@@ -319,6 +319,9 @@ class ScheduleExecutor:
             print(f"[DEBUG] Verificando agendamento: {schedule.name}")
             print(f"[DEBUG] - Player ID: {schedule.player_id}")
             print(f"[DEBUG] - Horário: {schedule.start_time}")
+            print(f"[DEBUG] - End time: {schedule.end_time}")
+            print(f"[DEBUG] - Is persistent: {schedule.is_persistent}")
+            print(f"[DEBUG] - Content type: {schedule.content_type}")
             print(f"[DEBUG] - Dias da semana: {schedule.days_of_week}")
             print(f"[DEBUG] - Tipo de repetição: {schedule.repeat_type}")
             
@@ -328,14 +331,21 @@ class ScheduleExecutor:
                 print(f"[DEBUG] Dia da semana {current_weekday} não está nos dias configurados {days_of_week}")
                 return False
             
-            # Verificar horário
+            # Verificar horário de início
             if schedule.start_time > current_time:
                 print(f"[DEBUG] Ainda não chegou o horário: {schedule.start_time} > {current_time}")
                 return False
             
-            if schedule.end_time and schedule.end_time < current_time:
-                print(f"[DEBUG] Horário já passou: {schedule.end_time} < {current_time}")
-                return False
+            # Para agendamentos persistentes/overlay, se end_time é 00:00:00, significa "até o final do dia"
+            if schedule.end_time:
+                from datetime import time as time_obj
+                midnight = time_obj(0, 0, 0)
+                
+                if schedule.is_persistent and schedule.end_time == midnight:
+                    print(f"[DEBUG] Agendamento persistente até meia-noite - sempre ativo após start_time")
+                elif schedule.end_time < current_time:
+                    print(f"[DEBUG] Horário já passou: {schedule.end_time} < {current_time}")
+                    return False
             
             print(f"[DEBUG] Agendamento {schedule.name} deve ser executado agora!")
             return True
