@@ -29,6 +29,10 @@ import {
   Paper,
   Switch,
   FormControlLabel,
+  Skeleton,
+  Avatar,
+  Fade,
+  Grow,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,12 +47,14 @@ import {
   Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../contexts/ThemeContext';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const ScheduleList = () => {
   const navigate = useNavigate();
+  const { isDarkMode } = useTheme();
   
   const [schedules, setSchedules] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -205,210 +211,520 @@ const ScheduleList = () => {
     return 'Ativo';
   };
 
+  const ScheduleRowSkeleton = ({ delay = 0 }) => (
+    <Grow in={true} timeout={1000 + delay * 100}>
+      <TableRow>
+        <TableCell>
+          <Box display="flex" alignItems="center">
+            <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+            <Skeleton variant="text" width={120} />
+          </Box>
+        </TableCell>
+        <TableCell><Skeleton variant="text" width={100} /></TableCell>
+        <TableCell><Skeleton variant="text" width={80} /></TableCell>
+        <TableCell><Skeleton variant="text" width={150} /></TableCell>
+        <TableCell><Skeleton variant="text" width={120} /></TableCell>
+        <TableCell><Skeleton variant="text" width={100} /></TableCell>
+        <TableCell><Skeleton variant="rectangular" width={60} height={24} /></TableCell>
+        <TableCell><Skeleton variant="circular" width={32} height={32} /></TableCell>
+      </TableRow>
+    </Grow>
+  );
+
   return (
     <Box>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Agendamentos
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/schedules/new')}
-        >
-          Novo Agendamento
-        </Button>
-      </Box>
+      <Grow in={true} timeout={1000}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" alignItems="center">
+            <Avatar
+              sx={{
+                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                mr: 2,
+                width: 48,
+                height: 48,
+              }}
+            >
+              <ScheduleIcon />
+            </Avatar>
+            <Typography 
+              variant="h4" 
+              component="h1"
+              sx={{
+                fontWeight: 700,
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                  : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Agendamentos
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/schedules/new')}
+            sx={{
+              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+              borderRadius: '12px',
+              px: 3,
+              py: 1.5,
+              textTransform: 'none',
+              fontWeight: 600,
+              boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
+              }
+            }}
+          >
+            Novo Agendamento
+          </Button>
+        </Box>
+      </Grow>
 
       {/* Alerts */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
+        <Fade in={true}>
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 2,
+              borderRadius: '12px',
+              backdropFilter: 'blur(10px)',
+              background: isDarkMode 
+                ? 'rgba(244, 67, 54, 0.1)' 
+                : 'rgba(244, 67, 54, 0.05)',
+            }} 
+            onClose={() => setError('')}
+          >
+            {error}
+          </Alert>
+        </Fade>
       )}
       {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
-          {success}
-        </Alert>
+        <Fade in={true}>
+          <Alert 
+            severity="success" 
+            sx={{ 
+              mb: 2,
+              borderRadius: '12px',
+              backdropFilter: 'blur(10px)',
+              background: isDarkMode 
+                ? 'rgba(76, 175, 80, 0.1)' 
+                : 'rgba(76, 175, 80, 0.05)',
+            }} 
+            onClose={() => setSuccess('')}
+          >
+            {success}
+          </Alert>
+        </Fade>
       )}
 
       {/* Filters */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                label="Buscar agendamentos"
-                value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                }}
-              />
+      <Grow in={true} timeout={1200}>
+        <Card 
+          sx={{ 
+            mb: 3,
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(255, 255, 255, 0.05)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: isDarkMode 
+              ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
+              : '0 8px 32px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Grid container spacing={3} alignItems="center">
+              <Grid item xs={12} md={3}>
+                <TextField
+                  fullWidth
+                  label="Buscar agendamentos"
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  InputProps={{
+                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      },
+                      '&.Mui-focused': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
+                      }
+                    }
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Campanha</InputLabel>
+                  <Select
+                    value={filters.campaign_id}
+                    onChange={(e) => handleFilterChange('campaign_id', e.target.value)}
+                    label="Campanha"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todas as campanhas</MenuItem>
+                    {campaigns.map(campaign => (
+                      <MenuItem key={campaign.id} value={campaign.id}>
+                        {campaign.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Player</InputLabel>
+                  <Select
+                    value={filters.player_id}
+                    onChange={(e) => handleFilterChange('player_id', e.target.value)}
+                    label="Player"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todos os players</MenuItem>
+                    {players.map(player => (
+                      <MenuItem key={player.id} value={player.id}>
+                        {player.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filters.is_active}
+                    onChange={(e) => handleFilterChange('is_active', e.target.value)}
+                    label="Status"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    <MenuItem value="true">Ativos</MenuItem>
+                    <MenuItem value="false">Inativos</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Campanha</InputLabel>
-                <Select
-                  value={filters.campaign_id}
-                  onChange={(e) => handleFilterChange('campaign_id', e.target.value)}
-                  label="Campanha"
-                >
-                  <MenuItem value="">Todas as campanhas</MenuItem>
-                  {campaigns.map(campaign => (
-                    <MenuItem key={campaign.id} value={campaign.id}>
-                      {campaign.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Player</InputLabel>
-                <Select
-                  value={filters.player_id}
-                  onChange={(e) => handleFilterChange('player_id', e.target.value)}
-                  label="Player"
-                >
-                  <MenuItem value="">Todos os players</MenuItem>
-                  {players.map(player => (
-                    <MenuItem key={player.id} value={player.id}>
-                      {player.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={filters.is_active}
-                  onChange={(e) => handleFilterChange('is_active', e.target.value)}
-                  label="Status"
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="true">Ativos</MenuItem>
-                  <MenuItem value="false">Inativos</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </Grow>
 
       {/* Schedules Table */}
-      <Card>
-        <CardContent>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nome</TableCell>
-                  <TableCell>Campanha</TableCell>
-                  <TableCell>Player</TableCell>
-                  <TableCell>Período</TableCell>
-                  <TableCell>Horário</TableCell>
-                  <TableCell>Dias</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Ações</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {schedules.map((schedule) => (
-                  <TableRow key={schedule.id}>
-                    <TableCell>
-                      <Box display="flex" alignItems="center">
-                        <ScheduleIcon sx={{ mr: 1, color: 'primary.main' }} />
-                        <Typography variant="subtitle2">
-                          {schedule.name}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      {schedule.campaign?.name || 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      {schedule.player?.name || 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      {formatDate(schedule.start_date)} - {formatDate(schedule.end_date)}
-                    </TableCell>
-                    <TableCell>
-                      {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
-                    </TableCell>
-                    <TableCell>
-                      {getDaysOfWeekText(schedule.days_of_week)}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusText(schedule)}
-                        color={getStatusColor(schedule)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        onClick={(e) => handleMenuClick(e, schedule)}
-                        size="small"
-                      >
-                        <MoreVertIcon />
-                      </IconButton>
-                    </TableCell>
+      <Grow in={true} timeout={1400}>
+        <Card
+          sx={{
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(255, 255, 255, 0.05)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: isDarkMode 
+              ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
+              : '0 8px 32px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden',
+          }}
+        >
+          <CardContent sx={{ p: 0 }}>
+            <TableContainer 
+              component={Paper} 
+              sx={{ 
+                background: 'transparent',
+                boxShadow: 'none',
+              }}
+            >
+              <Table>
+                <TableHead>
+                  <TableRow
+                    sx={{
+                      background: isDarkMode
+                        ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%)'
+                        : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.05) 100%)',
+                    }}
+                  >
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Nome</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Campanha</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Player</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Período</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Horário</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Dias</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Ações</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <ScheduleRowSkeleton key={index} delay={index} />
+                    ))
+                  ) : (
+                    schedules.map((schedule, index) => (
+                      <Grow in={true} timeout={1600 + index * 100} key={schedule.id}>
+                        <TableRow
+                          sx={{
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                              background: isDarkMode
+                                ? 'rgba(255, 119, 48, 0.05)'
+                                : 'rgba(255, 119, 48, 0.02)',
+                              transform: 'scale(1.01)',
+                              boxShadow: '0 4px 20px rgba(255, 119, 48, 0.1)',
+                            }
+                          }}
+                        >
+                          <TableCell>
+                            <Box display="flex" alignItems="center">
+                              <Avatar
+                                sx={{
+                                  mr: 2,
+                                  width: 32,
+                                  height: 32,
+                                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                }}
+                              >
+                                <ScheduleIcon sx={{ fontSize: 16 }} />
+                              </Avatar>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                                {schedule.name}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {schedule.campaign?.name || 'N/A'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {schedule.player?.name || 'N/A'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {formatDate(schedule.start_date)} - {formatDate(schedule.end_date)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {getDaysOfWeekText(schedule.days_of_week)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getStatusText(schedule)}
+                              color={getStatusColor(schedule)}
+                              size="small"
+                              sx={{
+                                borderRadius: '8px',
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <IconButton
+                              onClick={(e) => handleMenuClick(e, schedule)}
+                              size="small"
+                              sx={{
+                                transition: 'all 0.3s ease',
+                                '&:hover': {
+                                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                  color: 'white',
+                                  transform: 'scale(1.1)',
+                                }
+                              }}
+                            >
+                              <MoreVertIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      </Grow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-          {schedules.length === 0 && !loading && (
-            <Box textAlign="center" py={4}>
-              <EventIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">
-                Nenhum agendamento encontrado
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/schedules/new')}
-                sx={{ mt: 2 }}
-              >
-                Criar Primeiro Agendamento
-              </Button>
-            </Box>
-          )}
+            {schedules.length === 0 && !loading && (
+              <Fade in={true} timeout={1000}>
+                <Box 
+                  textAlign="center" 
+                  py={8}
+                  sx={{
+                    background: isDarkMode
+                      ? 'radial-gradient(circle, rgba(255, 119, 48, 0.05) 0%, transparent 70%)'
+                      : 'radial-gradient(circle, rgba(255, 119, 48, 0.02) 0%, transparent 70%)',
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      mx: 'auto',
+                      mb: 3,
+                      background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                      fontSize: '2rem',
+                    }}
+                  >
+                    <EventIcon sx={{ fontSize: 40 }} />
+                  </Avatar>
+                  <Typography 
+                    variant="h6" 
+                    color="text.secondary" 
+                    sx={{ mb: 2, fontWeight: 600 }}
+                  >
+                    Nenhum agendamento encontrado
+                  </Typography>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary" 
+                    sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}
+                  >
+                    Comece criando seu primeiro agendamento para controlar quando e onde suas campanhas serão exibidas.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => navigate('/schedules/new')}
+                    sx={{
+                      background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                      borderRadius: '12px',
+                      px: 4,
+                      py: 1.5,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
+                      }
+                    }}
+                  >
+                    Criar Primeiro Agendamento
+                  </Button>
+                </Box>
+              </Fade>
+            )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <Box display="flex" justifyContent="center" mt={3}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={(_, newPage) => setPage(newPage)}
-                color="primary"
-              />
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <Fade in={true} timeout={1800}>
+                <Box display="flex" justifyContent="center" p={3}>
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(_, newPage) => setPage(newPage)}
+                    color="primary"
+                    sx={{
+                      '& .MuiPaginationItem-root': {
+                        borderRadius: '8px',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          transform: 'translateY(-1px)',
+                        },
+                        '&.Mui-selected': {
+                          background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                          color: 'white',
+                        }
+                      }
+                    }}
+                  />
+                </Box>
+              </Fade>
+            )}
+          </CardContent>
+        </Card>
+      </Grow>
 
       {/* Actions Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(30, 30, 30, 0.9)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+          }
+        }}
       >
-        <MenuItem onClick={() => {
-          navigate(`/schedules/${selectedSchedule?.id}/edit`);
-          handleMenuClose();
-        }}>
+        <MenuItem 
+          onClick={() => {
+            navigate(`/schedules/${selectedSchedule?.id}/edit`);
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
           <EditIcon sx={{ mr: 1 }} />
           Editar
         </MenuItem>
-        <MenuItem onClick={() => handleToggleActive(selectedSchedule)}>
+        <MenuItem 
+          onClick={() => handleToggleActive(selectedSchedule)}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
           {selectedSchedule?.is_active ? (
             <>
               <PauseIcon sx={{ mr: 1 }} />
@@ -421,26 +737,68 @@ const ScheduleList = () => {
             </>
           )}
         </MenuItem>
-        <MenuItem onClick={() => handleDeleteClick(selectedSchedule)}>
+        <MenuItem 
+          onClick={() => handleDeleteClick(selectedSchedule)}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(244, 67, 54, 0.1)',
+              transform: 'translateX(4px)',
+              color: 'error.main',
+            }
+          }}
+        >
           <DeleteIcon sx={{ mr: 1 }} />
           Deletar
         </MenuItem>
       </Menu>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Confirmar Exclusão</DialogTitle>
+      <Dialog 
+        open={deleteDialogOpen} 
+        onClose={() => setDeleteDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(30, 30, 30, 0.9)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
             Tem certeza que deseja deletar o agendamento "{scheduleToDelete?.name}"?
             Esta ação não pode ser desfeita.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleDeleteConfirm} color="error" variant="contained">
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
             Deletar
           </Button>
         </DialogActions>

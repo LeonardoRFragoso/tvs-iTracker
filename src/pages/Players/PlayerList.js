@@ -4,14 +4,16 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Button,
-  IconButton,
-  Chip,
+  Grid,
   TextField,
-  InputAdornment,
-  Menu,
+  FormControl,
+  InputLabel,
+  Select,
   MenuItem,
+  Chip,
+  IconButton,
+  Menu,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -20,65 +22,60 @@ import {
   Pagination,
   Fab,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Tooltip,
+  Badge,
+  Fade,
+  Grow,
+  Skeleton,
 } from '@mui/material';
 import {
+  Add as AddIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Add as AddIcon,
+  MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  MoreVert as MoreIcon,
-  Tv as PlayerIcon,
-  PowerSettingsNew as PowerIcon,
-  Refresh as RefreshIcon,
-  Schedule as ScheduleIcon,
-  Sync as SyncIcon,
-  LocationOn as LocationIcon,
   Computer as ComputerIcon,
-  Smartphone as SmartphoneIcon,
-  Tablet as TabletIcon,
+  Wifi as WifiIcon,
+  WifiOff as WifiOffIcon,
+  Cast as CastIcon,
+  Settings as SettingsIcon,
+  PlayArrow as PlayIcon,
+  Stop as StopIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useSocket } from '../../contexts/SocketContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const PlayerList = () => {
   const navigate = useNavigate();
-  const { socket, sendPlayerCommand } = useSocket();
+  const { isDarkMode } = useTheme();
+  
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterLocation, setFilterLocation] = useState('all');
+  const [success, setSuccess] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, player: null });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [locations, setLocations] = useState([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [playerToDelete, setPlayerToDelete] = useState(null);
+  const [filters, setFilters] = useState({
+    search: '',
+    status: '',
+    location_id: ''
+  });
 
   useEffect(() => {
     loadPlayers();
     loadLocations();
-  }, [page, searchTerm, filterStatus, filterLocation]);
-
-  useEffect(() => {
-    if (socket) {
-      socket.on('player_status_update', handlePlayerStatusUpdate);
-      return () => {
-        socket.off('player_status_update');
-      };
-    }
-  }, [socket]);
+  }, [page, filters.search, filters.status, filters.location_id]);
 
   const handlePlayerStatusUpdate = (data) => {
     setPlayers(prev => prev.map(player => 
@@ -94,9 +91,9 @@ const PlayerList = () => {
       const params = {
         page,
         per_page: 12,
-        search: searchTerm || undefined,
-        status: filterStatus !== 'all' ? filterStatus : undefined,
-        location: filterLocation !== 'all' ? filterLocation : undefined,
+        search: filters.search || undefined,
+        status: filters.status || undefined,
+        location_id: filters.location_id || undefined,
       };
 
       const response = await axios.get(`${API_BASE_URL}/players`, { params });
@@ -122,8 +119,10 @@ const PlayerList = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/players/${deleteDialog.player.id}`);
-      setDeleteDialog({ open: false, player: null });
+      await axios.delete(`${API_BASE_URL}/players/${playerToDelete.id}`);
+      setSuccess(`Player "${playerToDelete.name}" deletado com sucesso`);
+      setDeleteDialogOpen(false);
+      setPlayerToDelete(null);
       loadPlayers();
     } catch (err) {
       setError('Erro ao deletar player');
@@ -131,13 +130,19 @@ const PlayerList = () => {
     }
   };
 
-  const handlePlayerCommand = async (playerId, command) => {
+  const handlePlayerAction = async (player, action) => {
     try {
-      await sendPlayerCommand(playerId, command);
-      loadPlayers(); // Refresh to get updated status
-    } catch (err) {
-      setError(`Erro ao enviar comando: ${command}`);
-      console.error('Player command error:', err);
+      await axios.post(`${API_BASE_URL}/players/${player.id}/${action}`);
+      setSuccess(`Comando ${action} enviado para ${player.name}`);
+      handleMenuClose();
+      // Reload players to get updated status
+      setTimeout(() => {
+        loadPlayers();
+      }, 1000);
+    } catch (error) {
+      console.error(`Error sending ${action} command:`, error);
+      setError(`Erro ao enviar comando ${action}`);
+      handleMenuClose();
     }
   };
 
@@ -166,7 +171,7 @@ const PlayerList = () => {
     }
   };
 
-  const getStatusLabel = (status) => {
+  const getStatusText = (status) => {
     switch (status) {
       case 'online':
         return 'Online';
@@ -184,15 +189,15 @@ const PlayerList = () => {
   const getDeviceIcon = (deviceType) => {
     switch (deviceType) {
       case 'android':
-        return <SmartphoneIcon />;
+        return <ComputerIcon />;
       case 'windows':
         return <ComputerIcon />;
       case 'web':
         return <ComputerIcon />;
       case 'tablet':
-        return <TabletIcon />;
+        return <ComputerIcon />;
       default:
-        return <PlayerIcon />;
+        return <ComputerIcon />;
     }
   };
 
@@ -208,313 +213,694 @@ const PlayerList = () => {
     return date.toLocaleDateString('pt-BR');
   };
 
-  return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gerenciar Players
-        </Typography>
-        <Box display="flex" gap={2}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={loadPlayers}
-          >
-            Atualizar
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/players/new')}
-          >
-            Novo Player
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Filtros e Busca */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                placeholder="Buscar player..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                select
-                label="Status"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <MenuItem value="all">Todos os status</MenuItem>
-                <MenuItem value="online">Online</MenuItem>
-                <MenuItem value="offline">Offline</MenuItem>
-                <MenuItem value="syncing">Sincronizando</MenuItem>
-                <MenuItem value="error">Erro</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                select
-                label="Localização"
-                value={filterLocation}
-                onChange={(e) => setFilterLocation(e.target.value)}
-              >
-                <MenuItem value="all">Todas as localizações</MenuItem>
-                {locations.filter(location => location && typeof location === 'object' && location.name).map((location) => (
-                  <MenuItem key={location.id || location.name} value={location.name}>
-                    {location.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={loadPlayers}
-              >
-                Filtrar
-              </Button>
-            </Grid>
-          </Grid>
+  const PlayerCardSkeleton = ({ delay = 0 }) => (
+    <Grow in={true} timeout={1000 + delay * 100}>
+      <Card sx={{ borderRadius: '16px' }}>
+        <CardContent sx={{ p: 3 }}>
+          <Box display="flex" alignItems="center" mb={2}>
+            <Skeleton variant="circular" width={48} height={48} sx={{ mr: 2 }} />
+            <Box flex={1}>
+              <Skeleton variant="text" width="70%" height={28} sx={{ mb: 1 }} />
+              <Skeleton variant="text" width="50%" height={20} />
+            </Box>
+            <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: '12px' }} />
+          </Box>
+          <Box display="flex" gap={1} mb={2}>
+            <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: '12px' }} />
+            <Skeleton variant="rectangular" width={100} height={24} sx={{ borderRadius: '12px' }} />
+          </Box>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Skeleton variant="text" width={120} />
+            <Skeleton variant="circular" width={32} height={32} />
+          </Box>
         </CardContent>
       </Card>
+    </Grow>
+  );
 
+  const handleFilterChange = (key, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: value
+    }));
+    // Also update the existing filter states for compatibility
+    if (key === 'search') setSearchTerm(value);
+    if (key === 'status') setFilterStatus(value);
+    if (key === 'location_id') setFilterLocation(value);
+  };
+
+  const handleDeleteClick = (player) => {
+    setPlayerToDelete(player);
+    setDeleteDialogOpen(true);
+    handleMenuClose();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!playerToDelete) return;
+    
+    try {
+      await axios.delete(`${API_BASE_URL}/players/${playerToDelete.id}`);
+      setSuccess(`Player "${playerToDelete.name}" deletado com sucesso`);
+      setDeleteDialogOpen(false);
+      setPlayerToDelete(null);
+      loadPlayers();
+    } catch (error) {
+      console.error('Error deleting player:', error);
+      setError('Erro ao deletar player');
+    }
+  };
+
+  return (
+    <Box>
+      {/* Header */}
+      <Grow in={true} timeout={1000}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" alignItems="center">
+            <Avatar
+              sx={{
+                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                mr: 2,
+                width: 48,
+                height: 48,
+              }}
+            >
+              <ComputerIcon />
+            </Avatar>
+            <Typography 
+              variant="h4" 
+              component="h1"
+              sx={{
+                fontWeight: 700,
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                  : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Gerenciar Players
+            </Typography>
+          </Box>
+        </Box>
+      </Grow>
+
+      {/* Alerts */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+        <Fade in={true}>
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 2,
+              borderRadius: '12px',
+              backdropFilter: 'blur(10px)',
+              background: isDarkMode 
+                ? 'rgba(244, 67, 54, 0.1)' 
+                : 'rgba(244, 67, 54, 0.05)',
+            }} 
+            onClose={() => setError('')}
+          >
+            {error}
+          </Alert>
+        </Fade>
+      )}
+      {success && (
+        <Fade in={true}>
+          <Alert 
+            severity="success" 
+            sx={{ 
+              mb: 2,
+              borderRadius: '12px',
+              backdropFilter: 'blur(10px)',
+              background: isDarkMode 
+                ? 'rgba(76, 175, 80, 0.1)' 
+                : 'rgba(76, 175, 80, 0.05)',
+            }} 
+            onClose={() => setSuccess('')}
+          >
+            {success}
+          </Alert>
+        </Fade>
       )}
 
-      {/* Lista de Players */}
+      {/* Filters */}
+      <Grow in={true} timeout={1200}>
+        <Card 
+          sx={{ 
+            mb: 3,
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(255, 255, 255, 0.05)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: isDarkMode 
+              ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
+              : '0 8px 32px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Grid container spacing={3} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="Buscar players"
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  InputProps={{
+                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      },
+                      '&.Mui-focused': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
+                      }
+                    }
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filters.status}
+                    onChange={(e) => handleFilterChange('status', e.target.value)}
+                    label="Status"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todos os status</MenuItem>
+                    <MenuItem value="online">Online</MenuItem>
+                    <MenuItem value="offline">Offline</MenuItem>
+                    <MenuItem value="syncing">Sincronizando</MenuItem>
+                    <MenuItem value="error">Erro</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Localização</InputLabel>
+                  <Select
+                    value={filters.location_id}
+                    onChange={(e) => handleFilterChange('location_id', e.target.value)}
+                    label="Localização"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todas as localizações</MenuItem>
+                    {locations.map(location => (
+                      <MenuItem key={location.id} value={location.id}>
+                        {location.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={2}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterIcon />}
+                  fullWidth
+                  sx={{
+                    borderRadius: '12px',
+                    py: 1.5,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: 'rgba(255, 119, 48, 0.5)',
+                    color: '#ff7730',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      borderColor: '#ff7730',
+                      background: 'rgba(255, 119, 48, 0.05)',
+                      transform: 'translateY(-1px)',
+                    }
+                  }}
+                >
+                  Filtrar
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grow>
+
+      {/* Players Grid */}
       <Grid container spacing={3}>
-        {players.map((player) => (
-          <Grid item xs={12} sm={6} md={4} key={player.id}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                      {getDeviceIcon(player.device_type)}
-                    </Avatar>
-                    <Box>
-                      <Typography variant="h6" component="h3">
-                        {player.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {player.description}
-                      </Typography>
+        {loading ? (
+          Array.from({ length: 6 }).map((_, index) => (
+            <Grid item xs={12} sm={6} md={4} key={index}>
+              <PlayerCardSkeleton delay={index} />
+            </Grid>
+          ))
+        ) : players.length > 0 ? (
+          players.map((player, index) => (
+            <Grid item xs={12} sm={6} md={4} key={player.id}>
+              <Grow in={true} timeout={1400 + index * 100}>
+                <Card
+                  sx={{
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    background: isDarkMode 
+                      ? 'rgba(255, 255, 255, 0.05)' 
+                      : 'rgba(255, 255, 255, 0.9)',
+                    backdropFilter: 'blur(20px)',
+                    border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                    boxShadow: isDarkMode 
+                      ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
+                      : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                    '&:hover': {
+                      transform: 'translateY(-8px) scale(1.02)',
+                      boxShadow: isDarkMode 
+                        ? '0 16px 48px rgba(0, 0, 0, 0.4)' 
+                        : '0 16px 48px rgba(0, 0, 0, 0.15)',
+                    }
+                  }}
+                  onClick={() => navigate(`/players/${player.id}`)}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={2}>
+                      <Badge
+                        overlap="circular"
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        badgeContent={
+                          <Box
+                            sx={{
+                              width: 16,
+                              height: 16,
+                              borderRadius: '50%',
+                              background: getStatusColor(player.status) === 'success' 
+                                ? 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)'
+                                : getStatusColor(player.status) === 'warning'
+                                ? 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)'
+                                : 'linear-gradient(135deg, #f44336 0%, #e57373 100%)',
+                              border: '2px solid white',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                            }}
+                          />
+                        }
+                      >
+                        <Avatar
+                          sx={{
+                            background: 'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
+                            width: 48,
+                            height: 48,
+                          }}
+                        >
+                          <ComputerIcon />
+                        </Avatar>
+                      </Badge>
+                      
+                      <Box flex={1} ml={2}>
+                        <Typography 
+                          variant="h6" 
+                          component="h3" 
+                          sx={{ 
+                            mb: 0.5, 
+                            fontWeight: 700,
+                            background: isDarkMode 
+                              ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                              : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                            backgroundClip: 'text',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                          }}
+                        >
+                          {player.name}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {player.location?.name || 'Sem localização'}
+                        </Typography>
+                      </Box>
+                      
+                      <Chip
+                        label={getStatusText(player.status)}
+                        color={getStatusColor(player.status)}
+                        size="small"
+                        sx={{
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                        }}
+                      />
                     </Box>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    onClick={(e) => handleMenuClick(e, player)}
-                  >
-                    <MoreIcon />
-                  </IconButton>
-                </Box>
-
-                <Box display="flex" gap={1} mb={2} flexWrap="wrap">
-                  <Chip
-                    size="small"
-                    label={getStatusLabel(player.status)}
-                    color={getStatusColor(player.status)}
-                  />
-                  {player.device_type && (
-                    <Chip
-                      size="small"
-                      label={player.device_type}
-                      variant="outlined"
-                    />
-                  )}
-                </Box>
-
-                <List dense>
-                  {player.location && (
-                    <ListItem sx={{ px: 0 }}>
-                      <ListItemIcon sx={{ minWidth: 32 }}>
-                        <LocationIcon fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary="Localização"
-                        secondary={player.location}
+                    
+                    <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                      <Chip 
+                        icon={player.is_online ? <WifiIcon /> : <WifiOffIcon />}
+                        label={player.is_online ? 'Conectado' : 'Desconectado'}
+                        size="small"
+                        sx={{
+                          borderRadius: '8px',
+                          background: player.is_online 
+                            ? 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)'
+                            : 'linear-gradient(135deg, #f44336 0%, #e57373 100%)',
+                          color: 'white',
+                          fontWeight: 600,
+                          fontSize: '0.7rem',
+                        }}
                       />
-                    </ListItem>
-                  )}
-                  
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      <RefreshIcon fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary="Última conexão"
-                      secondary={formatLastSeen(player.last_seen)}
-                    />
-                  </ListItem>
-
-                  {player.current_campaign && (
-                    <ListItem sx={{ px: 0 }}>
-                      <ListItemIcon sx={{ minWidth: 32 }}>
-                        <ScheduleIcon fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText
-                        primary="Campanha ativa"
-                        secondary={player.current_campaign.name}
-                      />
-                    </ListItem>
-                  )}
-                </List>
-
-                <Box display="flex" gap={1} mt={2}>
-                  {player.status === 'online' && (
-                    <>
-                      <Tooltip title="Reiniciar Player">
-                        <IconButton
+                      {player.current_campaign && (
+                        <Chip 
+                          icon={<PlayIcon />}
+                          label={player.current_campaign.name}
                           size="small"
-                          onClick={() => handlePlayerCommand(player.id, 'restart')}
-                        >
-                          <PowerIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Sincronizar Conteúdo">
-                        <IconButton
+                          sx={{
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                          }}
+                        />
+                      )}
+                      {player.supports_chromecast && (
+                        <Chip 
+                          icon={<CastIcon />}
+                          label="Chromecast"
                           size="small"
-                          onClick={() => handlePlayerCommand(player.id, 'sync')}
-                        >
-                          <SyncIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </>
-                  )}
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => navigate(`/players/${player.id}`)}
-                  >
-                    Detalhes
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
+                          sx={{
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #ff5722 0%, #ff8a65 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                          }}
+                        />
+                      )}
+                    </Box>
+                    
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="caption" color="text.secondary">
+                        IP: {player.ip_address || 'N/A'}
+                      </Typography>
+                      <IconButton
+                        onClick={(e) => handleMenuClick(e, player)}
+                        size="small"
+                        sx={{
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                            color: 'white',
+                            transform: 'scale(1.1)',
+                          }
+                        }}
+                      >
+                        <MoreVertIcon />
+                      </IconButton>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grow>
+            </Grid>
+          ))
+        ) : (
+          <Grid item xs={12}>
+            <Fade in={true} timeout={1000}>
+              <Box 
+                textAlign="center" 
+                py={8}
+                sx={{
+                  background: isDarkMode
+                    ? 'radial-gradient(circle, rgba(255, 119, 48, 0.05) 0%, transparent 70%)'
+                    : 'radial-gradient(circle, rgba(255, 119, 48, 0.02) 0%, transparent 70%)',
+                  borderRadius: '16px',
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    mx: 'auto',
+                    mb: 3,
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    fontSize: '2rem',
+                  }}
+                >
+                  <ComputerIcon sx={{ fontSize: 40 }} />
+                </Avatar>
+                <Typography 
+                  variant="h6" 
+                  color="text.secondary" 
+                  sx={{ mb: 2, fontWeight: 600 }}
+                >
+                  Nenhum player encontrado
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}
+                >
+                  Comece registrando seu primeiro player para começar a exibir conteúdo em suas telas.
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => navigate('/players/new')}
+                  sx={{
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    borderRadius: '12px',
+                    px: 4,
+                    py: 1.5,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
+                    }
+                  }}
+                >
+                  Registrar Primeiro Player
+                </Button>
+              </Box>
+            </Fade>
           </Grid>
-        ))}
+        )}
       </Grid>
 
-      {players.length === 0 && !loading && (
-        <Box textAlign="center" py={8}>
-          <Typography variant="h6" color="text.secondary">
-            Nenhum player encontrado
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/players/new')}
-            sx={{ mt: 2 }}
-          >
-            Adicionar Primeiro Player
-          </Button>
-        </Box>
-      )}
-
-      {/* Paginação */}
+      {/* Pagination */}
       {totalPages > 1 && (
-        <Box display="flex" justifyContent="center" mt={4}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={(e, value) => setPage(value)}
-            color="primary"
-          />
-        </Box>
+        <Fade in={true} timeout={1800}>
+          <Box display="flex" justifyContent="center" mt={4}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={(_, newPage) => setPage(newPage)}
+              color="primary"
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  borderRadius: '8px',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-1px)',
+                  },
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    color: 'white',
+                  }
+                }
+              }}
+            />
+          </Box>
+        </Fade>
       )}
 
-      {/* Menu de Ações */}
+      {/* Floating Action Button */}
+      <Fade in={true} timeout={2000}>
+        <Fab
+          color="primary"
+          onClick={() => navigate('/players/new')}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+            boxShadow: '0 8px 32px rgba(255, 119, 48, 0.3)',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+              transform: 'scale(1.1)',
+              boxShadow: '0 12px 40px rgba(255, 119, 48, 0.4)',
+            }
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      </Fade>
+
+      {/* Actions Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(30, 30, 30, 0.9)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+          }
+        }}
       >
-        <MenuItem onClick={() => {
-          navigate(`/players/${selectedPlayer?.id}`);
-          handleMenuClose();
-        }}>
-          <ViewIcon sx={{ mr: 1 }} />
-          Visualizar
-        </MenuItem>
-        <MenuItem onClick={() => {
-          navigate(`/players/${selectedPlayer?.id}/edit`);
-          handleMenuClose();
-        }}>
+        <MenuItem 
+          onClick={() => {
+            navigate(`/players/${selectedPlayer?.id}/edit`);
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
           <EditIcon sx={{ mr: 1 }} />
           Editar
         </MenuItem>
-        <MenuItem onClick={() => {
-          navigate(`/schedules?player=${selectedPlayer?.id}`);
-          handleMenuClose();
-        }}>
-          <ScheduleIcon sx={{ mr: 1 }} />
-          Agendamento
+        <MenuItem 
+          onClick={() => {
+            navigate(`/players/${selectedPlayer?.id}/settings`);
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          <SettingsIcon sx={{ mr: 1 }} />
+          Configurações
         </MenuItem>
-        <MenuItem onClick={() => {
-          setDeleteDialog({ open: true, player: selectedPlayer });
-          handleMenuClose();
-        }}>
+        <MenuItem 
+          onClick={() => handlePlayerAction(selectedPlayer, 'restart')}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          <PlayIcon sx={{ mr: 1 }} />
+          Reiniciar
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handlePlayerAction(selectedPlayer, 'stop')}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 152, 0, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          <StopIcon sx={{ mr: 1 }} />
+          Parar Reprodução
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleDeleteClick(selectedPlayer)}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(244, 67, 54, 0.1)',
+              transform: 'translateX(4px)',
+              color: 'error.main',
+            }
+          }}
+        >
           <DeleteIcon sx={{ mr: 1 }} />
-          Excluir
+          Deletar
         </MenuItem>
       </Menu>
 
-      {/* Dialog de Confirmação de Exclusão */}
-      <Dialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, player: null })}
+      {/* Delete Confirmation Dialog */}
+      <Dialog 
+        open={deleteDialogOpen} 
+        onClose={() => setDeleteDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(30, 30, 30, 0.9)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+          }
+        }}
       >
-        <DialogTitle>Confirmar Exclusão</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
-            Tem certeza que deseja deletar o player "{deleteDialog.player?.name}"?
+            Tem certeza que deseja deletar o player "{playerToDelete?.name}"?
             Esta ação não pode ser desfeita e removerá todos os agendamentos associados.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, player: null })}>
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
+          <Button 
+            onClick={handleDeleteConfirm} 
+            color="error" 
+            variant="contained"
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
             Deletar
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* FAB para adicionar player */}
-      <Fab
-        color="primary"
-        aria-label="add"
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-        }}
-        onClick={() => navigate('/players/new')}
-      >
-        <AddIcon />
-      </Fab>
     </Box>
   );
 };

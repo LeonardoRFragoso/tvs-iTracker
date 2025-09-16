@@ -3,15 +3,18 @@ import {
   Box,
   Card,
   CardContent,
+  CardMedia,
   Typography,
-  Grid,
   Button,
-  IconButton,
-  Chip,
+  Grid,
   TextField,
-  InputAdornment,
-  Menu,
+  FormControl,
+  InputLabel,
+  Select,
   MenuItem,
+  Chip,
+  IconButton,
+  Menu,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -20,32 +23,31 @@ import {
   Pagination,
   Fab,
   Avatar,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
+  Fade,
+  Grow,
+  Skeleton,
 } from '@mui/material';
 import {
+  Add as AddIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Add as AddIcon,
+  MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  MoreVert as MoreIcon,
-  Campaign as CampaignIcon,
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
-  Schedule as ScheduleIcon,
-  VideoLibrary as ContentIcon,
+  Campaign as CampaignIcon,
+  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../contexts/ThemeContext';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const CampaignList = () => {
   const navigate = useNavigate();
+  const { isDarkMode } = useTheme();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -132,7 +134,7 @@ const CampaignList = () => {
     }
   };
 
-  const getStatusLabel = (status) => {
+  const getStatusText = (status) => {
     switch (status) {
       case 'active':
         return 'Ativa';
@@ -147,6 +149,21 @@ const CampaignList = () => {
     }
   };
 
+  const getStatusGradient = (status) => {
+    switch (status) {
+      case 'active':
+        return '#34C759 0%, #2ECC71 100%';
+      case 'inactive':
+        return '#FFC107 0%, #FF9800 100%';
+      case 'scheduled':
+        return '#FF9800 0%, #FFC107 100%';
+      case 'expired':
+        return '#E74C3C 0%, #C0392B 100%';
+      default:
+        return '#2ECC71 0%, #34C759 100%';
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -157,278 +174,597 @@ const CampaignList = () => {
     });
   };
 
-  return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gerenciar Campanhas
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/campaigns/new')}
-        >
-          Nova Campanha
-        </Button>
-      </Box>
-
-      {/* Filtros e Busca */}
-      <Card sx={{ mb: 3 }}>
+  const CampaignCardSkeleton = ({ delay = 0 }) => (
+    <Grow in={true} timeout={1000 + delay * 100}>
+      <Card sx={{ borderRadius: '16px' }}>
+        <Skeleton variant="rectangular" height={200} />
         <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                placeholder="Buscar campanha..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                select
-                label="Status"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <MenuItem value="all">Todos os status</MenuItem>
-                <MenuItem value="active">Ativa</MenuItem>
-                <MenuItem value="inactive">Inativa</MenuItem>
-                <MenuItem value="scheduled">Agendada</MenuItem>
-                <MenuItem value="expired">Expirada</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={loadCampaigns}
-              >
-                Filtrar
-              </Button>
-            </Grid>
-          </Grid>
+          <Skeleton variant="text" width="70%" height={28} sx={{ mb: 1 }} />
+          <Skeleton variant="text" width="100%" height={20} sx={{ mb: 2 }} />
+          <Box display="flex" gap={1} mb={2}>
+            <Skeleton variant="rectangular" width={60} height={24} sx={{ borderRadius: '12px' }} />
+            <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: '12px' }} />
+          </Box>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Skeleton variant="text" width={100} />
+            <Skeleton variant="circular" width={32} height={32} />
+          </Box>
         </CardContent>
       </Card>
+    </Grow>
+  );
 
+  return (
+    <Box>
+      {/* Header */}
+      <Grow in={true} timeout={1000}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" alignItems="center">
+            <Avatar
+              sx={{
+                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                mr: 2,
+                width: 48,
+                height: 48,
+              }}
+            >
+              <CampaignIcon />
+            </Avatar>
+            <Typography 
+              variant="h4" 
+              component="h1"
+              sx={{
+                fontWeight: 700,
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                  : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              Gerenciar Campanhas
+            </Typography>
+          </Box>
+        </Box>
+      </Grow>
+
+      {/* Alerts */}
       {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+        <Fade in={true}>
+          <Alert 
+            severity="error" 
+            sx={{ 
+              mb: 2,
+              borderRadius: '12px',
+              backdropFilter: 'blur(10px)',
+              background: isDarkMode 
+                ? 'rgba(244, 67, 54, 0.1)' 
+                : 'rgba(244, 67, 54, 0.05)',
+            }} 
+            onClose={() => setError('')}
+          >
+            {error}
+          </Alert>
+        </Fade>
       )}
 
-      {/* Lista de Campanhas */}
+      {/* Filters */}
+      <Grow in={true} timeout={1200}>
+        <Card 
+          sx={{ 
+            mb: 3,
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(255, 255, 255, 0.05)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: isDarkMode 
+              ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
+              : '0 8px 32px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Grid container spacing={3} alignItems="center">
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Buscar campanhas"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      },
+                      '&.Mui-focused': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
+                      }
+                    }
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    label="Status"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': {
+                        transform: 'translateY(-1px)',
+                      }
+                    }}
+                  >
+                    <MenuItem value="">Todos os status</MenuItem>
+                    <MenuItem value="active">Ativas</MenuItem>
+                    <MenuItem value="inactive">Inativas</MenuItem>
+                    <MenuItem value="scheduled">Agendadas</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterIcon />}
+                  fullWidth
+                  sx={{
+                    borderRadius: '12px',
+                    py: 1.5,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: 'rgba(255, 119, 48, 0.5)',
+                    color: '#ff7730',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      borderColor: '#ff7730',
+                      background: 'rgba(255, 119, 48, 0.05)',
+                      transform: 'translateY(-1px)',
+                    }
+                  }}
+                >
+                  Filtrar
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grow>
+
+      {/* Campaigns Grid */}
       <Grid container spacing={3}>
-        {campaigns.map((campaign) => (
-          <Grid item xs={12} key={campaign.id}>
-            <Card>
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start">
-                  <Box flex={1}>
-                    <Box display="flex" alignItems="center" gap={2} mb={2}>
-                      <Avatar sx={{ bgcolor: 'primary.main' }}>
-                        <CampaignIcon />
-                      </Avatar>
-                      <Box>
-                        <Typography variant="h6" component="h3">
-                          {campaign.name}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {campaign.description}
-                        </Typography>
-                      </Box>
-                      <Chip
-                        label={getStatusLabel(campaign.status)}
-                        color={getStatusColor(campaign.status)}
+        {loading ? (
+          Array.from({ length: 6 }).map((_, index) => (
+            <Grid item xs={12} sm={6} md={4} key={index}>
+              <CampaignCardSkeleton delay={index} />
+            </Grid>
+          ))
+        ) : campaigns.length > 0 ? (
+          campaigns.map((campaign, index) => (
+            <Grid item xs={12} sm={6} md={4} key={campaign.id}>
+              <Grow in={true} timeout={1400 + index * 100}>
+                <Card
+                  sx={{
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    background: isDarkMode 
+                      ? 'rgba(255, 255, 255, 0.05)' 
+                      : 'rgba(255, 255, 255, 0.9)',
+                    backdropFilter: 'blur(20px)',
+                    border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                    boxShadow: isDarkMode 
+                      ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
+                      : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                    '&:hover': {
+                      transform: 'translateY(-8px) scale(1.02)',
+                      boxShadow: isDarkMode 
+                        ? '0 16px 48px rgba(0, 0, 0, 0.4)' 
+                        : '0 16px 48px rgba(0, 0, 0, 0.15)',
+                    }
+                  }}
+                  onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                >
+                  <Box sx={{ position: 'relative' }}>
+                    <CardMedia
+                      component="img"
+                      height="200"
+                      image={campaign.thumbnail || '/placeholder-campaign.jpg'}
+                      alt={campaign.name}
+                      sx={{
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          transform: 'scale(1.05)',
+                        }
+                      }}
+                    />
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: `linear-gradient(135deg, ${getStatusGradient(campaign.status)})`,
+                        opacity: 0.1,
+                      }}
+                    />
+                    <Chip
+                      label={getStatusText(campaign.status)}
+                      color={getStatusColor(campaign.status)}
+                      size="small"
+                      sx={{
+                        position: 'absolute',
+                        top: 12,
+                        right: 12,
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        backdropFilter: 'blur(10px)',
+                        background: 'rgba(255, 255, 255, 0.9)',
+                      }}
+                    />
+                  </Box>
+                  
+                  <CardContent sx={{ p: 3 }}>
+                    <Typography 
+                      variant="h6" 
+                      component="h3" 
+                      sx={{ 
+                        mb: 1, 
+                        fontWeight: 700,
+                        background: isDarkMode 
+                          ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                          : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                        backgroundClip: 'text',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      {campaign.name}
+                    </Typography>
+                    
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary" 
+                      sx={{ 
+                        mb: 2, 
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {campaign.description || 'Sem descrição disponível'}
+                    </Typography>
+                    
+                    <Box display="flex" gap={1} mb={2} flexWrap="wrap">
+                      <Chip 
+                        label={`${campaign.contents?.length || 0} conteúdos`}
                         size="small"
+                        sx={{
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
+                          color: 'white',
+                          fontWeight: 600,
+                          fontSize: '0.7rem',
+                        }}
+                      />
+                      <Chip 
+                        label={formatDate(campaign.created_at)}
+                        size="small"
+                        sx={{
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
+                          color: 'white',
+                          fontWeight: 600,
+                          fontSize: '0.7rem',
+                        }}
                       />
                     </Box>
-
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          Período de Exibição
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {campaign.start_date ? formatDate(campaign.start_date) : 'Não definido'} - {' '}
-                          {campaign.end_date ? formatDate(campaign.end_date) : 'Não definido'}
-                        </Typography>
-                      </Grid>
-
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          Conteúdos ({campaign.content_count || 0})
-                        </Typography>
-                        {campaign.contents && campaign.contents.length > 0 ? (
-                          <List dense>
-                            {campaign.contents.slice(0, 3).map((content) => (
-                              <ListItem key={content.id} sx={{ px: 0 }}>
-                                <ListItemAvatar>
-                                  <Avatar sx={{ width: 32, height: 32 }}>
-                                    <ContentIcon fontSize="small" />
-                                  </Avatar>
-                                </ListItemAvatar>
-                                <ListItemText
-                                  primary={content.title}
-                                  secondary={`${content.duration || 0}s`}
-                                />
-                              </ListItem>
-                            ))}
-                            {campaign.contents.length > 3 && (
-                              <Typography variant="caption" color="text.secondary">
-                                +{campaign.contents.length - 3} mais
-                              </Typography>
-                            )}
-                          </List>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Nenhum conteúdo adicionado
-                          </Typography>
-                        )}
-                      </Grid>
-                    </Grid>
-
-                    <Box display="flex" gap={1} mt={2}>
-                      <Button
+                    
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="caption" color="text.secondary">
+                        Atualizada {formatDate(campaign.updated_at)}
+                      </Typography>
+                      <IconButton
+                        onClick={(e) => handleMenuClick(e, campaign)}
                         size="small"
-                        variant={campaign.status === 'active' ? 'contained' : 'outlined'}
-                        color={campaign.status === 'active' ? 'error' : 'success'}
-                        startIcon={campaign.status === 'active' ? <PauseIcon /> : <PlayIcon />}
-                        onClick={() => handleStatusToggle(campaign)}
+                        sx={{
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                            color: 'white',
+                            transform: 'scale(1.1)',
+                          }
+                        }}
                       >
-                        {campaign.status === 'active' ? 'Pausar' : 'Ativar'}
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<ScheduleIcon />}
-                        onClick={() => navigate(`/schedules?campaign=${campaign.id}`)}
-                      >
-                        Agendamentos
-                      </Button>
+                        <MoreVertIcon />
+                      </IconButton>
                     </Box>
-                  </Box>
-
-                  <IconButton
-                    onClick={(e) => handleMenuClick(e, campaign)}
-                  >
-                    <MoreIcon />
-                  </IconButton>
-                </Box>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              </Grow>
+            </Grid>
+          ))
+        ) : (
+          <Grid item xs={12}>
+            <Fade in={true} timeout={1000}>
+              <Box 
+                textAlign="center" 
+                py={8}
+                sx={{
+                  background: isDarkMode
+                    ? 'radial-gradient(circle, rgba(255, 119, 48, 0.05) 0%, transparent 70%)'
+                    : 'radial-gradient(circle, rgba(255, 119, 48, 0.02) 0%, transparent 70%)',
+                  borderRadius: '16px',
+                }}
+              >
+                <Avatar
+                  sx={{
+                    width: 80,
+                    height: 80,
+                    mx: 'auto',
+                    mb: 3,
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    fontSize: '2rem',
+                  }}
+                >
+                  <CampaignIcon sx={{ fontSize: 40 }} />
+                </Avatar>
+                <Typography 
+                  variant="h6" 
+                  color="text.secondary" 
+                  sx={{ mb: 2, fontWeight: 600 }}
+                >
+                  Nenhuma campanha encontrada
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ mb: 3, maxWidth: 400, mx: 'auto' }}
+                >
+                  Comece criando sua primeira campanha para organizar e gerenciar seus conteúdos de forma eficiente.
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => navigate('/campaigns/new')}
+                  sx={{
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    borderRadius: '12px',
+                    px: 4,
+                    py: 1.5,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
+                    }
+                  }}
+                >
+                  Criar Primeira Campanha
+                </Button>
+              </Box>
+            </Fade>
           </Grid>
-        ))}
+        )}
       </Grid>
 
-      {campaigns.length === 0 && !loading && (
-        <Box textAlign="center" py={8}>
-          <Typography variant="h6" color="text.secondary">
-            Nenhuma campanha encontrada
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/campaigns/new')}
-            sx={{ mt: 2 }}
-          >
-            Criar Primeira Campanha
-          </Button>
-        </Box>
-      )}
-
-      {/* Paginação */}
+      {/* Pagination */}
       {totalPages > 1 && (
-        <Box display="flex" justifyContent="center" mt={4}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={(e, value) => setPage(value)}
-            color="primary"
-          />
-        </Box>
+        <Fade in={true} timeout={1800}>
+          <Box display="flex" justifyContent="center" mt={4}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={(_, newPage) => setPage(newPage)}
+              color="primary"
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  borderRadius: '8px',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    transform: 'translateY(-1px)',
+                  },
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    color: 'white',
+                  }
+                }
+              }}
+            />
+          </Box>
+        </Fade>
       )}
 
-      {/* Menu de Ações */}
+      {/* Floating Action Button */}
+      <Fade in={true} timeout={2000}>
+        <Fab
+          color="primary"
+          onClick={() => navigate('/campaigns/new')}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+            boxShadow: '0 8px 32px rgba(255, 119, 48, 0.3)',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+              transform: 'scale(1.1)',
+              boxShadow: '0 12px 40px rgba(255, 119, 48, 0.4)',
+            }
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      </Fade>
+
+      {/* Actions Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(30, 30, 30, 0.9)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+          }
+        }}
       >
-        <MenuItem onClick={() => {
-          navigate(`/campaigns/${selectedCampaign?.id}`);
-          handleMenuClose();
-        }}>
-          <ViewIcon sx={{ mr: 1 }} />
+        <MenuItem 
+          onClick={() => {
+            navigate(`/campaigns/${selectedCampaign?.id}`);
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          <VisibilityIcon sx={{ mr: 1 }} />
           Visualizar
         </MenuItem>
-        <MenuItem onClick={() => {
-          navigate(`/campaigns/${selectedCampaign?.id}/edit`);
-          handleMenuClose();
-        }}>
+        <MenuItem 
+          onClick={() => {
+            navigate(`/campaigns/${selectedCampaign?.id}/edit`);
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
           <EditIcon sx={{ mr: 1 }} />
           Editar
         </MenuItem>
-        <MenuItem onClick={() => {
-          navigate(`/schedules?campaign=${selectedCampaign?.id}`);
-          handleMenuClose();
-        }}>
-          <ScheduleIcon sx={{ mr: 1 }} />
-          Agendamentos
+        <MenuItem 
+          onClick={() => handleStatusToggle(selectedCampaign)}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(255, 119, 48, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          {selectedCampaign?.status === 'active' ? (
+            <>
+              <PauseIcon sx={{ mr: 1 }} />
+              Pausar
+            </>
+          ) : (
+            <>
+              <PlayIcon sx={{ mr: 1 }} />
+              Ativar
+            </>
+          )}
         </MenuItem>
-        <MenuItem onClick={() => {
-          setDeleteDialog({ open: true, campaign: selectedCampaign });
-          handleMenuClose();
-        }}>
+        <MenuItem 
+          onClick={() => {
+            setDeleteDialog({ open: true, campaign: selectedCampaign });
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(244, 67, 54, 0.1)',
+              transform: 'translateX(4px)',
+              color: 'error.main',
+            }
+          }}
+        >
           <DeleteIcon sx={{ mr: 1 }} />
           Deletar
         </MenuItem>
       </Menu>
 
-      {/* Dialog de Confirmação de Exclusão */}
-      <Dialog
-        open={deleteDialog.open}
+      {/* Delete Confirmation Dialog */}
+      <Dialog 
+        open={deleteDialog.open} 
         onClose={() => setDeleteDialog({ open: false, campaign: null })}
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            backdropFilter: 'blur(20px)',
+            background: isDarkMode 
+              ? 'rgba(30, 30, 30, 0.9)' 
+              : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+          }
+        }}
       >
-        <DialogTitle>Confirmar Exclusão</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
             Tem certeza que deseja deletar a campanha "{deleteDialog.campaign?.name}"?
-            Esta ação não pode ser desfeita e removerá todos os agendamentos associados.
+            Esta ação não pode ser desfeita.
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialog({ open: false, campaign: null })}>
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={() => setDeleteDialog({ open: false, campaign: null })}
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
             Cancelar
           </Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
+          <Button 
+            onClick={handleDelete} 
+            color="error" 
+            variant="contained"
+            sx={{
+              borderRadius: '8px',
+              textTransform: 'none',
+              fontWeight: 600,
+            }}
+          >
             Deletar
           </Button>
         </DialogActions>
       </Dialog>
-
-      {/* FAB para adicionar campanha */}
-      <Fab
-        color="primary"
-        aria-label="add"
-        sx={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-        }}
-        onClick={() => navigate('/campaigns/new')}
-      >
-        <AddIcon />
-      </Fab>
     </Box>
   );
 };

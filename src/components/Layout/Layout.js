@@ -185,7 +185,7 @@ export default function Layout() {
             <Tv />
           </Avatar>
           <Box>
-            <Typography variant="h6" noWrap component="div" fontWeight="bold">
+            <Typography variant="h6" noWrap component="div" fontWeight="bold" sx={{ color: isDarkMode ? 'white' : 'inherit' }}>
               TVS iTracker
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.9 }}>
@@ -377,10 +377,38 @@ export default function Layout() {
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
           background: isDarkMode 
-            ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
-            : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-          backdropFilter: 'blur(10px)',
-          borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 152, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)'}`,
+            ? 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(26, 26, 26, 0.95) 70%, rgba(255, 119, 48, 0.15) 100%)'
+            : 'linear-gradient(135deg, rgba(25, 118, 210, 0.95) 0%, rgba(21, 101, 192, 0.95) 70%, rgba(255, 152, 0, 0.15) 100%)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 119, 48, 0.3)' : 'rgba(255, 255, 255, 0.3)'}`,
+          boxShadow: isDarkMode 
+            ? '0 4px 20px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(255, 119, 48, 0.2)' 
+            : '0 4px 20px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(255, 152, 0, 0.2)',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: isDarkMode
+              ? 'radial-gradient(ellipse at 30% 0%, rgba(255, 119, 48, 0.08) 0%, transparent 70%)'
+              : 'radial-gradient(ellipse at 30% 0%, rgba(255, 152, 0, 0.08) 0%, transparent 70%)',
+            pointerEvents: 'none',
+            zIndex: -1,
+          },
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '1px',
+            background: isDarkMode
+              ? 'linear-gradient(90deg, transparent 0%, rgba(255, 119, 48, 0.5) 50%, transparent 100%)'
+              : 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
+            zIndex: 1,
+          }
         }}
       >
         <Toolbar>
