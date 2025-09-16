@@ -16,6 +16,10 @@ import {
   Avatar,
   Menu,
   MenuItem,
+  Fade,
+  Badge,
+  Chip,
+  Divider,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -28,25 +32,72 @@ import {
   AccountCircle,
   Logout,
   LocationOn,
+  Brightness4,
+  Brightness7,
+  TrendingUp,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const drawerWidth = 240;
 
 const menuItems = [
-  { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
-  { text: 'Conteúdo', icon: <VideoLibrary />, path: '/content' },
-  { text: 'Sedes', icon: <LocationOn />, path: '/locations' },
-  { text: 'Campanhas', icon: <Campaign />, path: '/campaigns' },
-  { text: 'Players', icon: <Tv />, path: '/players' },
-  { text: 'Agendamentos', icon: <Schedule />, path: '/schedules' },
-  { text: 'Configurações', icon: <Settings />, path: '/settings' },
+  { 
+    text: 'Dashboard', 
+    icon: <Dashboard />, 
+    path: '/dashboard',
+    badge: null,
+    description: 'Visão geral do sistema'
+  },
+  { 
+    text: 'Conteúdo', 
+    icon: <VideoLibrary />, 
+    path: '/content',
+    badge: '4',
+    description: 'Gerenciar mídias'
+  },
+  { 
+    text: 'Sedes', 
+    icon: <LocationOn />, 
+    path: '/locations',
+    badge: '3',
+    description: 'Localizações ativas'
+  },
+  { 
+    text: 'Campanhas', 
+    icon: <Campaign />, 
+    path: '/campaigns',
+    badge: null,
+    description: 'Campanhas publicitárias'
+  },
+  { 
+    text: 'Players', 
+    icon: <Tv />, 
+    path: '/players',
+    badge: '7',
+    description: 'Dispositivos conectados'
+  },
+  { 
+    text: 'Agendamentos', 
+    icon: <Schedule />, 
+    path: '/schedules',
+    badge: null,
+    description: 'Programação de conteúdo'
+  },
+  { 
+    text: 'Configurações', 
+    icon: <Settings />, 
+    path: '/settings',
+    badge: null,
+    description: 'Configurações do sistema'
+  },
 ];
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const { user, logout } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -69,26 +120,252 @@ export default function Layout() {
   };
 
   const drawer = (
-    <div>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div">
-          Controle de Televisões iTracker
-        </Typography>
+    <Box
+      sx={{
+        height: '100%',
+        background: isDarkMode 
+          ? 'linear-gradient(180deg, #000000 0%, #1a1a1a 100%)'
+          : 'linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: isDarkMode 
+            ? 'radial-gradient(circle at top left, rgba(255, 152, 0, 0.1) 0%, transparent 50%)'
+            : 'radial-gradient(circle at top left, rgba(25, 118, 210, 0.05) 0%, transparent 50%)',
+          pointerEvents: 'none',
+        },
+      }}
+    >
+      <Toolbar
+        sx={{
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+            : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          color: 'white',
+          position: 'relative',
+          overflow: 'hidden',
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: -50,
+            right: -50,
+            width: 100,
+            height: 100,
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '50%',
+            animation: 'pulse 4s ease-in-out infinite',
+          },
+          '@keyframes pulse': {
+            '0%, 100%': {
+              transform: 'scale(1)',
+              opacity: 0.7,
+            },
+            '50%': {
+              transform: 'scale(1.2)',
+              opacity: 0.3,
+            },
+          },
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={2} sx={{ position: 'relative', zIndex: 1 }}>
+          <Avatar
+            sx={{
+              bgcolor: 'rgba(255, 255, 255, 0.2)',
+              width: 40,
+              height: 40,
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+            }}
+          >
+            <Tv />
+          </Avatar>
+          <Box>
+            <Typography variant="h6" noWrap component="div" fontWeight="bold">
+              TVS iTracker
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.9 }}>
+              Digital Signage
+            </Typography>
+          </Box>
+        </Box>
       </Toolbar>
-      <List>
-        {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
-            <ListItemButton
-              selected={location.pathname === item.path}
-              onClick={() => navigate(item.path)}
-            >
-              <ListItemIcon>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
-          </ListItem>
-        ))}
+
+      <Box sx={{ p: 2, position: 'relative', zIndex: 1 }}>
+        <Chip
+          label={`Bem-vindo, ${user?.username || 'Usuário'}`}
+          avatar={<Avatar sx={{ bgcolor: 'primary.main' }}><AccountCircle /></Avatar>}
+          variant="outlined"
+          sx={{
+            width: '100%',
+            justifyContent: 'flex-start',
+            mb: 2,
+            bgcolor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
+            borderColor: isDarkMode ? 'rgba(255, 152, 0, 0.3)' : 'rgba(25, 118, 210, 0.3)',
+            '&:hover': {
+              bgcolor: isDarkMode ? 'rgba(255, 152, 0, 0.2)' : 'rgba(25, 118, 210, 0.2)',
+            },
+          }}
+        />
+      </Box>
+
+      <Divider sx={{ mx: 2, opacity: 0.3 }} />
+
+      <List sx={{ px: 1, pt: 2 }}>
+        {menuItems.map((item, index) => {
+          const isActive = location.pathname === item.path || 
+                          (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+          
+          return (
+            <Fade in={true} timeout={300 + index * 100} key={item.text}>
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  selected={isActive}
+                  onClick={() => navigate(item.path)}
+                  sx={{
+                    borderRadius: 2,
+                    mx: 1,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: isActive 
+                        ? (isDarkMode 
+                          ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.2) 0%, rgba(245, 124, 0, 0.1) 100%)'
+                          : 'linear-gradient(135deg, rgba(25, 118, 210, 0.15) 0%, rgba(21, 101, 192, 0.1) 100%)')
+                        : 'transparent',
+                      transition: 'all 0.3s ease',
+                    },
+                    '&:hover': {
+                      transform: 'translateX(4px)',
+                      bgcolor: 'transparent',
+                      '&::before': {
+                        background: isDarkMode 
+                          ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(245, 124, 0, 0.05) 100%)'
+                          : 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(21, 101, 192, 0.05) 100%)',
+                      },
+                    },
+                    '&.Mui-selected': {
+                      bgcolor: 'transparent',
+                      '&::after': {
+                        content: '""',
+                        position: 'absolute',
+                        left: 0,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        width: 4,
+                        height: '60%',
+                        background: isDarkMode 
+                          ? 'linear-gradient(180deg, #ff9800 0%, #f57c00 100%)'
+                          : 'linear-gradient(180deg, #1976d2 0%, #1565c0 100%)',
+                        borderRadius: '0 2px 2px 0',
+                      },
+                      '&:hover': {
+                        bgcolor: 'transparent',
+                      },
+                    },
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      position: 'relative',
+                      zIndex: 1,
+                      color: isActive 
+                        ? (isDarkMode ? '#ff9800' : '#1976d2')
+                        : 'inherit',
+                      transition: 'all 0.3s ease',
+                      transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    sx={{ position: 'relative', zIndex: 1 }}
+                    primary={
+                      <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Typography
+                          variant="body2"
+                          fontWeight={isActive ? 'bold' : 'medium'}
+                          sx={{
+                            color: isActive 
+                              ? (isDarkMode ? '#ff9800' : '#1976d2')
+                              : 'inherit',
+                            transition: 'all 0.3s ease',
+                          }}
+                        >
+                          {item.text}
+                        </Typography>
+                        {item.badge && (
+                          <Badge
+                            badgeContent={item.badge}
+                            color="primary"
+                            sx={{
+                              '& .MuiBadge-badge': {
+                                fontSize: '0.7rem',
+                                minWidth: 18,
+                                height: 18,
+                                bgcolor: isDarkMode ? '#ff9800' : '#1976d2',
+                              },
+                            }}
+                          />
+                        )}
+                      </Box>
+                    }
+                    secondary={
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: 'text.secondary',
+                          opacity: isActive ? 1 : 0.7,
+                          transition: 'opacity 0.3s ease',
+                        }}
+                      >
+                        {item.description}
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
+              </ListItem>
+            </Fade>
+          );
+        })}
       </List>
-    </div>
+
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 16,
+          left: 16,
+          right: 16,
+          p: 2,
+          borderRadius: 2,
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(245, 124, 0, 0.05) 100%)'
+            : 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(21, 101, 192, 0.05) 100%)',
+          border: `1px solid ${isDarkMode ? 'rgba(255, 152, 0, 0.2)' : 'rgba(25, 118, 210, 0.2)'}`,
+        }}
+      >
+        <Box display="flex" alignItems="center" gap={1} mb={1}>
+          <TrendingUp sx={{ fontSize: 16, color: 'success.main' }} />
+          <Typography variant="caption" fontWeight="bold">
+            Sistema Online
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          Todos os serviços funcionando normalmente
+        </Typography>
+      </Box>
+    </Box>
   );
 
   return (
@@ -99,6 +376,11 @@ export default function Layout() {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          background: isDarkMode 
+            ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
+            : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          backdropFilter: 'blur(10px)',
+          borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 152, 0, 0.2)' : 'rgba(255, 255, 255, 0.2)'}`,
         }}
       >
         <Toolbar>
@@ -116,12 +398,33 @@ export default function Layout() {
           </Typography>
           <div>
             <IconButton
+              color="inherit"
+              onClick={toggleTheme}
+              title={isDarkMode ? 'Modo Claro' : 'Modo Escuro'}
+              sx={{ 
+                mr: 1,
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'scale(1.1)',
+                  bgcolor: 'rgba(255, 255, 255, 0.1)',
+                },
+              }}
+            >
+              {isDarkMode ? <Brightness7 /> : <Brightness4 />}
+            </IconButton>
+            <IconButton
               size="large"
               aria-label="account of current user"
               aria-controls="menu-appbar"
               aria-haspopup="true"
               onClick={handleMenu}
               color="inherit"
+              sx={{
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  transform: 'scale(1.05)',
+                },
+              }}
             >
               <Avatar sx={{ width: 32, height: 32 }}>
                 <AccountCircle />
@@ -141,6 +444,15 @@ export default function Layout() {
               }}
               open={Boolean(anchorEl)}
               onClose={handleClose}
+              sx={{
+                '& .MuiPaper-root': {
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+                    : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                  backdropFilter: 'blur(10px)',
+                  border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+                },
+              }}
             >
               <MenuItem onClick={handleClose}>
                 <AccountCircle sx={{ mr: 1 }} />
@@ -168,7 +480,11 @@ export default function Layout() {
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              border: 'none',
+            },
           }}
         >
           {drawer}
@@ -177,7 +493,11 @@ export default function Layout() {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              border: 'none',
+            },
           }}
           open
         >

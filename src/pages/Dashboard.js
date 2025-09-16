@@ -14,6 +14,18 @@ import {
   ListItemIcon,
   IconButton,
   Tooltip,
+  LinearProgress,
+  Avatar,
+  Fade,
+  Grow,
+  Paper,
+  Divider,
+  Fab,
+  Skeleton,
+  Badge,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
 } from '@mui/material';
 import {
   VideoLibrary as ContentIcon,
@@ -27,6 +39,14 @@ import {
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
   Storage as StorageIcon,
+  CheckCircle as CheckCircleIcon,
+  Timeline as TimelineIcon,
+  Add as AddIcon,
+  Upload as UploadIcon,
+  PlayArrow as PlayIcon,
+  Settings as SettingsIcon,
+  TrendingDown as TrendingDownIcon,
+  Remove as RemoveIcon,
 } from '@mui/icons-material';
 import { Line } from 'react-chartjs-2';
 import {
@@ -38,9 +58,11 @@ import {
   Title,
   Tooltip as ChartTooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 ChartJS.register(
   CategoryScale,
@@ -49,10 +71,173 @@ ChartJS.register(
   LineElement,
   Title,
   ChartTooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Skeleton loading component for stat cards
+const StatCardSkeleton = ({ delay = 0 }) => (
+  <Grow in={true} timeout={1000 + delay * 200}>
+    <Card sx={{ height: '100%', p: 2 }}>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+        <Skeleton variant="circular" width={56} height={56} />
+        <Skeleton variant="text" width={60} height={20} />
+      </Box>
+      <Skeleton variant="text" width="80%" height={40} sx={{ mb: 1 }} />
+      <Skeleton variant="text" width="60%" height={24} sx={{ mb: 1 }} />
+      <Skeleton variant="text" width="40%" height={16} />
+    </Card>
+  </Grow>
+);
+
+// Enhanced StatCard component with animations and gradients
+const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previousValue }) => {
+  const { isDarkMode } = useTheme();
+  
+  const gradients = {
+    primary: isDarkMode 
+      ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+      : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+    success: isDarkMode
+      ? 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)'
+      : 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
+    warning: isDarkMode
+      ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+      : 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+    info: isDarkMode
+      ? 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)'
+      : 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
+  };
+
+  // Calculate trend direction
+  const getTrendIcon = () => {
+    if (!trend) return null;
+    const isPositive = trend.includes('+') || trend.includes('↑');
+    const isNegative = trend.includes('-') || trend.includes('↓');
+    
+    if (isPositive) return <TrendingUpIcon fontSize="small" />;
+    if (isNegative) return <TrendingDownIcon fontSize="small" />;
+    return <RemoveIcon fontSize="small" />;
+  };
+
+  const getTrendColor = () => {
+    if (!trend) return 'inherit';
+    const isPositive = trend.includes('+') || trend.includes('↑');
+    const isNegative = trend.includes('-') || trend.includes('↓');
+    
+    if (isPositive) return '#4caf50';
+    if (isNegative) return '#f44336';
+    return 'inherit';
+  };
+
+  return (
+    <Grow in={true} timeout={1000 + delay * 200}>
+      <Card
+        sx={{
+          height: '100%',
+          background: gradients[color] || gradients.primary,
+          color: 'white',
+          position: 'relative',
+          overflow: 'hidden',
+          cursor: 'pointer',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          '&:hover': {
+            transform: 'translateY(-4px) scale(1.02)',
+            boxShadow: isDarkMode 
+              ? '0 12px 35px rgba(255, 152, 0, 0.4)'
+              : '0 12px 35px rgba(0, 0, 0, 0.25)',
+          },
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(255, 255, 255, 0.1)',
+            opacity: 0,
+            transition: 'opacity 0.3s ease',
+          },
+          '&:hover::before': {
+            opacity: 1,
+          },
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: -50,
+            right: -50,
+            width: 100,
+            height: 100,
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '50%',
+            transition: 'all 0.5s ease',
+          },
+          '&:hover::after': {
+            transform: 'scale(1.5)',
+            opacity: 0,
+          },
+        }}
+      >
+        <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+            <Avatar
+              sx={{
+                bgcolor: 'rgba(255, 255, 255, 0.2)',
+                width: 56,
+                height: 56,
+                transition: 'all 0.3s ease',
+              }}
+            >
+              {icon}
+            </Avatar>
+            {trend && (
+              <Box 
+                display="flex" 
+                alignItems="center" 
+                gap={0.5}
+                sx={{
+                  bgcolor: 'rgba(255, 255, 255, 0.2)',
+                  borderRadius: 2,
+                  px: 1,
+                  py: 0.5,
+                }}
+              >
+                <Box sx={{ color: getTrendColor() }}>
+                  {getTrendIcon()}
+                </Box>
+                <Typography variant="caption" fontWeight="bold">
+                  {trend}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <Typography 
+            variant="h3" 
+            component="div" 
+            fontWeight="bold" 
+            mb={1}
+            sx={{
+              textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              transition: 'all 0.3s ease',
+            }}
+          >
+            {value}
+          </Typography>
+          <Typography variant="h6" mb={1} sx={{ opacity: 0.95 }}>
+            {title}
+          </Typography>
+          {subtitle && (
+            <Typography variant="body2" sx={{ opacity: 0.85 }}>
+              {subtitle}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+    </Grow>
+  );
+};
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
@@ -61,7 +246,10 @@ const Dashboard = () => {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const { user } = useAuth();
+  const { isDarkMode } = useTheme();
 
   useEffect(() => {
     if (user) {
@@ -69,9 +257,22 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  const loadDashboardData = async () => {
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    let interval;
+    if (autoRefresh && user) {
+      interval = setInterval(() => {
+        loadDashboardData(true); // Silent refresh
+      }, 30000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh, user]);
+
+  const loadDashboardData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [statsRes, alertsRes, performanceRes, healthRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/dashboard/stats`),
         axios.get(`${API_BASE_URL}/dashboard/alerts`),
@@ -83,11 +284,12 @@ const Dashboard = () => {
       setAlerts(alertsRes.data.alerts);
       setPerformance(performanceRes.data);
       setHealth(healthRes.data);
+      setLastUpdated(new Date());
     } catch (err) {
       setError('Erro ao carregar dados do dashboard');
       console.error('Dashboard error:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -118,57 +320,161 @@ const Dashboard = () => {
 
   const chartOptions = {
     responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
     plugins: {
       legend: {
         position: 'top',
+        labels: {
+          color: isDarkMode ? '#ff9800' : '#000000',
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 12,
+            weight: 'bold',
+          },
+        },
       },
       title: {
         display: true,
         text: 'Atividade dos Últimos 7 Dias',
+        color: isDarkMode ? '#ff9800' : '#000000',
+        font: {
+          size: 16,
+          weight: 'bold',
+        },
+        padding: 20,
+      },
+      tooltip: {
+        backgroundColor: isDarkMode ? '#1a1a1a' : '#ffffff',
+        titleColor: isDarkMode ? '#ff9800' : '#000000',
+        bodyColor: isDarkMode ? '#ffffff' : '#666666',
+        borderColor: isDarkMode ? '#333333' : '#e0e0e0',
+        borderWidth: 1,
       },
     },
     scales: {
+      x: {
+        ticks: {
+          color: isDarkMode ? '#ffffff' : '#666666',
+          font: {
+            size: 11,
+          },
+        },
+        grid: {
+          color: isDarkMode ? '#333333' : '#e0e0e0',
+          drawBorder: false,
+        },
+      },
       y: {
         beginAtZero: true,
+        ticks: {
+          color: isDarkMode ? '#ffffff' : '#666666',
+          font: {
+            size: 11,
+          },
+        },
+        grid: {
+          color: isDarkMode ? '#333333' : '#e0e0e0',
+          drawBorder: false,
+        },
+      },
+    },
+    elements: {
+      line: {
+        tension: 0.4,
+      },
+      point: {
+        radius: 6,
+        hoverRadius: 8,
+        borderWidth: 2,
       },
     },
   };
 
   const chartData = performance ? {
     labels: performance.content_per_day?.map(item => 
-      new Date(item.date).toLocaleDateString('pt-BR')
+      new Date(item.date).toLocaleDateString('pt-BR', { 
+        day: '2-digit', 
+        month: '2-digit' 
+      })
     ) || [],
     datasets: [
       {
         label: 'Conteúdo Criado',
         data: performance.content_per_day?.map(item => item.count) || [],
-        borderColor: 'rgb(75, 192, 192)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        borderColor: isDarkMode ? '#ff9800' : '#1976d2',
+        backgroundColor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
+        fill: true,
+        borderWidth: 3,
       },
       {
         label: 'Campanhas Criadas',
         data: performance.campaigns_per_day?.map(item => item.count) || [],
-        borderColor: 'rgb(255, 99, 132)',
-        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+        borderColor: isDarkMode ? '#ffffff' : '#dc004e',
+        backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(220, 0, 78, 0.1)',
+        fill: true,
+        borderWidth: 3,
       },
     ],
   } : null;
 
+  const speedDialActions = [
+    { icon: <UploadIcon />, name: 'Novo Conteúdo', onClick: () => window.location.href = '/content/new' },
+    { icon: <CampaignIcon />, name: 'Nova Campanha', onClick: () => window.location.href = '/campaigns/new' },
+    { icon: <PlayerIcon />, name: 'Novo Player', onClick: () => window.location.href = '/players/new' },
+    { icon: <ScheduleIcon />, name: 'Novo Agendamento', onClick: () => window.location.href = '/schedules/new' },
+  ];
+
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
+      <Box>
+        <Fade in={true} timeout={800}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+            <Box>
+              <Skeleton variant="text" width={200} height={48} />
+              <Skeleton variant="text" width={300} height={24} />
+            </Box>
+            <Skeleton variant="circular" width={56} height={56} />
+          </Box>
+        </Fade>
+
+        <Skeleton variant="rectangular" width="100%" height={120} sx={{ mb: 4, borderRadius: 3 }} />
+
+        <Grid container spacing={3} mb={4}>
+          {[0, 1, 2, 3].map((index) => (
+            <Grid item xs={12} sm={6} md={3} key={index}>
+              <StatCardSkeleton delay={index} />
+            </Grid>
+          ))}
+        </Grid>
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={8}>
+            <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 3 }} />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 3 }} />
+          </Grid>
+        </Grid>
       </Box>
     );
   }
 
   if (error) {
     return (
-      <Alert severity="error" action={
-        <IconButton color="inherit" size="small" onClick={loadDashboardData}>
-          <RefreshIcon />
-        </IconButton>
-      }>
+      <Alert 
+        severity="error" 
+        sx={{ borderRadius: 2 }}
+        action={
+          <IconButton color="inherit" size="small" onClick={loadDashboardData}>
+            <RefreshIcon />
+          </IconButton>
+        }
+      >
         {error}
       </Alert>
     );
@@ -176,158 +482,377 @@ const Dashboard = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Dashboard
-        </Typography>
-        <Tooltip title="Atualizar dados">
-          <IconButton onClick={loadDashboardData}>
-            <RefreshIcon />
-          </IconButton>
-        </Tooltip>
-      </Box>
+      <Fade in={true} timeout={800}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+          <Box>
+            <Typography variant="h3" component="h1" fontWeight="bold" gutterBottom>
+              Dashboard
+            </Typography>
+            <Box display="flex" alignItems="center" gap={2}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Visão geral do sistema de sinalização digital
+              </Typography>
+              {lastUpdated && (
+                <Chip
+                  label={`Atualizado: ${lastUpdated.toLocaleTimeString('pt-BR')}`}
+                  size="small"
+                  variant="outlined"
+                  sx={{ opacity: 0.7 }}
+                />
+              )}
+            </Box>
+          </Box>
+          <Box display="flex" gap={1}>
+            <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
+              <IconButton 
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                sx={{
+                  bgcolor: autoRefresh ? 'success.main' : 'action.disabled',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: autoRefresh ? 'success.dark' : 'action.hover',
+                  },
+                }}
+              >
+                <PlayIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Atualizar dados">
+              <IconButton 
+                onClick={() => loadDashboardData()}
+                sx={{
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'primary.dark',
+                    transform: 'rotate(180deg)',
+                  },
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+      </Fade>
 
       {/* Status de Saúde do Sistema */}
       {health && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Box display="flex" alignItems="center" gap={2}>
-              <Typography variant="h6">Status do Sistema</Typography>
-              <Chip 
-                label={health.status === 'healthy' ? 'Saudável' : 
-                      health.status === 'warning' ? 'Atenção' : 'Crítico'}
-                color={getHealthColor(health.status)}
-              />
-              <Typography variant="body2" color="text.secondary">
-                {health.overall_health}% de saúde geral
-              </Typography>
+        <Fade in={true} timeout={1000}>
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 4,
+              p: 3,
+              borderRadius: 3,
+              background: isDarkMode 
+                ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+                : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+              border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+              position: 'relative',
+              overflow: 'hidden',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 4,
+                background: health.status === 'healthy' ? 'linear-gradient(90deg, #4caf50, #81c784)' :
+                           health.status === 'warning' ? 'linear-gradient(90deg, #ff9800, #ffb74d)' :
+                           'linear-gradient(90deg, #f44336, #e57373)',
+              },
+            }}
+          >
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box display="flex" alignItems="center" gap={3}>
+                <Badge
+                  badgeContent={health.overall_health}
+                  color={health.status === 'healthy' ? 'success' : 
+                         health.status === 'warning' ? 'warning' : 'error'}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                    },
+                  }}
+                >
+                  <Avatar
+                    sx={{
+                      bgcolor: health.status === 'healthy' ? 'success.main' : 
+                              health.status === 'warning' ? 'warning.main' : 'error.main',
+                      width: 56,
+                      height: 56,
+                    }}
+                  >
+                    <CheckCircleIcon />
+                  </Avatar>
+                </Badge>
+                <Box>
+                  <Typography variant="h5" fontWeight="bold" gutterBottom>
+                    Status do Sistema
+                  </Typography>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Chip 
+                      label={health.status === 'healthy' ? 'Saudável' : 
+                            health.status === 'warning' ? 'Atenção' : 'Crítico'}
+                      color={getHealthColor(health.status)}
+                      sx={{ fontWeight: 'bold' }}
+                    />
+                    <Typography variant="body1" color="text.secondary">
+                      {health.overall_health}% de saúde geral
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+              <Box sx={{ width: 200 }}>
+                <LinearProgress
+                  variant="determinate"
+                  value={health.overall_health}
+                  sx={{
+                    height: 8,
+                    borderRadius: 4,
+                    bgcolor: isDarkMode ? '#333' : '#e0e0e0',
+                    '& .MuiLinearProgress-bar': {
+                      borderRadius: 4,
+                    },
+                  }}
+                />
+              </Box>
             </Box>
-          </CardContent>
-        </Card>
+          </Paper>
+        </Fade>
       )}
 
       {/* Estatísticas Principais */}
-      <Grid container spacing={3} mb={3}>
+      <Grid container spacing={3} mb={4}>
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <ContentIcon color="primary" />
-                <Box>
-                  <Typography variant="h4">
-                    {stats?.overview.total_content || 0}
-                  </Typography>
-                  <Typography color="text.secondary">
-                    Conteúdos
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={<ContentIcon />}
+            title="Conteúdos"
+            value={stats?.overview.total_content || 0}
+            subtitle="Total de mídias"
+            color="primary"
+            trend="+12%"
+            delay={0}
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <CampaignIcon color="primary" />
-                <Box>
-                  <Typography variant="h4">
-                    {stats?.overview.total_campaigns || 0}
-                  </Typography>
-                  <Typography color="text.secondary">
-                    Campanhas
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={<CampaignIcon />}
+            title="Campanhas"
+            value={stats?.overview.total_campaigns || 0}
+            subtitle="Campanhas ativas"
+            color="success"
+            trend="+8%"
+            delay={1}
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <PlayerIcon color="primary" />
-                <Box>
-                  <Typography variant="h4">
-                    {stats?.overview.online_players || 0}/{stats?.overview.total_players || 0}
-                  </Typography>
-                  <Typography color="text.secondary">
-                    Players Online
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={<PlayerIcon />}
+            title="Players Online"
+            value={`${stats?.overview.online_players || 0}/${stats?.overview.total_players || 0}`}
+            subtitle="Dispositivos conectados"
+            color="info"
+            trend="98%"
+            delay={2}
+          />
         </Grid>
 
         <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <StorageIcon color="primary" />
-                <Box>
-                  <Typography variant="h4">
-                    {stats?.storage.percentage.toFixed(1) || 0}%
-                  </Typography>
-                  <Typography color="text.secondary">
-                    Armazenamento
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+          <StatCard
+            icon={<StorageIcon />}
+            title="Armazenamento"
+            value={`${stats?.storage.percentage.toFixed(1) || 0}%`}
+            subtitle="Espaço utilizado"
+            color="warning"
+            trend="Normal"
+            delay={3}
+          />
         </Grid>
       </Grid>
 
       <Grid container spacing={3}>
         {/* Gráfico de Performance */}
         <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Atividade Recente
-              </Typography>
+          <Fade in={true} timeout={1200}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                height: 400,
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+                  : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 100,
+                  height: 100,
+                  background: `radial-gradient(circle, ${isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
+                },
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={2} mb={3}>
+                <Avatar sx={{ bgcolor: 'primary.main' }}>
+                  <TimelineIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" fontWeight="bold">
+                    Atividade Recente
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Evolução de conteúdo e campanhas
+                  </Typography>
+                </Box>
+              </Box>
               {chartData && (
                 <Box height={300}>
                   <Line options={chartOptions} data={chartData} />
                 </Box>
               )}
-            </CardContent>
-          </Card>
+            </Paper>
+          </Fade>
         </Grid>
 
         {/* Alertas do Sistema */}
         <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Alertas do Sistema
-              </Typography>
+          <Fade in={true} timeout={1400}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                height: 400,
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+                  : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={2} mb={3}>
+                <Badge badgeContent={alerts.length} color="error">
+                  <Avatar sx={{ bgcolor: 'warning.main' }}>
+                    <WarningIcon />
+                  </Avatar>
+                </Badge>
+                <Box>
+                  <Typography variant="h6" fontWeight="bold">
+                    Alertas do Sistema
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Notificações importantes
+                  </Typography>
+                </Box>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
               {alerts.length === 0 ? (
-                <Typography color="text.secondary">
-                  Nenhum alerta no momento
-                </Typography>
+                <Box 
+                  display="flex" 
+                  flexDirection="column" 
+                  alignItems="center" 
+                  justifyContent="center"
+                  height={200}
+                >
+                  <CheckCircleIcon 
+                    sx={{ 
+                      fontSize: 48, 
+                      color: 'success.main',
+                      mb: 2 
+                    }} 
+                  />
+                  <Typography variant="h6" color="success.main" fontWeight="bold">
+                    Tudo funcionando!
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" textAlign="center">
+                    Nenhum alerta no momento
+                  </Typography>
+                </Box>
               ) : (
-                <List dense>
+                <List dense sx={{ maxHeight: 280, overflow: 'auto' }}>
                   {alerts.slice(0, 5).map((alert, index) => (
-                    <ListItem key={index}>
-                      <ListItemIcon>
-                        {getAlertIcon(alert.type)}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={alert.title}
-                        secondary={alert.message}
-                      />
-                    </ListItem>
+                    <Grow in={true} timeout={1000 + index * 100} key={index}>
+                      <ListItem
+                        sx={{
+                          borderRadius: 2,
+                          mb: 1,
+                          bgcolor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+                          '&:hover': {
+                            bgcolor: isDarkMode ? '#333' : '#e0e0e0',
+                            transform: 'translateX(4px)',
+                          },
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <ListItemIcon>
+                          {getAlertIcon(alert.type)}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {alert.title}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="body2" color="text.secondary">
+                              {alert.message}
+                            </Typography>
+                          }
+                        />
+                      </ListItem>
+                    </Grow>
                   ))}
                 </List>
               )}
-            </CardContent>
-          </Card>
+            </Paper>
+          </Fade>
         </Grid>
       </Grid>
+
+      {/* Speed Dial for Quick Actions */}
+      <SpeedDial
+        ariaLabel="Ações rápidas"
+        sx={{ 
+          position: 'fixed', 
+          bottom: 24, 
+          right: 24,
+          '& .MuiFab-primary': {
+            bgcolor: 'primary.main',
+            '&:hover': {
+              bgcolor: 'primary.dark',
+            },
+          },
+        }}
+        icon={<SpeedDialIcon />}
+      >
+        {speedDialActions.map((action) => (
+          <SpeedDialAction
+            key={action.name}
+            icon={action.icon}
+            tooltipTitle={action.name}
+            onClick={action.onClick}
+            sx={{
+              '& .MuiFab-primary': {
+                bgcolor: isDarkMode ? '#333' : '#fff',
+                color: isDarkMode ? '#ff9800' : '#1976d2',
+                '&:hover': {
+                  bgcolor: isDarkMode ? '#444' : '#f5f5f5',
+                },
+              },
+            }}
+          />
+        ))}
+      </SpeedDial>
     </Box>
   );
 };

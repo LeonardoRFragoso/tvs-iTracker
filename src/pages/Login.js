@@ -16,8 +16,11 @@ import {
   Visibility,
   VisibilityOff,
   Email as EmailIcon,
+  Brightness4,
+  Brightness7,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 const Login = () => {
@@ -27,6 +30,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, user } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -76,8 +80,23 @@ const Login = () => {
           alignItems: 'center',
           minHeight: '100vh',
           justifyContent: 'center',
+          position: 'relative',
         }}
       >
+        {/* Theme toggle button */}
+        <IconButton
+          onClick={toggleTheme}
+          title={isDarkMode ? 'Modo Claro' : 'Modo Escuro'}
+          sx={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            color: 'text.primary',
+          }}
+        >
+          {isDarkMode ? <Brightness7 /> : <Brightness4 />}
+        </IconButton>
+
         <Paper
           elevation={3}
           sx={{
