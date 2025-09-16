@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -38,68 +38,103 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import axios from 'axios';
 
 const drawerWidth = 240;
 
-const menuItems = [
-  { 
-    text: 'Dashboard', 
-    icon: <Dashboard />, 
-    path: '/dashboard',
-    badge: null,
-    description: 'Visão geral do sistema'
-  },
-  { 
-    text: 'Conteúdo', 
-    icon: <VideoLibrary />, 
-    path: '/content',
-    badge: '4',
-    description: 'Gerenciar mídias'
-  },
-  { 
-    text: 'Sedes', 
-    icon: <LocationOn />, 
-    path: '/locations',
-    badge: '3',
-    description: 'Localizações ativas'
-  },
-  { 
-    text: 'Campanhas', 
-    icon: <Campaign />, 
-    path: '/campaigns',
-    badge: null,
-    description: 'Campanhas publicitárias'
-  },
-  { 
-    text: 'Players', 
-    icon: <Tv />, 
-    path: '/players',
-    badge: '7',
-    description: 'Dispositivos conectados'
-  },
-  { 
-    text: 'Agendamentos', 
-    icon: <Schedule />, 
-    path: '/schedules',
-    badge: null,
-    description: 'Programação de conteúdo'
-  },
-  { 
-    text: 'Configurações', 
-    icon: <Settings />, 
-    path: '/settings',
-    badge: null,
-    description: 'Configurações do sistema'
-  },
-];
-
-export default function Layout() {
+const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [badges, setBadges] = useState({
+    content: 0,
+    locations: 0,
+    players: 0
+  });
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Buscar dados para badges
+  useEffect(() => {
+    const fetchBadgeData = async () => {
+      try {
+        const [contentRes, locationsRes, dashboardRes] = await Promise.all([
+          axios.get('/api/content?per_page=1000'), // Buscar todos os conteúdos
+          axios.get('/api/locations'),
+          axios.get('/api/dashboard/stats') // Buscar stats do dashboard para players online
+        ]);
+
+        setBadges({
+          content: contentRes.data.total || contentRes.data.content?.length || 0,
+          locations: locationsRes.data.length || 0,
+          players: dashboardRes.data.overview?.online_players || 0 // Usar players online em vez do total
+        });
+      } catch (error) {
+        console.error('Erro ao buscar dados dos badges:', error);
+        // Manter valores padrão em caso de erro
+        setBadges({
+          content: 4,
+          locations: 3,
+          players: 0 // Padrão 0 para players online
+        });
+      }
+    };
+
+    fetchBadgeData();
+  }, []);
+
+  const menuItems = [
+    { 
+      text: 'Dashboard', 
+      icon: <Dashboard />, 
+      path: '/dashboard',
+      badge: null,
+      description: 'Visão geral do sistema'
+    },
+    { 
+      text: 'Conteúdo', 
+      icon: <VideoLibrary />, 
+      path: '/content',
+      badge: badges.content > 0 ? badges.content.toString() : null,
+      description: 'Gerenciar mídias'
+    },
+    { 
+      text: 'Sedes', 
+      icon: <LocationOn />, 
+      path: '/locations',
+      badge: badges.locations > 0 ? badges.locations.toString() : null,
+      description: 'Localizações ativas'
+    },
+    { 
+      text: 'Campanhas', 
+      icon: <Campaign />, 
+      path: '/campaigns',
+      badge: null,
+      description: 'Campanhas publicitárias'
+    },
+    { 
+      text: 'Players', 
+      icon: <Tv />, 
+      path: '/players',
+      badge: badges.players > 0 ? badges.players.toString() : null,
+      description: 'Players online'
+    },
+    { 
+      text: 'Agendamentos', 
+      icon: <Schedule />, 
+      path: '/schedules',
+      badge: null,
+      description: 'Programação de conteúdo'
+    },
+    { 
+      text: 'Configurações', 
+      icon: <Settings />, 
+      path: '/settings',
+      badge: null,
+      description: 'Configurações do sistema'
+    },
+  ];
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -542,3 +577,5 @@ export default function Layout() {
     </Box>
   );
 }
+
+export default Layout;

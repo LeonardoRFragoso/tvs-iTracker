@@ -50,6 +50,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Skeleton loading component for statistics cards
 const StatCardSkeleton = ({ delay = 0 }) => (
@@ -97,10 +98,21 @@ const LocationList = () => {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, location: null });
   const [stats, setStats] = useState({});
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchLocations();
   }, []);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (user) {
+        fetchLocations();
+      }
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   const fetchLocations = async () => {
     try {
@@ -197,63 +209,76 @@ const LocationList = () => {
   return (
     <Box sx={{ p: 4 }}>
       <Fade in={true} timeout={800}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-          <Box>
-            <Typography 
-              variant="h3" 
-              component="h1" 
-              fontWeight="bold" 
-              gutterBottom
-              sx={{
-                textShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              }}
-            >
-              Gerenciamento de Sedes
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              Monitore e gerencie todas as suas localizações
-            </Typography>
-          </Box>
-          <Box display="flex" gap={1}>
-            <Tooltip title="Atualizar dados">
-              <IconButton 
-                onClick={fetchLocations}
+        <Grow in={true} timeout={1000}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+            <Box display="flex" alignItems="center">
+              <Avatar
                 sx={{
-                  bgcolor: 'info.main',
-                  color: 'white',
+                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                  mr: 2,
+                  width: 48,
+                  height: 48,
+                }}
+              >
+                <LocationIcon />
+              </Avatar>
+              <Typography 
+                variant="h4" 
+                component="h1"
+                sx={{
+                  fontWeight: 700,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                    : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                Gerenciamento de Sedes
+              </Typography>
+            </Box>
+            <Box display="flex" gap={1}>
+              <Tooltip title="Atualizar dados">
+                <IconButton 
+                  onClick={fetchLocations}
+                  sx={{
+                    bgcolor: 'info.main',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: 'info.dark',
+                      transform: 'rotate(180deg)',
+                    },
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/locations/new')}
+                sx={{
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontWeight: 'bold',
+                  px: 3,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+                    : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
                   '&:hover': {
-                    bgcolor: 'info.dark',
-                    transform: 'rotate(180deg)',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 25px rgba(0,0,0,0.2)',
                   },
                   transition: 'all 0.3s ease',
                 }}
               >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => navigate('/locations/new')}
-              sx={{
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 'bold',
-                px: 3,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                  : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 8px 25px rgba(0,0,0,0.2)',
-                },
-                transition: 'all 0.3s ease',
-              }}
-            >
-              Nova Sede
-            </Button>
+                Nova Sede
+              </Button>
+            </Box>
           </Box>
-        </Box>
+        </Grow>
       </Fade>
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>

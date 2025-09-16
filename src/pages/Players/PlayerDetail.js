@@ -17,8 +17,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  MenuItem,
   Switch,
   FormControlLabel,
   Tabs,
@@ -58,9 +56,7 @@ const PlayerDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tabValue, setTabValue] = useState(0);
-  const [editDialog, setEditDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
-  const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
     loadPlayer();
@@ -71,7 +67,6 @@ const PlayerDetail = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/players/${id}`);
       setPlayer(response.data);
-      setEditForm(response.data);
     } catch (err) {
       setError('Erro ao carregar player');
       console.error('Load player error:', err);
@@ -82,20 +77,20 @@ const PlayerDetail = () => {
 
   const handlePlayerCommand = async (command) => {
     try {
-      await sendPlayerCommand(id, command);
-      setTimeout(loadPlayer, 1000); // Refresh after command
+      if (command === 'sync') {
+        // Para sync, usar endpoint HTTP específico
+        const response = await axios.post(`${API_BASE_URL}/players/${id}/sync`);
+        if (response.data.chromecast_status === 'found') {
+          setError(''); // Limpar erros anteriores
+        }
+        setTimeout(loadPlayer, 1000); // Refresh after sync
+      } else {
+        // Para outros comandos, usar WebSocket
+        await sendPlayerCommand(id, command);
+        setTimeout(loadPlayer, 1000); // Refresh after command
+      }
     } catch (err) {
-      setError(`Erro ao enviar comando: ${command}`);
-    }
-  };
-
-  const handleEdit = async () => {
-    try {
-      await axios.put(`${API_BASE_URL}/players/${id}`, editForm);
-      setEditDialog(false);
-      loadPlayer();
-    } catch (err) {
-      setError('Erro ao atualizar player');
+      setError(`Erro ao enviar comando: ${command} - ${err.response?.data?.error || err.message}`);
     }
   };
 
@@ -166,13 +161,13 @@ const PlayerDetail = () => {
           >
             Atualizar
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<EditIcon />}
-            onClick={() => setEditDialog(true)}
+          <IconButton
+            color="primary"
+            onClick={() => navigate(`/players/${id}/edit`)}
+            sx={{ mr: 1 }}
           >
-            Editar
-          </Button>
+            <EditIcon />
+          </IconButton>
           <Button
             variant="outlined"
             color="error"
@@ -283,9 +278,14 @@ const PlayerDetail = () => {
                 </Typography>
                 <List dense>
                   <ListItem>
-                    <ListItemText primary="Status" secondary={
-                      <Chip label={player.status} color={getStatusColor(player.status)} size="small" />
-                    } />
+                    <ListItemText 
+                      primary="Status"
+                      primaryTypographyProps={{ component: 'div' }}
+                      secondary={
+                        <Chip label={player.status} color={getStatusColor(player.status)} size="small" />
+                      }
+                      secondaryTypographyProps={{ component: 'div' }}
+                    />
                   </ListItem>
                   <ListItem>
                     <ListItemText primary="Online" secondary={player.is_online ? 'Sim' : 'Não'} />
@@ -411,91 +411,6 @@ const PlayerDetail = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Edit Dialog */}
-      <Dialog open={editDialog} onClose={() => setEditDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Editar Player</DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Nome"
-                value={editForm.name || ''}
-                onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Ambiente"
-                value={editForm.room_name || ''}
-                onChange={(e) => setEditForm({...editForm, room_name: e.target.value})}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                select
-                label="Resolução"
-                value={editForm.resolution || '1920x1080'}
-                onChange={(e) => setEditForm({...editForm, resolution: e.target.value})}
-              >
-                <MenuItem value="1920x1080">1920x1080 (Full HD)</MenuItem>
-                <MenuItem value="1366x768">1366x768 (HD)</MenuItem>
-                <MenuItem value="1280x720">1280x720 (HD Ready)</MenuItem>
-                <MenuItem value="3840x2160">3840x2160 (4K)</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                select
-                label="Orientação"
-                value={editForm.orientation || 'landscape'}
-                onChange={(e) => setEditForm({...editForm, orientation: e.target.value})}
-              >
-                <MenuItem value="landscape">Paisagem</MenuItem>
-                <MenuItem value="portrait">Retrato</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Duração padrão (segundos)"
-                value={editForm.default_content_duration || 10}
-                onChange={(e) => setEditForm({...editForm, default_content_duration: parseInt(e.target.value)})}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Volume (%)"
-                value={editForm.volume_level || 50}
-                onChange={(e) => setEditForm({...editForm, volume_level: parseInt(e.target.value)})}
-                inputProps={{ min: 0, max: 100 }}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={editForm.is_active || false}
-                    onChange={(e) => setEditForm({...editForm, is_active: e.target.checked})}
-                  />
-                }
-                label="Player ativo"
-              />
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialog(false)}>Cancelar</Button>
-          <Button onClick={handleEdit} variant="contained">Salvar</Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Delete Dialog */}
       <Dialog open={deleteDialog} onClose={() => setDeleteDialog(false)}>

@@ -55,6 +55,7 @@ const ContentForm = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [tagInput, setTagInput] = useState('');
+  const [detectedContentType, setDetectedContentType] = useState('');
 
   const { isDarkMode } = useTheme();
 
@@ -103,6 +104,7 @@ const ContentForm = () => {
     const selectedFile = acceptedFiles[0];
     if (selectedFile) {
       setFile(selectedFile);
+      setDetectedContentType(selectedFile.type);
       
       // Create preview for images
       if (selectedFile.type.startsWith('image/')) {
@@ -570,25 +572,27 @@ const ContentForm = () => {
                           </FormControl>
                         </Grid>
 
-                        <Grid item xs={12}>
-                          <TextField
-                            fullWidth
-                            label="Duração (segundos)"
-                            name="duration"
-                            type="number"
-                            value={formData.duration}
-                            onChange={handleInputChange}
-                            helperText="Para vídeos e áudios"
-                            sx={{
-                              '& .MuiOutlinedInput-root': {
-                                borderRadius: 2,
-                                '&:hover fieldset': {
-                                  borderColor: 'primary.main',
+                        {(detectedContentType?.startsWith('video/') || detectedContentType?.startsWith('audio/')) && (
+                          <Grid item xs={12}>
+                            <TextField
+                              fullWidth
+                              label="Duração (segundos)"
+                              name="duration"
+                              type="number"
+                              value={formData.duration}
+                              onChange={handleInputChange}
+                              helperText="Para vídeos e áudios"
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  '&:hover fieldset': {
+                                    borderColor: 'primary.main',
+                                  },
                                 },
-                              },
-                            }}
-                          />
-                        </Grid>
+                              }}
+                            />
+                          </Grid>
+                        )}
 
                         <Grid item xs={12}>
                           <Box display="flex" gap={1} mb={2}>

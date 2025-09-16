@@ -211,18 +211,20 @@ const PlayerForm = () => {
                     <TextField
                       fullWidth
                       label="MAC Address"
-                      value={formData.mac_address}
+                      value={formData.mac_address || ''}
                       onChange={(e) => handleChange('mac_address', e.target.value)}
-                      placeholder="00:00:00:00:00:00"
+                      placeholder="F4:F5:D8:51:81:20"
+                      disabled={loading}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <TextField
                       fullWidth
                       label="IP Address"
-                      value={formData.ip_address}
+                      value={formData.ip_address || ''}
                       onChange={(e) => handleChange('ip_address', e.target.value)}
-                      placeholder="192.168.1.100"
+                      placeholder="192.168.0.10"
+                      disabled={loading}
                     />
                   </Grid>
                 </Grid>

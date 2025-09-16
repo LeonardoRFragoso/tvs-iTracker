@@ -52,7 +52,7 @@ const CampaignList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, campaign: null });
@@ -70,7 +70,7 @@ const CampaignList = () => {
         page,
         per_page: 10,
         search: searchTerm || undefined,
-        status: filterStatus !== 'all' ? filterStatus : undefined,
+        status: filterStatus !== '' ? filterStatus : undefined,
       };
 
       const response = await axios.get(`${API_BASE_URL}/campaigns`, { params });
@@ -380,13 +380,19 @@ const CampaignList = () => {
                     <CardMedia
                       component="img"
                       height="200"
-                      image={campaign.thumbnail || '/placeholder-campaign.jpg'}
+                      image={campaign.thumbnail ? `${API_BASE_URL}${campaign.thumbnail}` : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDQwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjVmNWY1Ii8+CjxwYXRoIGQ9Ik0xNzUgNzVIMjI1VjEyNUgxNzVWNzVaIiBmaWxsPSIjY2NjY2NjIi8+CjxwYXRoIGQ9Ik0xOTAgMTAwTDIwNSA4NUwyMTAgMTAwTDIwNSAxMTVMMTkwIDEwMFoiIGZpbGw9IiNhYWFhYWEiLz4KPHRleHQgeD0iMjAwIiB5PSIxNTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSI+U2VtIEltYWdlbTwvdGV4dD4KPHN2Zz4='}
                       alt={campaign.name}
                       sx={{
                         transition: 'all 0.3s ease',
+                        objectFit: 'cover',
+                        backgroundColor: '#f5f5f5',
                         '&:hover': {
                           transform: 'scale(1.05)',
                         }
+                      }}
+                      onError={(e) => {
+                        // Fallback to SVG placeholder if thumbnail fails to load
+                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDQwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjVmNWY1Ii8+CjxwYXRoIGQ9Ik0xNzUgNzVIMjI1VjEyNUgxNzVWNzVaIiBmaWxsPSIjY2NjY2NjIi8+CjxwYXRoIGQ9Ik0xOTAgMTAwTDIwNSA4NUwyMTAgMTAwTDIwNSAxMTVMMTkwIDEwMFoiIGZpbGw9IiNhYWFhYWEiLz4KPHRleHQgeD0iMjAwIiB5PSIxNTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSI+U2VtIEltYWdlbTwvdGV4dD4KPHN2Zz4=';
                       }}
                     />
                     <Box

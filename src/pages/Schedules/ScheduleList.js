@@ -482,6 +482,7 @@ const ScheduleList = () => {
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Horário</TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Dias</TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Prioridade</TableCell>
                     <TableCell sx={{ fontWeight: 700, fontSize: '0.9rem' }}>Ações</TableCell>
                   </TableRow>
                 </TableHead>
@@ -548,16 +549,31 @@ const ScheduleList = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <Chip
-                              label={getStatusText(schedule)}
-                              color={getStatusColor(schedule)}
+                            <Chip 
+                              label={`Prioridade ${schedule.priority}`}
+                              color={
+                                schedule.priority >= 8 ? 'error' : 
+                                schedule.priority >= 5 ? 'warning' : 
+                                'default'
+                              }
                               size="small"
-                              sx={{
-                                borderRadius: '8px',
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                              }}
                             />
+                            {schedule.is_persistent && (
+                              <Chip 
+                                label="Persistente"
+                                color="info"
+                                size="small"
+                                sx={{ ml: 1 }}
+                              />
+                            )}
+                            {schedule.content_type === 'overlay' && (
+                              <Chip 
+                                label="Overlay"
+                                color="secondary"
+                                size="small"
+                                sx={{ ml: 1 }}
+                              />
+                            )}
                           </TableCell>
                           <TableCell>
                             <IconButton

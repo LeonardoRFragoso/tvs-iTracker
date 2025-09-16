@@ -612,86 +612,97 @@ const Dashboard = () => {
   return (
     <Box>
       <Fade in={true} timeout={800}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-          <Box>
-            <Typography variant="h3" component="h1" fontWeight="bold" gutterBottom>
-              Dashboard
-            </Typography>
-            <Box display="flex" alignItems="center" gap={2}>
-              <Typography variant="subtitle1" color="text.secondary">
-                Visão geral do sistema de sinalização digital
+        <Grow in={true} timeout={1000}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+            <Box display="flex" alignItems="center">
+              <Avatar
+                sx={{
+                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                  mr: 2,
+                  width: 48,
+                  height: 48,
+                }}
+              >
+                <TimelineIcon />
+              </Avatar>
+              <Typography 
+                variant="h4" 
+                component="h1"
+                sx={{
+                  fontWeight: 700,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
+                    : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                Dashboard
               </Typography>
-              {lastUpdated && (
-                <Chip
-                  label={`Atualizado: ${lastUpdated.toLocaleTimeString('pt-BR')}`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ opacity: 0.7 }}
-                />
-              )}
+            </Box>
+            <Box display="flex" gap={1}>
+              <Tooltip title="Atalhos do teclado (Ctrl+H)">
+                <IconButton 
+                  onClick={() => setKeyboardShortcutsOpen(true)}
+                  sx={{
+                    bgcolor: 'info.main',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: 'info.dark',
+                    },
+                  }}
+                >
+                  <KeyboardIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Exportar dados">
+                <IconButton 
+                  onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+                  sx={{
+                    bgcolor: 'secondary.main',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: 'secondary.dark',
+                    },
+                  }}
+                >
+                  <ExportIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
+                <IconButton 
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  sx={{
+                    bgcolor: autoRefresh ? 'success.main' : 'action.disabled',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: autoRefresh ? 'success.dark' : 'action.hover',
+                    },
+                  }}
+                >
+                  <PlayIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Atualizar dados">
+                <IconButton 
+                  onClick={() => loadDashboardData()}
+                  sx={{
+                    bgcolor: 'primary.main',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: 'primary.dark',
+                      transform: 'rotate(180deg)',
+                    },
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </Tooltip>
             </Box>
           </Box>
-          <Box display="flex" gap={1}>
-            <Tooltip title="Atalhos do teclado (Ctrl+H)">
-              <IconButton 
-                onClick={() => setKeyboardShortcutsOpen(true)}
-                sx={{
-                  bgcolor: 'info.main',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: 'info.dark',
-                  },
-                }}
-              >
-                <KeyboardIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Exportar dados">
-              <IconButton 
-                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
-                sx={{
-                  bgcolor: 'secondary.main',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: 'secondary.dark',
-                  },
-                }}
-              >
-                <ExportIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
-              <IconButton 
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                sx={{
-                  bgcolor: autoRefresh ? 'success.main' : 'action.disabled',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: autoRefresh ? 'success.dark' : 'action.hover',
-                  },
-                }}
-              >
-                <PlayIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Atualizar dados">
-              <IconButton 
-                onClick={() => loadDashboardData()}
-                sx={{
-                  bgcolor: 'primary.main',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
-                    transform: 'rotate(180deg)',
-                  },
-                  transition: 'all 0.3s ease',
-                }}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
+        </Grow>
       </Fade>
 
       {/* Status de Saúde do Sistema */}

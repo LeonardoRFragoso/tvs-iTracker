@@ -18,6 +18,8 @@ import {
   IconButton,
   Divider,
   Chip,
+  Switch,
+  FormHelperText,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -45,14 +47,16 @@ const ScheduleForm = () => {
     name: '',
     campaign_id: '',
     player_id: '',
-    start_date: new Date(),
-    end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-    start_time: null,
-    end_time: null,
+    start_date: '',
+    end_date: '',
+    start_time: '',
+    end_time: '',
     days_of_week: [1, 2, 3, 4, 5], // Monday to Friday
     repeat_type: 'daily',
     repeat_interval: 1,
     priority: 1,
+    is_persistent: false,
+    content_type: 'main',
     is_active: true,
   });
 
@@ -97,14 +101,16 @@ const ScheduleForm = () => {
         name: schedule.name || '',
         campaign_id: schedule.campaign_id || '',
         player_id: schedule.player_id || '',
-        start_date: new Date(schedule.start_date),
-        end_date: new Date(schedule.end_date),
-        start_time: schedule.start_time ? new Date(`2000-01-01T${schedule.start_time}`) : null,
-        end_time: schedule.end_time ? new Date(`2000-01-01T${schedule.end_time}`) : null,
+        start_date: schedule.start_date ? schedule.start_date.split('T')[0] : '',
+        end_date: schedule.end_date ? schedule.end_date.split('T')[0] : '',
+        start_time: schedule.start_time || '',
+        end_time: schedule.end_time || '',
         days_of_week: schedule.days_of_week ? schedule.days_of_week.split(',').map(d => parseInt(d.trim())) : [1,2,3,4,5],
         repeat_type: schedule.repeat_type || 'daily',
         repeat_interval: schedule.repeat_interval || 1,
         priority: schedule.priority || 1,
+        is_persistent: schedule.is_persistent || false,
+        content_type: schedule.content_type || 'main',
         is_active: schedule.is_active !== false,
       });
     } catch (err) {
@@ -139,16 +145,17 @@ const ScheduleForm = () => {
     try {
       const conflictData = {
         player_id: formData.player_id,
-        start_date: formData.start_date.toISOString(),
-        end_date: formData.end_date.toISOString(),
+        campaign_id: formData.campaign_id,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
         days_of_week: formData.days_of_week.join(','),
       };
 
       if (formData.start_time) {
-        conflictData.start_time = formData.start_time.toTimeString().slice(0, 5);
+        conflictData.start_time = formData.start_time;
       }
       if (formData.end_time) {
-        conflictData.end_time = formData.end_time.toTimeString().slice(0, 5);
+        conflictData.end_time = formData.end_time;
       }
       if (isEdit) {
         conflictData.exclude_schedule_id = id;
@@ -204,24 +211,21 @@ const ScheduleForm = () => {
       }
 
       const submitData = {
-        name: formData.name.trim(),
+        name: formData.name,
         campaign_id: formData.campaign_id,
         player_id: formData.player_id,
-        start_date: formData.start_date.toISOString(),
-        end_date: formData.end_date.toISOString(),
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        start_time: formData.start_time,
+        end_time: formData.end_time,
         days_of_week: formData.days_of_week.join(','),
         repeat_type: formData.repeat_type,
         repeat_interval: formData.repeat_interval,
         priority: formData.priority,
+        is_persistent: formData.is_persistent,
+        content_type: formData.content_type,
         is_active: formData.is_active,
       };
-
-      if (formData.start_time) {
-        submitData.start_time = formData.start_time.toTimeString().slice(0, 5);
-      }
-      if (formData.end_time) {
-        submitData.end_time = formData.end_time.toTimeString().slice(0, 5);
-      }
 
       let response;
       if (isEdit) {
@@ -435,35 +439,7 @@ const ScheduleForm = () => {
                   </Typography>
                   
                   <Grid container spacing={2}>
-                    <Grid item xs={12} md={4}>
-                      <FormControl fullWidth>
-                        <InputLabel>Tipo de Repetição</InputLabel>
-                        <Select
-                          value={formData.repeat_type}
-                          onChange={(e) => handleInputChange('repeat_type', e.target.value)}
-                          label="Tipo de Repetição"
-                        >
-                          {repeatTypes.map(type => (
-                            <MenuItem key={type.value} value={type.value}>
-                              {type.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={4}>
-                      <TextField
-                        fullWidth
-                        label="Intervalo de Repetição"
-                        type="number"
-                        value={formData.repeat_interval}
-                        onChange={(e) => handleInputChange('repeat_interval', parseInt(e.target.value) || 1)}
-                        inputProps={{ min: 1 }}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
                         label="Prioridade"
@@ -475,16 +451,36 @@ const ScheduleForm = () => {
                       />
                     </Grid>
                     
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth>
+                        <InputLabel>Tipo de Conteúdo</InputLabel>
+                        <Select
+                          value={formData.content_type}
+                          onChange={(e) => handleInputChange('content_type', e.target.value)}
+                          label="Tipo de Conteúdo"
+                        >
+                          <MenuItem value="main">Principal (Vídeos)</MenuItem>
+                          <MenuItem value="overlay">Overlay (Logos/Imagens)</MenuItem>
+                        </Select>
+                        <FormHelperText>
+                          Overlay fica fixo na tela, Principal reproduz por período
+                        </FormHelperText>
+                      </FormControl>
+                    </Grid>
+                    
                     <Grid item xs={12}>
                       <FormControlLabel
                         control={
-                          <Checkbox
-                            checked={formData.is_active}
-                            onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                          <Switch
+                            checked={formData.is_persistent}
+                            onChange={(e) => handleInputChange('is_persistent', e.target.checked)}
                           />
                         }
-                        label="Agendamento ativo"
+                        label="Agendamento Persistente"
                       />
+                      <FormHelperText>
+                        Conteúdo fica fixo na tela até ser substituído por outro agendamento
+                      </FormHelperText>
                     </Grid>
                   </Grid>
                 </CardContent>

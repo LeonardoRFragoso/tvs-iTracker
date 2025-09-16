@@ -30,14 +30,32 @@ const CastManager = ({ playerId, onCastStateChange }) => {
   }, []);
 
   const loadCastAPI = () => {
-    // Carregar Google Cast API
-    if (!window.chrome || !window.chrome.cast) {
+    // Verificar se já está carregado
+    if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+      initializeCastAPI();
+      return;
+    }
+
+    // Carregar Google Cast API apenas se necessário
+    if (!document.querySelector('script[src*="cast_sender.js"]')) {
       const script = document.createElement('script');
       script.src = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
-      script.onload = initializeCastAPI;
+      script.onload = () => {
+        // Aguardar API estar disponível
+        const checkAPI = () => {
+          if (window.chrome && window.chrome.cast && window.chrome.cast.isAvailable) {
+            initializeCastAPI();
+          } else {
+            setTimeout(checkAPI, 100);
+          }
+        };
+        checkAPI();
+      };
+      script.onerror = () => {
+        console.warn('Falha ao carregar Google Cast API - funcionalidade Cast desabilitada');
+        setCastApiLoaded(false);
+      };
       document.head.appendChild(script);
-    } else {
-      initializeCastAPI();
     }
   };
 
@@ -72,20 +90,42 @@ const CastManager = ({ playerId, onCastStateChange }) => {
     }
   };
 
-  const scanForDevices = () => {
+  const scanForDevices = async () => {
     if (!window.cast || !window.cast.framework) return;
 
-    const context = window.cast.framework.CastContext.getInstance();
-    const castState = context.getCastState();
-    
-    // Simular dispositivos disponíveis (em produção, seria detectado automaticamente)
-    const mockDevices = [
-      { id: 'chromecast-1', name: 'TV Recepção', type: 'Chromecast' },
-      { id: 'chromecast-2', name: 'TV Sala Reunião', type: 'Chromecast' },
-      { id: 'chromecast-3', name: 'TV Cafeteria', type: 'Chromecast' }
-    ];
-    
-    setAvailableDevices(mockDevices);
+    try {
+      // Fazer requisição real para descobrir dispositivos
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/cast/devices/scan`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableDevices(data.discovered_devices || []);
+      } else {
+        console.error('Erro ao escanear dispositivos:', response.statusText);
+        // Fallback para dispositivos mock se a API falhar
+        const mockDevices = [
+          { id: 'chromecast-1', name: 'TV Recepção', type: 'Chromecast' },
+          { id: 'chromecast-2', name: 'TV Sala Reunião', type: 'Chromecast' },
+          { id: 'chromecast-3', name: 'TV Cafeteria', type: 'Chromecast' }
+        ];
+        setAvailableDevices(mockDevices);
+      }
+    } catch (error) {
+      console.error('Erro na descoberta de dispositivos:', error);
+      // Fallback para dispositivos mock em caso de erro
+      const mockDevices = [
+        { id: 'chromecast-1', name: 'TV Recepção', type: 'Chromecast' },
+        { id: 'chromecast-2', name: 'TV Sala Reunião', type: 'Chromecast' },
+        { id: 'chromecast-3', name: 'TV Cafeteria', type: 'Chromecast' }
+      ];
+      setAvailableDevices(mockDevices);
+    }
   };
 
   const connectToDevice = async (device) => {

@@ -10,6 +10,7 @@ import ContentList from './pages/Content/ContentList';
 import ContentDetail from './pages/Content/ContentDetail';
 import ContentForm from './pages/Content/ContentForm';
 import CampaignList from './pages/Campaigns/CampaignList';
+import CampaignDetail from './pages/Campaigns/CampaignDetail';
 import CampaignForm from './pages/Campaigns/CampaignForm';
 import PlayerList from './pages/Players/PlayerList';
 import PlayerDetail from './pages/Players/PlayerDetail';
@@ -42,9 +43,12 @@ function App() {
             <Route path="content/:id/edit" element={<ContentForm />} />
             <Route path="content/:id" element={<ContentDetail />} />
             
+            {/* Campaign routes - specific routes first */}
             <Route path="campaigns" element={<CampaignList />} />
             <Route path="campaigns/new" element={<CampaignForm />} />
             <Route path="campaigns/:id/edit" element={<CampaignForm />} />
+            <Route path="campaigns/:id" element={<CampaignDetail />} />
+            
             <Route path="locations" element={<LocationList />} />
             <Route path="locations/new" element={<LocationForm />} />
             <Route path="locations/:id/edit" element={<LocationForm />} />
