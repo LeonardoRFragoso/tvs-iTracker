@@ -188,13 +188,47 @@ def delete_content(content_id):
         if content.user_id != user_id and user.role not in ['admin', 'manager']:
             return jsonify({'error': 'Sem permissão para deletar este conteúdo'}), 403
         
+        # Importar CampaignContent e ContentDistribution aqui para evitar imports circulares
+        from models.campaign import CampaignContent
+        from models.content_distribution import ContentDistribution
+        
+        # Usar SQL direto para evitar problemas de relacionamento do SQLAlchemy
+        # Remover dependências em CampaignContent primeiro
+        db.session.execute(
+            db.text("DELETE FROM campaign_contents WHERE content_id = :content_id"),
+            {"content_id": content_id}
+        )
+        
+        # Remover dependências em ContentDistribution
+        db.session.execute(
+            db.text("DELETE FROM content_distributions WHERE content_id = :content_id"),
+            {"content_id": content_id}
+        )
+        
         # Remover arquivo físico
         if content.file_path:
             file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], content.file_path)
             if os.path.exists(file_path):
-                os.remove(file_path)
+                try:
+                    os.remove(file_path)
+                except OSError as e:
+                    print(f"Erro ao remover arquivo: {e}")
         
-        db.session.delete(content)
+        # Remover thumbnail se existir
+        if content.thumbnail_path:
+            thumbnail_path = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails', content.thumbnail_path)
+            if os.path.exists(thumbnail_path):
+                try:
+                    os.remove(thumbnail_path)
+                except OSError as e:
+                    print(f"Erro ao remover thumbnail: {e}")
+        
+        # Deletar o conteúdo usando SQL direto
+        db.session.execute(
+            db.text("DELETE FROM contents WHERE id = :content_id"),
+            {"content_id": content_id}
+        )
+        
         db.session.commit()
         
         return jsonify({'message': 'Conteúdo deletado com sucesso'}), 200

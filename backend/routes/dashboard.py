@@ -20,7 +20,14 @@ def get_dashboard_stats():
         total_content = Content.query.filter(Content.is_active == True).count()
         total_campaigns = Campaign.query.filter(Campaign.is_active == True).count()
         total_players = Player.query.count()
-        online_players = Player.query.filter(Player.is_online == True).count()
+        
+        # Fix: Calculate online players based on last_ping within 5 minutes (same logic as Player.is_online property)
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        online_players = Player.query.filter(
+            Player.last_ping.isnot(None),
+            Player.last_ping >= five_minutes_ago
+        ).count()
+        
         total_schedules = Schedule.query.filter(Schedule.is_active == True).count()
         total_editorials = Editorial.query.filter(Editorial.is_active == True).count()
         
@@ -242,7 +249,13 @@ def get_system_health():
     try:
         # Status do sistema
         total_players = Player.query.count()
-        online_players = Player.query.filter(Player.is_online == True).count()
+        
+        # Fix: Calculate online players based on last_ping within 5 minutes (same logic as Player.is_online property)
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        online_players = Player.query.filter(
+            Player.last_ping.isnot(None),
+            Player.last_ping >= five_minutes_ago
+        ).count()
         
         # Calcular uptime dos players (% de players online)
         uptime_percentage = (online_players / total_players * 100) if total_players > 0 else 0
@@ -278,6 +291,38 @@ def get_system_health():
                 'error_editorials': error_editorials,
                 'total_editorials': total_editorials
             }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@dashboard_bp.route('/debug/players', methods=['GET'])
+@jwt_required()
+def debug_players():
+    """Debug endpoint to check player status and last_ping values"""
+    try:
+        players = Player.query.all()
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        
+        debug_info = []
+        for player in players:
+            debug_info.append({
+                'id': player.id,
+                'name': player.name,
+                'platform': player.platform,
+                'chromecast_id': player.chromecast_id,
+                'last_ping': player.last_ping.isoformat() if player.last_ping else None,
+                'last_ping_minutes_ago': (datetime.utcnow() - player.last_ping).total_seconds() / 60 if player.last_ping else None,
+                'is_online_property': player.is_online,
+                'is_online_calculated': player.last_ping and player.last_ping >= five_minutes_ago,
+                'status': player.status
+            })
+        
+        return jsonify({
+            'total_players': len(players),
+            'five_minutes_ago': five_minutes_ago.isoformat(),
+            'current_time': datetime.utcnow().isoformat(),
+            'players': debug_info
         }), 200
         
     except Exception as e:

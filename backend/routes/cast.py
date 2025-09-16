@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models.player import Player, db
+from services.chromecast_service import chromecast_service
 import json
 
 cast_bp = Blueprint('cast', __name__)
@@ -10,21 +11,34 @@ cast_bp = Blueprint('cast', __name__)
 def get_cast_devices():
     """Retorna dispositivos Chromecast disponíveis na rede"""
     try:
-        # Em produção, isso faria descoberta real de dispositivos Cast na rede
-        # Por enquanto, retornamos dispositivos mockados baseados nos players
+        # Descobrir dispositivos reais na rede
+        discovered_devices = chromecast_service.discover_devices()
+        
+        # Combinar com players cadastrados
         players = Player.query.filter(Player.is_active == True).all()
         
         cast_devices = []
-        for player in players:
-            if player.chromecast_id:
-                cast_devices.append({
-                    'id': player.chromecast_id,
-                    'name': player.chromecast_name or f"Chromecast {player.name}",
-                    'player_id': player.id,
-                    'location': player.location_name,
-                    'room': player.room_name,
-                    'status': 'available' if player.is_online else 'offline'
-                })
+        
+        # Adicionar dispositivos descobertos
+        for device in discovered_devices:
+            # Verificar se já está associado a um player
+            associated_player = None
+            for player in players:
+                if player.chromecast_id == device['id']:
+                    associated_player = player
+                    break
+            
+            cast_devices.append({
+                'id': device['id'],
+                'name': device['name'],
+                'model': device['model'],
+                'ip': device['ip'],
+                'status': 'available',
+                'player_id': associated_player.id if associated_player else None,
+                'location': associated_player.location_name if associated_player else None,
+                'room': associated_player.room_name if associated_player else None,
+                'is_associated': associated_player is not None
+            })
         
         return jsonify({
             'devices': cast_devices,
@@ -39,33 +53,13 @@ def get_cast_devices():
 def scan_cast_devices():
     """Escaneia a rede em busca de dispositivos Chromecast"""
     try:
-        # Em produção, implementaria descoberta mDNS para Chromecast
-        # Por enquanto, simula descoberta de dispositivos
-        
-        discovered_devices = [
-            {
-                'id': 'cc_living_room_001',
-                'name': 'TV Recepção',
-                'ip': '192.168.1.101',
-                'model': 'Chromecast with Google TV'
-            },
-            {
-                'id': 'cc_meeting_room_002', 
-                'name': 'TV Sala Reunião',
-                'ip': '192.168.1.102',
-                'model': 'Chromecast Ultra'
-            },
-            {
-                'id': 'cc_cafeteria_003',
-                'name': 'TV Cafeteria', 
-                'ip': '192.168.1.103',
-                'model': 'Chromecast'
-            }
-        ]
+        # Descoberta real de dispositivos
+        discovered_devices = chromecast_service.discover_devices(timeout=10)
         
         return jsonify({
             'discovered_devices': discovered_devices,
-            'scan_time': '2024-01-15T10:30:00Z'
+            'scan_time': '2024-01-15T10:30:00Z',
+            'total_found': len(discovered_devices)
         }), 200
         
     except Exception as e:
@@ -138,24 +132,19 @@ def send_cast_command(player_id):
         if command not in valid_commands:
             return jsonify({'error': f'Comando inválido. Suportados: {valid_commands}'}), 400
         
-        # Em produção, enviaria comando real para Chromecast via Google Cast API
-        # Por enquanto, simula envio de comando
+        # Enviar comando real para Chromecast
+        success = chromecast_service.send_command(player.chromecast_id, command, params)
         
-        command_data = {
-            'player_id': player_id,
-            'chromecast_id': player.chromecast_id,
-            'command': command,
-            'params': params,
-            'timestamp': '2024-01-15T10:30:00Z'
-        }
-        
-        # Aqui seria implementada a comunicação real com Chromecast
-        # usando bibliotecas como pychromecast ou via WebSocket
-        
-        return jsonify({
-            'message': f'Comando {command} enviado com sucesso',
-            'command_data': command_data
-        }), 200
+        if success:
+            return jsonify({
+                'message': f'Comando {command} enviado com sucesso',
+                'player_id': player_id,
+                'chromecast_id': player.chromecast_id
+            }), 200
+        else:
+            return jsonify({
+                'error': f'Falha ao enviar comando {command}'
+            }), 500
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -198,13 +187,18 @@ def load_content_to_cast(player_id):
             }
         }
         
-        # Em produção, carregaria mídia real no Chromecast
-        # Por enquanto, simula carregamento
+        # Carregar mídia real no Chromecast
+        success = chromecast_service.load_media(player.chromecast_id, media_data)
         
-        return jsonify({
-            'message': 'Conteúdo carregado com sucesso no Chromecast',
-            'media_data': media_data
-        }), 200
+        if success:
+            return jsonify({
+                'message': 'Conteúdo carregado com sucesso no Chromecast',
+                'media_data': media_data
+            }), 200
+        else:
+            return jsonify({
+                'error': 'Falha ao carregar conteúdo'
+            }), 500
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -221,29 +215,15 @@ def get_cast_status(player_id):
         if not player.chromecast_id:
             return jsonify({'error': 'Player não possui Chromecast associado'}), 400
         
-        # Em produção, consultaria status real do Chromecast
-        # Por enquanto, retorna status simulado
+        # Obter status real do Chromecast
+        cast_status = chromecast_service.get_device_status(player.chromecast_id)
         
-        cast_status = {
-            'chromecast_id': player.chromecast_id,
-            'chromecast_name': player.chromecast_name,
-            'is_connected': player.is_online,
-            'current_app': 'TVS Digital Signage',
-            'media_status': {
-                'player_state': 'PLAYING',
-                'current_time': 45.2,
-                'duration': 180.0,
-                'volume': 0.8,
-                'is_muted': False
-            },
-            'device_info': {
-                'model': 'Chromecast with Google TV',
-                'version': '1.56.281627',
-                'ip_address': player.ip_address
-            }
-        }
-        
-        return jsonify(cast_status), 200
+        if cast_status:
+            return jsonify(cast_status), 200
+        else:
+            return jsonify({
+                'error': 'Não foi possível obter status do Chromecast'
+            }), 500
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

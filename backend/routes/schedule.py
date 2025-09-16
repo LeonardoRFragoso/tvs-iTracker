@@ -256,6 +256,38 @@ def get_active_schedules_for_player(player_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@schedule_bp.route('/campaign/<campaign_id>', methods=['GET'])
+@jwt_required()
+def get_schedules_by_campaign(campaign_id):
+    """Obter agendamentos para uma campanha específica"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        is_active = request.args.get('is_active')
+        
+        query = Schedule.query.filter(Schedule.campaign_id == campaign_id)
+        
+        if is_active is not None:
+            query = query.filter(Schedule.is_active == (is_active.lower() == 'true'))
+        
+        query = query.order_by(Schedule.created_at.desc())
+        
+        pagination = query.paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        
+        return jsonify({
+            'schedules': [schedule.to_dict() for schedule in pagination.items],
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': page,
+            'per_page': per_page,
+            'campaign_id': campaign_id
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @schedule_bp.route('/conflicts', methods=['POST'])
 @jwt_required()
 def check_schedule_conflicts():
@@ -263,6 +295,7 @@ def check_schedule_conflicts():
     try:
         data = request.get_json()
         player_id = data.get('player_id')
+        campaign_id = data.get('campaign_id')
         start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
         end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
         
@@ -277,6 +310,9 @@ def check_schedule_conflicts():
         
         days_of_week = data.get('days_of_week', '1,2,3,4,5')
         exclude_schedule_id = data.get('exclude_schedule_id')
+        
+        # Determinar tipo de conteúdo do novo agendamento
+        new_content_type = _get_schedule_content_type(campaign_id)
         
         # Buscar agendamentos que podem conflitar
         query = Schedule.query.filter(
@@ -294,6 +330,13 @@ def check_schedule_conflicts():
         conflicts = []
         
         for schedule in existing_schedules:
+            # Determinar tipo de conteúdo do agendamento existente
+            existing_content_type = _get_schedule_content_type(schedule.campaign_id)
+            
+            # Se são tipos diferentes (overlay + main), não há conflito
+            if new_content_type != existing_content_type:
+                continue
+            
             # Verificar sobreposição de dias da semana
             existing_days = set(int(d) for d in schedule.days_of_week.split(',') if d.strip())
             new_days = set(int(d) for d in days_of_week.split(',') if d.strip())
@@ -313,5 +356,66 @@ def check_schedule_conflicts():
             'conflicts': conflicts
         }), 200
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def _get_schedule_content_type(campaign_id):
+    """Determina o tipo de conteúdo de um agendamento baseado na campanha"""
+    try:
+        from models.campaign import Campaign, CampaignContent
+        from models.content import Content
+        
+        campaign = Campaign.query.get(campaign_id)
+        if not campaign:
+            return 'main'
+        
+        # Buscar primeiro conteúdo da campanha para determinar tipo
+        campaign_content = CampaignContent.query.filter_by(
+            campaign_id=campaign.id
+        ).order_by(CampaignContent.order_index).first()
+        
+        if campaign_content:
+            content = Content.query.get(campaign_content.content_id)
+            if content:
+                # Considerar imagens como overlay se o nome contém "logo" ou se é do tipo image
+                if ('logo' in content.title.lower() or 
+                    'overlay' in content.title.lower() or 
+                    content.content_type == 'image'):
+                    return 'overlay'
+        
+        return 'main'
+    except Exception as e:
+        print(f"[ERROR] Erro ao determinar tipo de conteúdo: {e}")
+        return 'main'
+
+@schedule_bp.route('/<schedule_id>/execute', methods=['POST'])
+@jwt_required()
+def force_execute_schedule(schedule_id):
+    """Força execução imediata de um agendamento para teste"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão para executar agendamentos'}), 403
+        
+        schedule = Schedule.query.get(schedule_id)
+        if not schedule:
+            return jsonify({'error': 'Agendamento não encontrado'}), 404
+        
+        # Importar executor
+        from services.schedule_executor import schedule_executor
+        
+        # Forçar execução
+        success = schedule_executor.force_execute_schedule(schedule_id)
+        
+        if success:
+            return jsonify({
+                'message': 'Agendamento executado com sucesso',
+                'schedule_id': schedule_id
+            }), 200
+        else:
+            return jsonify({'error': 'Falha ao executar agendamento'}), 500
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500

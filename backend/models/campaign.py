@@ -29,6 +29,16 @@ class Campaign(db.Model):
     schedules = db.relationship('Schedule', backref='campaign', lazy=True)
     
     def to_dict(self):
+        # Get first content thumbnail for campaign display
+        first_content_thumbnail = None
+        if self.contents:
+            # Sort by order_index to get the first content
+            sorted_contents = sorted(self.contents, key=lambda x: x.order_index)
+            if sorted_contents and sorted_contents[0].content:
+                first_content = sorted_contents[0].content
+                if hasattr(first_content, 'thumbnail_path') and first_content.thumbnail_path:
+                    first_content_thumbnail = f"/api/content/thumbnails/{first_content.thumbnail_path.split('/')[-1]}"
+        
         return {
             'id': self.id,
             'name': self.name,
@@ -41,8 +51,11 @@ class Campaign(db.Model):
             'time_slots': self.time_slots,
             'days_of_week': self.days_of_week,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'creator': self.creator.username if self.creator else None,
-            'content_count': len(self.contents)
+            'content_count': len(self.contents),
+            'thumbnail': first_content_thumbnail,
+            'contents': [cc.content.to_dict() if cc.content else None for cc in sorted(self.contents, key=lambda x: x.order_index)] if hasattr(self, '_include_contents') else None
         }
     
     def __repr__(self):

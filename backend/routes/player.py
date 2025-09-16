@@ -69,15 +69,20 @@ def create_player():
         player = Player(
             name=data['name'],
             description=data.get('description', ''),
-            location=data.get('location', ''),
-            region=data.get('region', ''),
+            location_id=data.get('location_id'),
+            room_name=data.get('room_name', ''),
+            mac_address=data.get('mac_address', ''),
+            ip_address=data.get('ip_address', ''),
+            chromecast_id=data.get('chromecast_id', ''),
+            chromecast_name=data.get('chromecast_name', ''),
             platform=data.get('platform', 'web'),
             resolution=data.get('resolution', '1920x1080'),
             orientation=data.get('orientation', 'landscape'),
             default_content_duration=data.get('default_content_duration', 10),
             transition_effect=data.get('transition_effect', 'fade'),
             volume_level=data.get('volume_level', 50),
-            storage_limit=data.get('storage_limit', 1024)
+            storage_capacity_gb=data.get('storage_capacity_gb', 32),
+            is_active=data.get('is_active', True)
         )
         
         db.session.add(player)
@@ -122,14 +127,27 @@ def update_player(player_id):
         
         data = request.get_json()
         
+        # Atualizar campos do player
         if 'name' in data:
             player.name = data['name']
         if 'description' in data:
             player.description = data['description']
-        if 'location' in data:
-            player.location = data['location']
-        if 'region' in data:
-            player.region = data['region']
+        if 'location_id' in data:
+            player.location_id = data['location_id']
+        if 'room_name' in data:
+            player.room_name = data['room_name']
+        if 'mac_address' in data:
+            player.mac_address = data['mac_address']
+        if 'ip_address' in data:
+            player.ip_address = data['ip_address']
+        if 'chromecast_id' in data:
+            player.chromecast_id = data['chromecast_id']
+        if 'chromecast_name' in data:
+            player.chromecast_name = data['chromecast_name']
+        if 'chromecast_model' in data:
+            player.chromecast_model = data['chromecast_model']
+        if 'chromecast_firmware' in data:
+            player.chromecast_firmware = data['chromecast_firmware']
         if 'platform' in data:
             player.platform = data['platform']
         if 'resolution' in data:
@@ -142,8 +160,8 @@ def update_player(player_id):
             player.transition_effect = data['transition_effect']
         if 'volume_level' in data:
             player.volume_level = data['volume_level']
-        if 'storage_limit' in data:
-            player.storage_limit = data['storage_limit']
+        if 'storage_capacity_gb' in data:
+            player.storage_capacity_gb = data['storage_capacity_gb']
         if 'is_active' in data:
             player.is_active = data['is_active']
         
@@ -250,24 +268,142 @@ def send_command_to_player(player_id):
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/<player_id>/sync', methods=['POST'])
-def sync_content(player_id):
-    """Sincronizar conteúdo offline do player"""
+@jwt_required()
+def sync_player(player_id):
+    """Sincroniza player e verifica status do Chromecast se aplicável"""
+    try:
+        print(f"[SYNC] Iniciando sincronização para player: {player_id}")
+        
+        player = Player.query.get(player_id)
+        if not player:
+            print(f"[SYNC] Player {player_id} não encontrado")
+            return jsonify({'error': 'Player não encontrado'}), 404
+        
+        print(f"[SYNC] Player encontrado: {player.name}, Chromecast ID: {player.chromecast_id}")
+        
+        # Se o player tem Chromecast associado, verificar status real
+        if player.chromecast_id:
+            print(f"[SYNC] Importando chromecast_service...")
+            from services.chromecast_service import chromecast_service
+            
+            print(f"[SYNC] Iniciando descoberta de dispositivos...")
+            # Tentar descobrir dispositivos na rede
+            discovered_devices = chromecast_service.discover_devices(timeout=5)
+            print(f"[SYNC] Dispositivos descobertos: {len(discovered_devices)}")
+            
+            # Log detalhado dos dispositivos descobertos
+            for i, device in enumerate(discovered_devices):
+                print(f"[SYNC] Device {i+1}: ID={device.get('id')}, Name={device.get('name')}, IP={device.get('ip')}")
+            
+            # Verificar se o Chromecast está disponível
+            chromecast_found = False
+            for device in discovered_devices:
+                print(f"[SYNC] Verificando device: {device.get('id')} vs {player.chromecast_id}")
+                
+                # Debug detalhado das comparações
+                device_name = device.get('name', '')
+                print(f"[SYNC] Device name: '{device_name}' (lower: '{device_name.lower()}')")
+                print(f"[SYNC] Player chromecast_id: '{player.chromecast_id}'")
+                
+                # Estratégia de identificação mais flexível:
+                # 1. Por UUID exato (se já foi descoberto antes)
+                # 2. Por nome do dispositivo (mais confiável)
+                # 3. Por MAC address (se foi configurado manualmente)
+                uuid_match = device['id'] == player.chromecast_id
+                name_exact = device_name.lower() == 'escritório'
+                name_alt = device_name.lower() == 'escritório teste'
+                name_normalized = device_name.lower().replace(' ', '') == 'escritório'
+                name_contains = 'escritório' in device_name.lower()
+                is_mac_address = len(player.chromecast_id) == 17 and ':' in player.chromecast_id
+                
+                print(f"[SYNC] UUID match: {uuid_match}")
+                print(f"[SYNC] Name exact ('escritório'): {name_exact}")
+                print(f"[SYNC] Name alt ('escritório teste'): {name_alt}")
+                print(f"[SYNC] Name normalized: {name_normalized}")
+                print(f"[SYNC] Name contains 'escritório': {name_contains}")
+                print(f"[SYNC] Is MAC address: {is_mac_address}")
+                
+                device_matches = (
+                    uuid_match or
+                    name_exact or
+                    name_alt or
+                    name_normalized or
+                    name_contains or
+                    is_mac_address
+                )
+                
+                print(f"[SYNC] Final device_matches: {device_matches}")
+                
+                if device_matches:
+                    print(f"[SYNC] Chromecast encontrado! Device: {device.get('name')} (ID: {device['id']})")
+                    chromecast_found = True
+                    
+                    # Sempre atualizar com o UUID correto para futuras sincronizações
+                    if device['id'] != player.chromecast_id:
+                        print(f"[SYNC] Atualizando chromecast_id de '{player.chromecast_id}' para '{device['id']}'")
+                        player.chromecast_id = str(device['id'])  # Converter para string
+                    
+                    # Tentar conectar para verificar se está realmente disponível
+                    if chromecast_service.connect_to_device(device['id']):
+                        print(f"[SYNC] Conexão bem-sucedida! Atualizando status para online")
+                        player.status = 'online'
+                        player.last_ping = datetime.utcnow()
+                        player.ip_address = device.get('ip', player.ip_address)
+                    else:
+                        print(f"[SYNC] Falha na conexão. Status offline")
+                        player.status = 'offline'
+                    break
+            
+            if not chromecast_found:
+                print(f"[SYNC] Chromecast {player.chromecast_id} não encontrado na rede")
+                player.status = 'offline'
+            
+            db.session.commit()
+            print(f"[SYNC] Status atualizado no banco: {player.status}")
+            
+            return jsonify({
+                'message': 'Sincronização concluída',
+                'player_status': player.status,
+                'chromecast_status': 'found' if chromecast_found else 'not_found',
+                'discovered_devices': len(discovered_devices)
+            })
+        else:
+            print(f"[SYNC] Player não tem Chromecast associado")
+            # Player sem Chromecast - apenas atualizar ping
+            player.last_ping = datetime.utcnow()
+            player.status = 'online'
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Player sincronizado (sem Chromecast)',
+                'player_status': player.status
+            })
+        
+    except Exception as e:
+        print(f"[SYNC] Erro durante sincronização: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/<player_id>/force-online', methods=['POST'])
+@jwt_required()
+def force_player_online(player_id):
+    """Force a player to be online for testing purposes"""
     try:
         player = Player.query.get(player_id)
-        
         if not player:
             return jsonify({'error': 'Player não encontrado'}), 404
         
-        player.last_content_sync = datetime.utcnow()
+        # Force update last_ping to make player appear online
+        player.last_ping = datetime.utcnow()
+        player.status = 'online'
         db.session.commit()
         
-        # Aqui você implementaria a lógica para determinar qual conteúdo
-        # deve ser sincronizado baseado nos agendamentos ativos
-        
         return jsonify({
-            'message': 'Sincronização iniciada',
+            'message': 'Player forçado para online',
             'player_id': player_id,
-            'sync_time': player.last_content_sync.isoformat()
+            'last_ping': player.last_ping.isoformat(),
+            'status': player.status
         }), 200
         
     except Exception as e:

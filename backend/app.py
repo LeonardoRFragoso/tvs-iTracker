@@ -101,27 +101,51 @@ app.register_blueprint(content_distribution_bp, url_prefix='/api/distributions')
 
 # Configurar scheduler para tarefas automáticas
 scheduler = BackgroundScheduler()
+
+# Adicionar job para verificar agendamentos a cada minuto
+def check_schedules_with_context():
+    """Wrapper para executar verificação de agendamentos com contexto da aplicação"""
+    print(f"[{datetime.now()}] Executando verificação de agendamentos...")
+    with app.app_context():
+        from services.schedule_executor import schedule_executor
+        schedule_executor.check_and_execute_schedules()
+
+scheduler.add_job(
+    func=check_schedules_with_context,
+    trigger="interval",
+    minutes=1,
+    id='schedule_checker',
+    name='Verificar e executar agendamentos'
+)
+
+# Iniciar o scheduler
+print("Iniciando scheduler...")
 scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
+print("Scheduler iniciado com sucesso!")
 
-# Importar serviços
-# from services.content_service import ContentService
-# from services.player_service import PlayerService
-# from services.editorial_service import EditorialService
+# Importar e configurar executor de agendamentos
+from services.schedule_executor import schedule_executor
 
-# WebSocket events
+# Configurar WebSocket no executor
 @socketio.on('connect')
 def handle_connect(auth):
-    try:
-        print(f"WebSocket connection attempt with auth: {auth}")
-        # For now, allow connections without strict JWT validation
-        # This can be enhanced later with proper token validation if needed
-        emit('connected', {'message': 'Conectado com sucesso'})
-        print("WebSocket connection successful")
-    except Exception as e:
-        print(f"Connection error: {e}")
-        emit('connected', {'message': 'Conectado com sucesso'})
+    # Configurar socketio no executor quando houver conexão
+    schedule_executor.socketio = socketio
+    print(f"WebSocket connection attempt with auth: {auth}")
+    
+    if auth and 'token' in auth:
+        try:
+            # Verificar token JWT
+            from flask_jwt_extended import decode_token
+            decode_token(auth['token'])
+            print("WebSocket connection successful")
+            return True
+        except Exception as e:
+            print(f"WebSocket authentication failed: {e}")
+            return False
+    return False
 
+# WebSocket events
 @socketio.on('disconnect')
 def handle_disconnect():
     print("Client disconnected")
@@ -358,4 +382,5 @@ def create_tables():
 
 if __name__ == '__main__':
     create_tables()
+    atexit.register(lambda: scheduler.shutdown())
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)

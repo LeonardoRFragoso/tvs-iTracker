@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from models.location import Location, db
 from models.user import User
 
@@ -238,7 +238,10 @@ def get_location_stats(location_id):
         
         players = location.players
         total_players = len(players)
-        online_players = len([p for p in players if p.is_online])
+        
+        # Fix: Calculate online players based on last_ping within 5 minutes (same logic as Player.is_online property)
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        online_players = len([p for p in players if p.last_ping and p.last_ping >= five_minutes_ago])
         offline_players = total_players - online_players
         
         # Estatísticas de armazenamento
@@ -301,3 +304,76 @@ def get_timezones():
     ]
     
     return jsonify({'timezones': timezones}), 200
+
+@location_bp.route('/<location_id>/debug/players', methods=['GET'])
+@jwt_required()
+def debug_location_players(location_id):
+    """Debug endpoint to check location player status and last_ping values"""
+    try:
+        location = Location.query.get(location_id)
+        
+        if not location:
+            return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        players = location.players
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        
+        debug_info = []
+        for player in players:
+            debug_info.append({
+                'id': player.id,
+                'name': player.name,
+                'platform': player.platform,
+                'chromecast_id': player.chromecast_id,
+                'last_ping': player.last_ping.isoformat() if player.last_ping else None,
+                'last_ping_minutes_ago': (datetime.utcnow() - player.last_ping).total_seconds() / 60 if player.last_ping else None,
+                'is_online_property': player.is_online,
+                'is_online_calculated': player.last_ping and player.last_ping >= five_minutes_ago,
+                'status': player.status
+            })
+        
+        return jsonify({
+            'location': location.to_dict(),
+            'total_players': len(players),
+            'five_minutes_ago': five_minutes_ago.isoformat(),
+            'current_time': datetime.utcnow().isoformat(),
+            'players': debug_info
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@location_bp.route('/<location_id>/force-players-online', methods=['POST'])
+@jwt_required()
+def force_location_players_online(location_id):
+    """Force all players in a location to be online for testing purposes"""
+    try:
+        location = Location.query.get(location_id)
+        
+        if not location:
+            return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        players = location.players
+        updated_players = []
+        
+        for player in players:
+            player.last_ping = datetime.utcnow()
+            player.status = 'online'
+            updated_players.append({
+                'id': player.id,
+                'name': player.name,
+                'last_ping': player.last_ping.isoformat(),
+                'status': player.status
+            })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Todos os {len(players)} players da sede forçados para online',
+            'location': location.name,
+            'updated_players': updated_players
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500

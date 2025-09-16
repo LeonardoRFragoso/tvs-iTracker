@@ -49,9 +49,13 @@ def create_campaign():
         user_id = get_jwt_identity()
         data = request.get_json()
         
+        print(f"[DEBUG] Campaign creation data received: {data}")
+        print(f"[DEBUG] User ID: {user_id}")
+        
         required_fields = ['name', 'start_date', 'end_date']
         for field in required_fields:
             if not data.get(field):
+                print(f"[ERROR] Missing required field: {field}")
                 return jsonify({'error': f'{field} é obrigatório'}), 400
         
         # Converter datas
@@ -66,6 +70,7 @@ def create_campaign():
             description=data.get('description', ''),
             start_date=start_date,
             end_date=end_date,
+            is_active=data.get('is_active', True),
             priority=data.get('priority', 1),
             regions=json.dumps(data.get('regions', [])),
             time_slots=json.dumps(data.get('time_slots', [])),
@@ -187,6 +192,36 @@ def delete_campaign(campaign_id):
         
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@campaign_bp.route('/<campaign_id>/contents', methods=['GET'])
+@jwt_required()
+def get_campaign_contents(campaign_id):
+    try:
+        campaign = Campaign.query.get(campaign_id)
+        
+        if not campaign:
+            return jsonify({'error': 'Campanha não encontrada'}), 404
+        
+        # Buscar conteúdos da campanha ordenados por order_index
+        campaign_contents = CampaignContent.query.filter_by(
+            campaign_id=campaign_id
+        ).order_by(CampaignContent.order_index).all()
+        
+        contents = []
+        for cc in campaign_contents:
+            content_dict = cc.to_dict()
+            # Incluir dados do conteúdo
+            if cc.content:
+                content_dict['content'] = cc.content.to_dict()
+            contents.append(content_dict)
+        
+        return jsonify({
+            'contents': contents,
+            'total': len(contents)
+        }), 200
+        
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @campaign_bp.route('/<campaign_id>/contents', methods=['POST'])

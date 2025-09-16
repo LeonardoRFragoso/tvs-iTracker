@@ -1,0 +1,286 @@
+================================================================================
+DATABASE STRUCTURE ANALYSIS REPORT
+================================================================================
+Database: C:\Users\leonardo.fragoso\Desktop\Projetos\Tvs-Project\backend\instance\tvs_platform.db
+Analysis Date: 2025-09-16T10:57:40.893370
+
+SUMMARY
+----------------------------------------
+Total Tables: 10
+Total Rows: 22
+Tables with Relationships: 7
+
+TABLES ANALYSIS
+----------------------------------------
+
+Table: CAMPAIGN_CONTENTS
+Rows: 1
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    campaign_id: VARCHAR(36) NOT NULL
+    content_id: VARCHAR(36) NOT NULL
+    order_index: INTEGER NULL
+    duration_override: INTEGER NULL
+    created_at: DATETIME NULL
+  Foreign Keys:
+    content_id -> contents.id (ON DELETE NO ACTION)
+    campaign_id -> campaigns.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_campaign_contents_1: (id) (UNIQUE)
+
+
+Table: CAMPAIGNS
+Rows: 1
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    name: VARCHAR(255) NOT NULL
+    description: TEXT NULL
+    start_date: DATETIME NOT NULL
+    end_date: DATETIME NOT NULL
+    is_active: BOOLEAN NULL
+    priority: INTEGER NULL
+    regions: TEXT NULL
+    time_slots: TEXT NULL
+    days_of_week: TEXT NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+    user_id: VARCHAR(36) NOT NULL
+  Foreign Keys:
+    user_id -> users.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_campaigns_1: (id) (UNIQUE)
+
+
+Table: CONTENT_DISTRIBUTIONS
+Rows: 0
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    content_id: VARCHAR(36) NOT NULL
+    player_id: VARCHAR(36) NOT NULL
+    status: VARCHAR(20) NULL
+    priority: INTEGER NULL
+    created_at: DATETIME NULL
+    started_at: DATETIME NULL
+    completed_at: DATETIME NULL
+    download_progress: INTEGER NULL
+    download_speed_kbps: INTEGER NULL
+    file_size_bytes: BIGINT NULL
+    bytes_downloaded: BIGINT NULL
+    checksum: VARCHAR(64) NULL
+    retry_count: INTEGER NULL
+    max_retries: INTEGER NULL
+    last_error: TEXT NULL
+    scheduled_for: DATETIME NULL
+    expires_at: DATETIME NULL
+  Foreign Keys:
+    player_id -> players.id (ON DELETE NO ACTION)
+    content_id -> contents.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_content_distributions_1: (id) (UNIQUE)
+
+
+Table: CONTENTS
+Rows: 1
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    title: VARCHAR(255) NOT NULL
+    description: TEXT NULL
+    content_type: VARCHAR(50) NOT NULL
+    file_path: VARCHAR(500) NULL
+    file_size: INTEGER NULL
+    mime_type: VARCHAR(100) NULL
+    duration: INTEGER NULL
+    tags: TEXT NULL
+    category: VARCHAR(100) NULL
+    is_active: BOOLEAN NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+    user_id: VARCHAR(36) NOT NULL
+    thumbnail_path: VARCHAR(500) NULL
+  Foreign Keys:
+    user_id -> users.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_contents_1: (id) (UNIQUE)
+
+
+Table: EDITORIAL_ITEMS
+Rows: 0
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    editorial_id: VARCHAR(36) NOT NULL
+    title: VARCHAR(500) NOT NULL
+    description: TEXT NULL
+    content: TEXT NULL
+    image_url: VARCHAR(500) NULL
+    source_url: VARCHAR(500) NULL
+    author: VARCHAR(255) NULL
+    published_at: DATETIME NULL
+    created_at: DATETIME NULL
+  Foreign Keys:
+    editorial_id -> editorials.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_editorial_items_1: (id) (UNIQUE)
+
+
+Table: EDITORIALS
+Rows: 0
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    name: VARCHAR(255) NOT NULL
+    description: TEXT NULL
+    editorial_type: VARCHAR(50) NOT NULL
+    feed_url: VARCHAR(500) NULL
+    api_key: VARCHAR(255) NULL
+    refresh_interval: INTEGER NULL
+    max_items: INTEGER NULL
+    template: TEXT NULL
+    duration_per_item: INTEGER NULL
+    keywords: TEXT NULL
+    categories: TEXT NULL
+    language: VARCHAR(10) NULL
+    is_active: BOOLEAN NULL
+    last_update: DATETIME NULL
+    last_error: TEXT NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+  Indexes:
+    sqlite_autoindex_editorials_1: (id) (UNIQUE)
+
+
+Table: LOCATIONS
+Rows: 8
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    name: VARCHAR(100) NOT NULL
+    city: VARCHAR(50) NOT NULL
+    state: VARCHAR(2) NOT NULL
+    address: TEXT NULL
+    timezone: VARCHAR(50) NULL
+    network_bandwidth_mbps: INTEGER NULL
+    peak_hours_start: TIME NULL
+    peak_hours_end: TIME NULL
+    is_active: BOOLEAN NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+  Indexes:
+    sqlite_autoindex_locations_1: (id) (UNIQUE)
+
+
+Table: PLAYERS
+Rows: 8
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    name: VARCHAR(255) NOT NULL
+    description: TEXT NULL
+    location_id: VARCHAR(36) NOT NULL
+    room_name: VARCHAR(100) NULL
+    mac_address: VARCHAR(17) NULL
+    ip_address: VARCHAR(45) NULL
+    platform: VARCHAR(50) NULL
+    resolution: VARCHAR(20) NULL
+    orientation: VARCHAR(20) NULL
+    player_version: VARCHAR(20) NULL
+    is_online: BOOLEAN NULL
+    is_active: BOOLEAN NULL
+    last_ping: DATETIME NULL
+    last_content_sync: DATETIME NULL
+    status: VARCHAR(20) NULL
+    default_content_duration: INTEGER NULL
+    transition_effect: VARCHAR(50) NULL
+    volume_level: INTEGER NULL
+    storage_capacity_gb: INTEGER NULL
+    storage_used_gb: FLOAT NULL
+    offline_content: TEXT NULL
+    avg_download_speed_kbps: INTEGER NULL
+    network_speed_mbps: FLOAT NULL
+    total_content_downloaded_gb: FLOAT NULL
+    uptime_percentage: FLOAT NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+    chromecast_id: VARCHAR(100) NULL
+    chromecast_name: VARCHAR(100) NULL
+  Foreign Keys:
+    location_id -> locations.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_players_2: (mac_address) (UNIQUE)
+    sqlite_autoindex_players_1: (id) (UNIQUE)
+
+
+Table: SCHEDULES
+Rows: 1
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    name: VARCHAR(255) NOT NULL
+    campaign_id: VARCHAR(36) NOT NULL
+    player_id: VARCHAR(36) NOT NULL
+    start_date: DATETIME NOT NULL
+    end_date: DATETIME NOT NULL
+    start_time: TIME NULL
+    end_time: TIME NULL
+    days_of_week: VARCHAR(20) NULL
+    repeat_type: VARCHAR(20) NULL
+    repeat_interval: INTEGER NULL
+    is_active: BOOLEAN NULL
+    priority: INTEGER NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+  Foreign Keys:
+    player_id -> players.id (ON DELETE NO ACTION)
+    campaign_id -> campaigns.id (ON DELETE NO ACTION)
+  Indexes:
+    sqlite_autoindex_schedules_1: (id) (UNIQUE)
+
+
+Table: USERS
+Rows: 2
+
+  Columns:
+    id: VARCHAR(36) (PK) NOT NULL
+    username: VARCHAR(80) NOT NULL
+    email: VARCHAR(120) NOT NULL
+    password_hash: VARCHAR(255) NOT NULL
+    role: VARCHAR(20) NULL
+    is_active: BOOLEAN NULL
+    created_at: DATETIME NULL
+    updated_at: DATETIME NULL
+    last_login: DATETIME NULL
+  Indexes:
+    sqlite_autoindex_users_3: (email) (UNIQUE)
+    sqlite_autoindex_users_2: (username) (UNIQUE)
+    sqlite_autoindex_users_1: (id) (UNIQUE)
+
+TABLE RELATIONSHIPS
+----------------------------------------
+
+CAMPAIGN_CONTENTS references:
+  -> contents.id via content_id
+  -> campaigns.id via campaign_id
+
+CAMPAIGNS references:
+  -> users.id via user_id
+
+CONTENT_DISTRIBUTIONS references:
+  -> players.id via player_id
+  -> contents.id via content_id
+
+CONTENTS references:
+  -> users.id via user_id
+
+EDITORIAL_ITEMS references:
+  -> editorials.id via editorial_id
+
+PLAYERS references:
+  -> locations.id via location_id
+
+SCHEDULES references:
+  -> players.id via player_id
+  -> campaigns.id via campaign_id
