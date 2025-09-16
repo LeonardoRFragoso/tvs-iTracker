@@ -1,0 +1,69 @@
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import { SocketProvider } from './contexts/SocketContext';
+import PrivateRoute from './components/Common/PrivateRoute';
+import Layout from './components/Layout/Layout';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import ContentList from './pages/Content/ContentList';
+import ContentDetail from './pages/Content/ContentDetail';
+import ContentForm from './pages/Content/ContentForm';
+import CampaignList from './pages/Campaigns/CampaignList';
+import CampaignForm from './pages/Campaigns/CampaignForm';
+import PlayerList from './pages/Players/PlayerList';
+import PlayerDetail from './pages/Players/PlayerDetail';
+import PlayerForm from './pages/Players/PlayerForm';
+import PlayerView from './pages/Player/PlayerView';
+import LocationList from './pages/Locations/LocationList';
+import LocationForm from './pages/Locations/LocationForm';
+import ScheduleList from './pages/Schedules/ScheduleList';
+import ScheduleForm from './pages/Schedules/ScheduleForm';
+import Settings from './pages/Settings/Settings';
+
+function App() {
+  return (
+    <AuthProvider>
+      <SocketProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/player/:id" element={<PrivateRoute><PlayerView /></PrivateRoute>} />
+          <Route path="/" element={
+            <PrivateRoute>
+              <Layout />
+            </PrivateRoute>
+          }>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            
+            {/* Content routes - specific routes first */}
+            <Route path="content" element={<ContentList />} />
+            <Route path="content/new" element={<ContentForm />} />
+            <Route path="content/:id/edit" element={<ContentForm />} />
+            <Route path="content/:id" element={<ContentDetail />} />
+            
+            <Route path="campaigns" element={<CampaignList />} />
+            <Route path="campaigns/new" element={<CampaignForm />} />
+            <Route path="campaigns/:id/edit" element={<CampaignForm />} />
+            <Route path="locations" element={<LocationList />} />
+            <Route path="locations/new" element={<LocationForm />} />
+            <Route path="locations/:id/edit" element={<LocationForm />} />
+            <Route path="players" element={<PlayerList />} />
+            <Route path="players/new" element={<PlayerForm />} />
+            <Route path="players/:id" element={<PlayerDetail />} />
+            <Route path="players/:id/edit" element={<PlayerForm />} />
+            
+            {/* Schedule routes - specific routes first */}
+            <Route path="schedules" element={<ScheduleList />} />
+            <Route path="schedules/new" element={<ScheduleForm />} />
+            <Route path="schedules/:id/edit" element={<ScheduleForm />} />
+            
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </SocketProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;

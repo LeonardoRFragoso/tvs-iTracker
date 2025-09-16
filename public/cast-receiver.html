@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TVS Cast Receiver</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #media-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #media-element {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        #info-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .loading {
+            color: white;
+            font-size: 24px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="media-container">
+        <div class="loading">Conectando ao TVS Digital Signage...</div>
+    </div>
+    
+    <div id="info-overlay">
+        <div id="content-title"></div>
+        <div id="player-info"></div>
+    </div>
+
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+    <script>
+        const context = cast.framework.CastReceiverContext.getInstance();
+        const playerManager = context.getPlayerManager();
+        
+        // Configuração do player
+        const playbackConfig = new cast.framework.PlaybackConfig();
+        playbackConfig.autoResumeDuration = 5;
+        context.start({
+            playbackConfig: playbackConfig,
+            supportedCommands: cast.framework.messages.Command.ALL_BASIC_MEDIA
+        });
+        
+        // Estado do player
+        let currentPlaylist = [];
+        let currentIndex = 0;
+        let playerId = null;
+        let socket = null;
+        
+        // Conectar WebSocket para controle remoto
+        function connectWebSocket() {
+            const wsUrl = 'ws://localhost:5000/socket.io/?transport=websocket';
+            socket = io('http://localhost:5000');
+            
+            socket.on('connect', () => {
+                console.log('WebSocket conectado');
+                if (playerId) {
+                    socket.emit('player_register', { player_id: playerId });
+                }
+            });
+            
+            socket.on('player_command', (data) => {
+                handleRemoteCommand(data);
+            });
+            
+            socket.on('content_update', (data) => {
+                if (data.player_id === playerId) {
+                    updatePlaylist(data.playlist);
+                }
+            });
+        }
+        
+        // Manipular comandos remotos
+        function handleRemoteCommand(command) {
+            switch(command.action) {
+                case 'play':
+                    playerManager.play();
+                    break;
+                case 'pause':
+                    playerManager.pause();
+                    break;
+                case 'next':
+                    playNext();
+                    break;
+                case 'previous':
+                    playPrevious();
+                    break;
+                case 'volume':
+                    playerManager.setVolume(command.volume / 100);
+                    break;
+                case 'load_content':
+                    loadContent(command.content_url, command.metadata);
+                    break;
+            }
+        }
+        
+        // Carregar conteúdo
+        function loadContent(contentUrl, metadata = {}) {
+            const mediaInfo = new cast.framework.messages.MediaInformation();
+            mediaInfo.contentId = contentUrl;
+            
+            // Determinar tipo de mídia
+            if (contentUrl.includes('.mp4') || contentUrl.includes('.webm')) {
+                mediaInfo.contentType = 'video/mp4';
+            } else if (contentUrl.includes('.jpg') || contentUrl.includes('.png')) {
+                mediaInfo.contentType = 'image/jpeg';
+            } else if (contentUrl.includes('.mp3')) {
+                mediaInfo.contentType = 'audio/mpeg';
+            }
+            
+            // Metadados
+            mediaInfo.metadata = new cast.framework.messages.GenericMediaMetadata();
+            mediaInfo.metadata.title = metadata.title || 'TVS Content';
+            mediaInfo.metadata.subtitle = metadata.description || '';
+            
+            // Duração para imagens
+            if (mediaInfo.contentType.startsWith('image/')) {
+                mediaInfo.duration = metadata.duration || 10;
+            }
+            
+            const request = new cast.framework.messages.LoadRequestData();
+            request.media = mediaInfo;
+            request.autoplay = true;
+            
+            playerManager.load(request);
+            
+            // Atualizar overlay
+            updateInfoOverlay(metadata);
+        }
+        
+        // Atualizar playlist
+        function updatePlaylist(playlist) {
+            currentPlaylist = playlist;
+            currentIndex = 0;
+            if (playlist.length > 0) {
+                loadContent(playlist[0].url, playlist[0]);
+            }
+        }
+        
+        // Próximo conteúdo
+        function playNext() {
+            if (currentPlaylist.length > 0) {
+                currentIndex = (currentIndex + 1) % currentPlaylist.length;
+                const content = currentPlaylist[currentIndex];
+                loadContent(content.url, content);
+            }
+        }
+        
+        // Conteúdo anterior
+        function playPrevious() {
+            if (currentPlaylist.length > 0) {
+                currentIndex = currentIndex > 0 ? currentIndex - 1 : currentPlaylist.length - 1;
+                const content = currentPlaylist[currentIndex];
+                loadContent(content.url, content);
+            }
+        }
+        
+        // Atualizar overlay de informações
+        function updateInfoOverlay(metadata) {
+            document.getElementById('content-title').textContent = metadata.title || '';
+            document.getElementById('player-info').textContent = `Player: ${playerId || 'Desconhecido'}`;
+            
+            const overlay = document.getElementById('info-overlay');
+            overlay.style.display = 'block';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Events do player
+        playerManager.addEventListener(cast.framework.events.EventType.MEDIA_STATUS_CHANGED, (event) => {
+            const mediaStatus = event.mediaStatus;
+            
+            // Auto-play próximo conteúdo quando terminar
+            if (mediaStatus && mediaStatus.playerState === cast.framework.messages.PlayerState.IDLE) {
+                if (mediaStatus.idleReason === cast.framework.messages.IdleReason.FINISHED) {
+                    setTimeout(playNext, 1000);
+                }
+            }
+        });
+        
+        // Inicializar quando receber dados do Cast Sender
+        context.addEventListener(cast.framework.system.EventType.READY, () => {
+            console.log('Cast Receiver pronto');
+            document.querySelector('.loading').textContent = 'TVS Digital Signage - Aguardando conteúdo...';
+        });
+        
+        // Receber ID do player via Cast message
+        playerManager.addEventListener(cast.framework.events.EventType.LOAD, (event) => {
+            const customData = event.requestData.media.customData;
+            if (customData && customData.player_id) {
+                playerId = customData.player_id;
+                connectWebSocket();
+            }
+        });
+    </script>
+</body>
+</html>
