@@ -12,6 +12,10 @@ class Schedule(db.Model):
     campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False)
     player_id = db.Column(db.String(36), db.ForeignKey('players.id'), nullable=False)
     
+    # Definir relacionamentos sem backref (já existem nos outros modelos)
+    campaign = db.relationship('Campaign', overlaps="schedules", lazy=True)
+    player = db.relationship('Player', overlaps="schedules", lazy=True)
+    
     # Configurações de agendamento
     start_date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime, nullable=False)
@@ -37,26 +41,69 @@ class Schedule(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'campaign_id': self.campaign_id,
-            'player_id': self.player_id,
-            'start_date': self.start_date.isoformat() if self.start_date else None,
-            'end_date': self.end_date.isoformat() if self.end_date else None,
-            'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
-            'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
-            'days_of_week': self.days_of_week,
-            'repeat_type': self.repeat_type,
-            'repeat_interval': self.repeat_interval,
-            'is_active': self.is_active,
-            'priority': self.priority,
-            'is_persistent': self.is_persistent,
-            'content_type': self.content_type,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'campaign': self.campaign.to_dict() if self.campaign else None,
-            'player': self.player.to_dict() if self.player else None
-        }
+        try:
+            # Safely get campaign and player data
+            campaign_data = None
+            player_data = None
+            
+            if hasattr(self, 'campaign') and self.campaign:
+                campaign_data = {
+                    'id': self.campaign.id,
+                    'name': self.campaign.name,
+                    'description': getattr(self.campaign, 'description', '')
+                }
+            
+            if hasattr(self, 'player') and self.player:
+                player_data = {
+                    'id': self.player.id,
+                    'name': self.player.name,
+                    'location': getattr(self.player, 'location', '')
+                }
+            
+            return {
+                'id': self.id,
+                'name': self.name,
+                'campaign_id': self.campaign_id,
+                'player_id': self.player_id,
+                'start_date': self.start_date.isoformat() if self.start_date else None,
+                'end_date': self.end_date.isoformat() if self.end_date else None,
+                'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
+                'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
+                'days_of_week': self.days_of_week,
+                'repeat_type': self.repeat_type,
+                'repeat_interval': self.repeat_interval,
+                'is_active': self.is_active,
+                'priority': self.priority,
+                'is_persistent': self.is_persistent,
+                'content_type': self.content_type,
+                'created_at': self.created_at.isoformat() if self.created_at else None,
+                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+                'campaign': campaign_data,
+                'player': player_data
+            }
+        except Exception as e:
+            # Fallback to basic data if relationships fail
+            return {
+                'id': self.id,
+                'name': self.name,
+                'campaign_id': self.campaign_id,
+                'player_id': self.player_id,
+                'start_date': self.start_date.isoformat() if self.start_date else None,
+                'end_date': self.end_date.isoformat() if self.end_date else None,
+                'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
+                'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
+                'days_of_week': self.days_of_week,
+                'repeat_type': self.repeat_type,
+                'repeat_interval': self.repeat_interval,
+                'is_active': self.is_active,
+                'priority': self.priority,
+                'is_persistent': self.is_persistent,
+                'content_type': self.content_type,
+                'created_at': self.created_at.isoformat() if self.created_at else None,
+                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+                'campaign': None,
+                'player': None
+            }
     
     def __repr__(self):
         return f'<Schedule {self.name}>'

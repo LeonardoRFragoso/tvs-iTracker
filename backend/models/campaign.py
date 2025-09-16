@@ -26,7 +26,7 @@ class Campaign(db.Model):
     
     # Relacionamentos
     contents = db.relationship('CampaignContent', backref='campaign', lazy=True)
-    schedules = db.relationship('Schedule', backref='campaign', lazy=True)
+    schedules = db.relationship('Schedule', lazy=True)
     
     def to_dict(self):
         # Get first content thumbnail for campaign display

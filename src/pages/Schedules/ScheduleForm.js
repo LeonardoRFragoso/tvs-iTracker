@@ -210,14 +210,35 @@ const ScheduleForm = () => {
         throw new Error('Selecione pelo menos um dia da semana');
       }
 
+      const formatDate = (date) => {
+        if (!date) return '';
+        if (typeof date === 'string') return date;
+        return date.toISOString();
+      };
+
+      const formatTime = (time) => {
+        if (!time) return '';
+        if (typeof time === 'string') return time;
+        // Convert Date object to local time string instead of UTC
+        const hours = time.getHours().toString().padStart(2, '0');
+        const minutes = time.getMinutes().toString().padStart(2, '0');
+        const seconds = time.getSeconds().toString().padStart(2, '0');
+        // Create a fake datetime string with local time to avoid UTC conversion
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = (today.getMonth() + 1).toString().padStart(2, '0');
+        const day = today.getDate().toString().padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
+      };
+
       const submitData = {
         name: formData.name,
         campaign_id: formData.campaign_id,
         player_id: formData.player_id,
-        start_date: formData.start_date,
-        end_date: formData.end_date,
-        start_time: formData.start_time,
-        end_time: formData.end_time,
+        start_date: formatDate(formData.start_date),
+        end_date: formatDate(formData.end_date),
+        start_time: formatTime(formData.start_time),
+        end_time: formatTime(formData.end_time),
         days_of_week: formData.days_of_week.join(','),
         repeat_type: formData.repeat_type,
         repeat_interval: formData.repeat_interval,

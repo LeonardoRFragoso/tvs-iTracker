@@ -110,6 +110,7 @@ const CampaignList = () => {
   };
 
   const handleMenuClick = (event, campaign) => {
+    event.stopPropagation(); // Prevent card click from firing
     setAnchorEl(event.currentTarget);
     setSelectedCampaign(campaign);
   };

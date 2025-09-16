@@ -43,8 +43,7 @@ const ContentDetail = () => {
   const [error, setError] = useState('');
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [previewDialog, setPreviewDialog] = useState(false);
-  const theme = useTheme();
-  const isDarkMode = theme.palette.mode === 'dark';
+  const { isDarkMode } = useTheme();
 
   useEffect(() => {
     loadContent();
@@ -145,8 +144,8 @@ const ContentDetail = () => {
               width: 40,
               height: 40,
               mr: 2,
-              bgcolor: theme.palette.gradient.main,
-              color: theme.palette.common.white,
+              bgcolor: isDarkMode ? '#ff9800' : '#1976d2',
+              color: 'white',
             }}
           >
             {content.title.charAt(0).toUpperCase()}

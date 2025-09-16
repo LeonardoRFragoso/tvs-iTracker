@@ -50,7 +50,7 @@ class Player(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
-    schedules = db.relationship('Schedule', backref='player', lazy=True)
+    schedules = db.relationship('Schedule', lazy=True)
     distributions = db.relationship('ContentDistribution', backref='player', lazy=True)
     
     @property

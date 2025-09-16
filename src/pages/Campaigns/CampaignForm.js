@@ -105,7 +105,7 @@ const CampaignForm = () => {
   const loadCampaign = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/campaigns/${id}`);
-      const campaign = response.data;
+      const campaign = response.data.campaign; 
       setFormData({
         name: campaign.name,
         description: campaign.description || '',
@@ -736,7 +736,7 @@ const CampaignForm = () => {
                   <Box display="flex" gap={2} justifyContent="flex-end">
                     <Button
                       variant="outlined"
-                      onClick={() => navigate('/campaigns')}
+                      onClick={() => navigate('/campaigns')} 
                       startIcon={<CancelIcon />}
                       sx={{
                         borderRadius: 2,
@@ -784,108 +784,269 @@ const CampaignForm = () => {
         <Dialog
           open={contentDialog}
           onClose={() => setContentDialog(false)}
-          maxWidth="md"
+          maxWidth="lg"
           fullWidth
           PaperProps={{
             sx: {
-              borderRadius: 3,
-              background: (theme) => theme.palette.mode === 'dark'
-                ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
-              backdropFilter: 'blur(10px)',
+              borderRadius: '20px',
+              backdropFilter: 'blur(20px)',
+              background: (theme) => theme.palette.mode === 'dark' 
+                ? 'rgba(30, 30, 30, 0.95)' 
+                : 'rgba(255, 255, 255, 0.95)',
+              border: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+              boxShadow: '0 24px 48px rgba(0, 0, 0, 0.3)',
+              overflow: 'hidden',
             },
           }}
         >
           <DialogTitle sx={{ 
-            background: (theme) => theme.palette.mode === 'dark'
-              ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-              : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
             color: 'white',
-            fontWeight: 'bold',
+            fontWeight: 700,
+            fontSize: '1.5rem',
+            py: 3,
+            px: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            borderBottom: 'none',
           }}>
-            Adicionar Conteúdos à Campanha
+            <Avatar sx={{ 
+              background: 'rgba(255, 255, 255, 0.2)',
+              width: 48,
+              height: 48,
+            }}>
+              <ContentIcon sx={{ fontSize: 28 }} />
+            </Avatar>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+                Adicionar Conteúdos à Campanha
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Selecione os conteúdos que deseja incluir na campanha
+              </Typography>
+            </Box>
           </DialogTitle>
-          <DialogContent sx={{ p: 0 }}>
-            <List>
-              {availableContents
-                .filter(content => !campaignContents.find(cc => cc.id === content.id))
-                .map((content, index) => (
-                  <Grow in timeout={300 + index * 100} key={content.id}>
-                    <ListItem
-                      sx={{
-                        '&:hover': {
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'rgba(255, 119, 48, 0.1)'
-                            : 'rgba(33, 150, 243, 0.1)',
-                        },
-                      }}
-                    >
-                      <Checkbox
-                        checked={selectedContents.includes(content.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedContents(prev => [...prev, content.id]);
-                          } else {
-                            setSelectedContents(prev => prev.filter(id => id !== content.id));
-                          }
-                        }}
-                        sx={{
-                          color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : '#2196F3',
-                          '&.Mui-checked': {
-                            color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : '#2196F3',
-                          },
-                        }}
-                      />
-                      <ListItemAvatar>
-                        <Avatar
-                          sx={{
-                            background: (theme) => theme.palette.mode === 'dark'
-                              ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                              : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                          }}
-                        >
-                          <ContentIcon />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={content.title}
-                        secondary={`${formatDuration(content.duration)} • ${content.type} • ${content.category || 'Sem categoria'}`}
-                      />
-                    </ListItem>
-                  </Grow>
-                ))}
-            </List>
+          <DialogContent sx={{ p: 0, minHeight: '400px', maxHeight: '500px', overflow: 'auto' }}>
+            {availableContents.filter(content => !campaignContents.find(cc => cc.id === content.id)).length === 0 ? (
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                py: 8,
+                px: 4,
+                textAlign: 'center'
+              }}>
+                <Avatar sx={{ 
+                  width: 80, 
+                  height: 80, 
+                  mb: 3,
+                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                  opacity: 0.7
+                }}>
+                  <ContentIcon sx={{ fontSize: 40 }} />
+                </Avatar>
+                <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
+                  Nenhum conteúdo disponível
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Todos os conteúdos já foram adicionados à campanha
+                </Typography>
+              </Box>
+            ) : (
+              <Box sx={{ p: 2 }}>
+                <Grid container spacing={2}>
+                  {availableContents
+                    .filter(content => !campaignContents.find(cc => cc.id === content.id))
+                    .map((content, index) => (
+                      <Grid item xs={12} sm={6} key={content.id}>
+                        <Grow in timeout={300 + index * 50}>
+                          <Card
+                            sx={{
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              border: selectedContents.includes(content.id) 
+                                ? '2px solid #ff7730' 
+                                : '2px solid transparent',
+                              background: (theme) => selectedContents.includes(content.id)
+                                ? (theme.palette.mode === 'dark' 
+                                  ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                                  : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.02) 100%)')
+                                : (theme.palette.mode === 'dark' 
+                                  ? 'rgba(40, 40, 40, 0.8)'
+                                  : 'rgba(255, 255, 255, 0.8)'),
+                              '&:hover': {
+                                transform: 'translateY(-4px)',
+                                boxShadow: '0 12px 24px rgba(255, 119, 48, 0.2)',
+                                border: '2px solid rgba(255, 119, 48, 0.5)',
+                              },
+                            }}
+                            onClick={() => {
+                              if (selectedContents.includes(content.id)) {
+                                setSelectedContents(prev => prev.filter(id => id !== content.id));
+                              } else {
+                                setSelectedContents(prev => [...prev, content.id]);
+                              }
+                            }}
+                          >
+                            <CardContent sx={{ p: 3 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                                <Checkbox
+                                  checked={selectedContents.includes(content.id)}
+                                  sx={{
+                                    color: '#ff7730',
+                                    '&.Mui-checked': {
+                                      color: '#ff7730',
+                                    },
+                                    mt: -1,
+                                  }}
+                                />
+                                <Avatar
+                                  sx={{
+                                    width: 56,
+                                    height: 56,
+                                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                    boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)',
+                                  }}
+                                >
+                                  <ContentIcon sx={{ fontSize: 28 }} />
+                                </Avatar>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography 
+                                    variant="h6" 
+                                    sx={{ 
+                                      fontWeight: 600, 
+                                      mb: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
+                                    {content.title}
+                                  </Typography>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                                    <Chip 
+                                      label={formatDuration(content.duration)} 
+                                      size="small"
+                                      sx={{ 
+                                        background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                        color: 'white',
+                                        fontWeight: 600,
+                                        fontSize: '0.75rem'
+                                      }}
+                                    />
+                                    <Chip 
+                                      label={content.type} 
+                                      size="small"
+                                      variant="outlined"
+                                      sx={{ 
+                                        borderColor: '#ff7730',
+                                        color: '#ff7730',
+                                        fontWeight: 600,
+                                        fontSize: '0.75rem'
+                                      }}
+                                    />
+                                    <Chip 
+                                      label={content.category || 'Sem categoria'} 
+                                      size="small"
+                                      sx={{ 
+                                        backgroundColor: (theme) => theme.palette.mode === 'dark' 
+                                          ? 'rgba(255, 255, 255, 0.1)' 
+                                          : 'rgba(0, 0, 0, 0.05)',
+                                        fontSize: '0.75rem'
+                                      }}
+                                    />
+                                  </Box>
+                                  {content.description && (
+                                    <Typography 
+                                      variant="body2" 
+                                      color="text.secondary"
+                                      sx={{ 
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 2,
+                                        WebkitBoxOrient: 'vertical',
+                                        lineHeight: 1.4
+                                      }}
+                                    >
+                                      {content.description}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              </Box>
+                            </CardContent>
+                          </Card>
+                        </Grow>
+                      </Grid>
+                    ))}
+                </Grid>
+              </Box>
+            )}
           </DialogContent>
-          <DialogActions sx={{ p: 3 }}>
-            <Button 
-              onClick={() => setContentDialog(false)}
-              sx={{
-                borderRadius: 2,
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  transition: 'transform 0.2s ease-in-out',
-                },
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleAddContents}
-              variant="contained"
-              disabled={selectedContents.length === 0}
-              sx={{
-                borderRadius: 2,
-                background: (theme) => theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  transition: 'transform 0.2s ease-in-out',
-                },
-              }}
-            >
-              Adicionar ({selectedContents.length})
-            </Button>
+          <DialogActions sx={{ 
+            p: 4, 
+            background: (theme) => theme.palette.mode === 'dark' 
+              ? 'rgba(40, 40, 40, 0.8)' 
+              : 'rgba(250, 250, 250, 0.8)',
+            borderTop: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            gap: 2,
+            justifyContent: 'space-between'
+          }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+              {selectedContents.length > 0 
+                ? `${selectedContents.length} conteúdo${selectedContents.length > 1 ? 's' : ''} selecionado${selectedContents.length > 1 ? 's' : ''}`
+                : 'Nenhum conteúdo selecionado'
+              }
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button 
+                onClick={() => setContentDialog(false)}
+                variant="outlined"
+                sx={{
+                  borderRadius: '12px',
+                  px: 4,
+                  py: 1.5,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  borderColor: '#ff7730',
+                  color: '#ff7730',
+                  '&:hover': {
+                    borderColor: '#ff9800',
+                    background: 'rgba(255, 119, 48, 0.05)',
+                    transform: 'translateY(-2px)',
+                  },
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAddContents}
+                variant="contained"
+                disabled={selectedContents.length === 0}
+                sx={{
+                  borderRadius: '12px',
+                  px: 4,
+                  py: 1.5,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                  boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 8px 20px rgba(255, 119, 48, 0.4)',
+                  },
+                  '&:disabled': {
+                    background: 'rgba(0, 0, 0, 0.12)',
+                    color: 'rgba(0, 0, 0, 0.26)',
+                  },
+                }}
+              >
+                Adicionar {selectedContents.length > 0 && `(${selectedContents.length})`}
+              </Button>
+            </Box>
           </DialogActions>
         </Dialog>
       </Box>

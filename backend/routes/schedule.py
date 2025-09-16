@@ -50,31 +50,44 @@ def list_schedules():
 @jwt_required()
 def create_schedule():
     try:
+        print(f"[DEBUG] Schedule creation started")
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
+        print(f"[DEBUG] User: {user.username if user else 'None'}, Role: {user.role if user else 'None'}")
         
         if user.role not in ['admin', 'manager']:
             return jsonify({'error': 'Apenas administradores e gerentes podem criar agendamentos'}), 403
         
         data = request.get_json()
+        print(f"[DEBUG] Received data: {data}")
         
         required_fields = ['name', 'campaign_id', 'player_id', 'start_date', 'end_date']
         for field in required_fields:
             if not data.get(field):
+                print(f"[DEBUG] Missing required field: {field}")
                 return jsonify({'error': f'{field} é obrigatório'}), 400
         
         # Verificar se campanha e player existem
         campaign = Campaign.query.get(data['campaign_id'])
         if not campaign:
+            print(f"[DEBUG] Campaign not found: {data['campaign_id']}")
             return jsonify({'error': 'Campanha não encontrada'}), 404
         
         player = Player.query.get(data['player_id'])
         if not player:
+            print(f"[DEBUG] Player not found: {data['player_id']}")
             return jsonify({'error': 'Player não encontrado'}), 404
         
+        print(f"[DEBUG] Campaign: {campaign.name}, Player: {player.name}")
+        
         # Converter datas
-        start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-        end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+        try:
+            start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+            end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+            print(f"[DEBUG] Dates converted - Start: {start_date}, End: {end_date}")
+        except Exception as e:
+            print(f"[DEBUG] Date conversion error: {e}")
+            return jsonify({'error': f'Erro na conversão de datas: {str(e)}'}), 400
         
         if start_date >= end_date:
             return jsonify({'error': 'Data de início deve ser anterior à data de fim'}), 400
@@ -83,12 +96,47 @@ def create_schedule():
         start_time = None
         end_time = None
         
-        if data.get('start_time'):
-            start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+        try:
+            if data.get('start_time'):
+                time_str = data['start_time']
+                print(f"[DEBUG] Original start_time string: {time_str}")
+                # Handle both datetime format and time format
+                if 'T' in time_str:
+                    # Extract time from datetime string without timezone conversion
+                    # Parse the datetime string and extract only the time part
+                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
+                    print(f"[DEBUG] Extracted time part: {dt_str}")
+                    if '.' in dt_str:
+                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
+                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
+                    start_time = datetime.strptime(dt_str, '%H:%M:%S').time()
+                else:
+                    # Handle direct time format (e.g., '15:45')
+                    start_time = datetime.strptime(time_str, '%H:%M').time()
+                print(f"[DEBUG] Final start_time object: {start_time}")
+            
+            if data.get('end_time'):
+                time_str = data['end_time']
+                print(f"[DEBUG] Original end_time string: {time_str}")
+                # Handle both datetime format and time format
+                if 'T' in time_str:
+                    # Extract time from datetime string without timezone conversion
+                    # Parse the datetime string and extract only the time part
+                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
+                    print(f"[DEBUG] Extracted time part: {dt_str}")
+                    if '.' in dt_str:
+                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
+                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
+                    end_time = datetime.strptime(dt_str, '%H:%M:%S').time()
+                else:
+                    # Handle direct time format (e.g., '03:00')
+                    end_time = datetime.strptime(time_str, '%H:%M').time()
+                print(f"[DEBUG] Final end_time object: {end_time}")
+        except Exception as e:
+            print(f"[DEBUG] Time conversion error: {e}")
+            return jsonify({'error': f'Erro na conversão de horários: {str(e)}'}), 400
         
-        if data.get('end_time'):
-            end_time = datetime.strptime(data['end_time'], '%H:%M').time()
-        
+        print(f"[DEBUG] Creating schedule object...")
         schedule = Schedule(
             name=data['name'],
             campaign_id=data['campaign_id'],
@@ -106,15 +154,22 @@ def create_schedule():
             is_active=data.get('is_active', True)
         )
         
+        print(f"[DEBUG] Schedule object created, adding to session...")
         db.session.add(schedule)
+        
+        print(f"[DEBUG] Committing to database...")
         db.session.commit()
         
+        print(f"[DEBUG] Schedule created successfully: {schedule.id}")
         return jsonify({
             'message': 'Agendamento criado com sucesso',
             'schedule': schedule.to_dict()
         }), 201
         
     except Exception as e:
+        print(f"[DEBUG] Exception in create_schedule: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
@@ -159,13 +214,29 @@ def update_schedule(schedule_id):
         
         if 'start_time' in data:
             if data['start_time']:
-                schedule.start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+                time_str = data['start_time']
+                # Handle both datetime format and time format
+                if 'T' in time_str:
+                    # Extract time from datetime string
+                    dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                    schedule.start_time = dt.time()
+                else:
+                    # Handle direct time format
+                    schedule.start_time = datetime.strptime(time_str, '%H:%M').time()
             else:
                 schedule.start_time = None
         
         if 'end_time' in data:
             if data['end_time']:
-                schedule.end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+                time_str = data['end_time']
+                # Handle both datetime format and time format
+                if 'T' in time_str:
+                    # Extract time from datetime string
+                    dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                    schedule.end_time = dt.time()
+                else:
+                    # Handle direct time format
+                    schedule.end_time = datetime.strptime(time_str, '%H:%M').time()
             else:
                 schedule.end_time = None
         
@@ -302,7 +373,10 @@ def get_schedules_by_campaign(campaign_id):
 def check_schedule_conflicts():
     """Verificar conflitos de agendamento"""
     try:
+        print(f"[DEBUG] Conflict detection started")
         data = request.get_json()
+        print(f"[DEBUG] Received data: {data}")
+        
         player_id = data.get('player_id')
         campaign_id = data.get('campaign_id')
         start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
@@ -311,17 +385,52 @@ def check_schedule_conflicts():
         start_time = None
         end_time = None
         
-        if data.get('start_time'):
-            start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+        try:
+            if data.get('start_time'):
+                time_str = data['start_time']
+                print(f"[DEBUG] Original start_time string: {time_str}")
+                # Handle both datetime format and time format
+                if 'T' in time_str:
+                    # Extract time from datetime string without timezone conversion
+                    # Parse the datetime string and extract only the time part
+                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
+                    print(f"[DEBUG] Extracted time part: {dt_str}")
+                    if '.' in dt_str:
+                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
+                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
+                    start_time = datetime.strptime(dt_str, '%H:%M:%S').time()
+                else:
+                    # Handle direct time format
+                    start_time = datetime.strptime(time_str, '%H:%M').time()
+                print(f"[DEBUG] Final start_time object: {start_time}")
         
-        if data.get('end_time'):
-            end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+            if data.get('end_time'):
+                time_str = data['end_time']
+                print(f"[DEBUG] Original end_time string: {time_str}")
+                # Handle both datetime format and time format
+                if 'T' in time_str:
+                    # Extract time from datetime string without timezone conversion
+                    # Parse the datetime string and extract only the time part
+                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
+                    print(f"[DEBUG] Extracted time part: {dt_str}")
+                    if '.' in dt_str:
+                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
+                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
+                    end_time = datetime.strptime(dt_str, '%H:%M:%S').time()
+                else:
+                    # Handle direct time format
+                    end_time = datetime.strptime(time_str, '%H:%M').time()
+                print(f"[DEBUG] Final end_time object: {end_time}")
+        except Exception as e:
+            print(f"[DEBUG] Time conversion error: {e}")
+            return jsonify({'error': f'Erro na conversão de horários: {str(e)}'}), 400
         
         days_of_week = data.get('days_of_week', '1,2,3,4,5')
         exclude_schedule_id = data.get('exclude_schedule_id')
         
         # Determinar tipo de conteúdo do novo agendamento
         new_content_type = _get_schedule_content_type(campaign_id)
+        print(f"[DEBUG] New content type: {new_content_type}")
         
         # Buscar agendamentos que podem conflitar
         query = Schedule.query.filter(
@@ -335,12 +444,14 @@ def check_schedule_conflicts():
             query = query.filter(Schedule.id != exclude_schedule_id)
         
         existing_schedules = query.all()
+        print(f"[DEBUG] Existing schedules: {[schedule.id for schedule in existing_schedules]}")
         
         conflicts = []
         
         for schedule in existing_schedules:
             # Determinar tipo de conteúdo do agendamento existente
             existing_content_type = _get_schedule_content_type(schedule.campaign_id)
+            print(f"[DEBUG] Existing content type: {existing_content_type}")
             
             # Se são tipos diferentes (overlay + main), não há conflito
             if new_content_type != existing_content_type:
@@ -360,12 +471,16 @@ def check_schedule_conflicts():
             
             conflicts.append(schedule.to_dict())
         
+        print(f"[DEBUG] Conflicts found: {[conflict['id'] for conflict in conflicts]}")
         return jsonify({
             'has_conflicts': len(conflicts) > 0,
             'conflicts': conflicts
         }), 200
         
     except Exception as e:
+        print(f"[DEBUG] Exception in check_schedule_conflicts: {type(e).__name__}: {str(e)}")
+        import traceback
+        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 def _get_schedule_content_type(campaign_id):

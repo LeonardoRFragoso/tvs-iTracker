@@ -100,11 +100,36 @@ const ContentForm = () => {
     }
   };
 
+  const getContentTypeFromFile = (file) => {
+    const type = file.type;
+    if (type.startsWith('image/')) {
+      return 'image';
+    } else if (type.startsWith('video/')) {
+      return 'video';
+    } else if (type.startsWith('audio/')) {
+      return 'audio';
+    } else {
+      return 'unknown';
+    }
+  };
+
+  const isDurationRequired = (contentType) => {
+    return contentType === 'video' || contentType === 'audio';
+  };
+
   const onDrop = (acceptedFiles) => {
     const selectedFile = acceptedFiles[0];
     if (selectedFile) {
       setFile(selectedFile);
+      const contentType = getContentTypeFromFile(selectedFile);
       setDetectedContentType(selectedFile.type);
+      
+      // Set default duration based on content type
+      if (contentType === 'image') {
+        setFormData(prev => ({ ...prev, duration: '' })); // Images don't need duration
+      } else if (contentType === 'video' || contentType === 'audio') {
+        setFormData(prev => ({ ...prev, duration: prev.duration || '' })); // Keep existing or empty for user input
+      }
       
       // Create preview for images
       if (selectedFile.type.startsWith('image/')) {
@@ -162,10 +187,21 @@ const ContentForm = () => {
     try {
       const submitData = new FormData();
       
+      // Get content type from file
+      const contentType = file ? getContentTypeFromFile(file) : 'text';
+      
       // Add form fields
       Object.keys(formData).forEach(key => {
         if (key === 'tags') {
           submitData.append('tags', JSON.stringify(formData.tags));
+        } else if (key === 'duration') {
+          // Only include duration for video and audio files
+          if (isDurationRequired(contentType) && formData[key]) {
+            submitData.append(key, formData[key]);
+          } else if (!isDurationRequired(contentType)) {
+            // For images, don't send duration at all - backend will set default
+            return;
+          }
         } else {
           submitData.append(key, formData[key]);
         }
@@ -681,7 +717,8 @@ const ContentForm = () => {
                     <Button
                       type="submit"
                       variant="contained"
-                      disabled={loading || (!file && !isEdit) || !formData.title}
+                      disabled={loading || (!file && !isEdit) || !formData.title || 
+                        (file && isDurationRequired(getContentTypeFromFile(file)) && !formData.duration)}
                       startIcon={<SaveIcon />}
                       sx={{
                         borderRadius: 3,
