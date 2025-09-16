@@ -23,7 +23,13 @@ import {
   Tooltip,
   Grid,
   Card,
-  CardContent
+  CardContent,
+  Avatar,
+  Fade,
+  Grow,
+  Skeleton,
+  LinearProgress,
+  Badge,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -35,10 +41,52 @@ import {
   Schedule as ScheduleIcon,
   Computer as ComputerIcon,
   Storage as StorageIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Business as BusinessIcon,
+  TrendingUp as TrendingUpIcon,
+  Close as CloseIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useTheme } from '../../contexts/ThemeContext';
+
+// Skeleton loading component for statistics cards
+const StatCardSkeleton = ({ delay = 0 }) => (
+  <Grow in={true} timeout={1000 + delay * 200}>
+    <Card 
+      sx={{ 
+        height: '100%',
+        borderRadius: 3,
+      }}
+    >
+      <CardContent>
+        <Box display="flex" alignItems="center">
+          <Skeleton variant="circular" width={40} height={40} sx={{ mr: 2 }} />
+          <Box sx={{ flexGrow: 1 }}>
+            <Skeleton variant="text" width="60%" height={32} />
+            <Skeleton variant="text" width="80%" height={20} />
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  </Grow>
+);
+
+// Skeleton loading component for table rows
+const TableRowSkeleton = ({ delay = 0 }) => (
+  <TableRow>
+    {Array.from({ length: 8 }, (_, index) => (
+      <TableCell key={index}>
+        <Skeleton 
+          variant="text" 
+          width={index === 0 ? "80%" : index === 7 ? "60%" : "70%"} 
+          height={20} 
+        />
+      </TableCell>
+    ))}
+  </TableRow>
+);
 
 const LocationList = () => {
   const navigate = useNavigate();
@@ -48,6 +96,7 @@ const LocationList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteDialog, setDeleteDialog] = useState({ open: false, location: null });
   const [stats, setStats] = useState({});
+  const { isDarkMode } = useTheme();
 
   useEffect(() => {
     fetchLocations();
@@ -119,37 +168,93 @@ const LocationList = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Typography>Carregando sedes...</Typography>
-      </Container>
+      <Box sx={{ p: 4 }}>
+        <Fade in={true} timeout={800}>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+            <Box>
+              <Skeleton variant="text" width={300} height={48} />
+              <Skeleton variant="text" width={200} height={24} />
+            </Box>
+            <Box display="flex" gap={1}>
+              <Skeleton variant="circular" width={56} height={56} />
+              <Skeleton variant="rectangular" width={120} height={56} sx={{ borderRadius: 2 }} />
+            </Box>
+          </Box>
+        </Fade>
+        <Skeleton variant="rectangular" width="100%" height={56} sx={{ mb: 3, borderRadius: 2 }} />
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          {Array.from({ length: 4 }, (_, index) => (
+            <Grid item xs={12} sm={6} md={3} key={index}>
+              <StatCardSkeleton delay={index} />
+            </Grid>
+          ))}
+        </Grid>
+        <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 3 }} />
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          Gerenciamento de Sedes
-        </Typography>
-        <Box display="flex" gap={2}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={fetchLocations}
-          >
-            Atualizar
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/locations/new')}
-          >
-            Nova Sede
-          </Button>
+    <Box sx={{ p: 4 }}>
+      <Fade in={true} timeout={800}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+          <Box>
+            <Typography 
+              variant="h3" 
+              component="h1" 
+              fontWeight="bold" 
+              gutterBottom
+              sx={{
+                textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              }}
+            >
+              Gerenciamento de Sedes
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              Monitore e gerencie todas as suas localizações
+            </Typography>
+          </Box>
+          <Box display="flex" gap={1}>
+            <Tooltip title="Atualizar dados">
+              <IconButton 
+                onClick={fetchLocations}
+                sx={{
+                  bgcolor: 'info.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'info.dark',
+                    transform: 'rotate(180deg)',
+                  },
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/locations/new')}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 'bold',
+                px: 3,
+                background: isDarkMode 
+                  ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+                  : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.2)',
+                },
+                transition: 'all 0.3s ease',
+              }}
+            >
+              Nova Sede
+            </Button>
+          </Box>
         </Box>
-      </Box>
-
+      </Fade>
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
@@ -157,230 +262,575 @@ const LocationList = () => {
       )}
 
       {/* Search */}
-      <Box mb={3}>
-        <TextField
-          fullWidth
-          placeholder="Buscar sedes por nome, cidade ou estado..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon />
-              </InputAdornment>
-            ),
+      <Fade in={true} timeout={1000}>
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 4,
+            p: 3,
+            borderRadius: 3,
+            background: isDarkMode 
+              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+            border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+            position: 'relative',
+            overflow: 'hidden',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: 100,
+              height: 100,
+              background: `radial-gradient(circle, ${isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
+            },
           }}
-        />
-      </Box>
+        >
+          <Box display="flex" alignItems="center" gap={2} mb={2}>
+            <Avatar sx={{ bgcolor: 'primary.main' }}>
+              <SearchIcon />
+            </Avatar>
+            <Box>
+              <Typography variant="h6" fontWeight="bold">
+                Buscar Sedes
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Encontre sedes por nome, cidade ou estado
+              </Typography>
+            </Box>
+          </Box>
+          <TextField
+            fullWidth
+            placeholder="Buscar sedes por nome, cidade ou estado..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                },
+                transition: 'all 0.2s ease',
+              },
+            }}
+          />
+        </Paper>
+      </Fade>
 
       {/* Statistics Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <LocationIcon color="primary" sx={{ mr: 2 }} />
-                <Box>
-                  <Typography variant="h6">{locations.length}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total de Sedes
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+      <Fade in={true} timeout={1200}>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Grow in={true} timeout={1000}>
+              <Card 
+                sx={{
+                  borderRadius: 3,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)'
+                    : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                  color: 'white',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'translateY(-4px) scale(1.02)',
+                    boxShadow: '0 12px 35px rgba(25, 118, 210, 0.3)',
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: -50,
+                    right: -50,
+                    width: 100,
+                    height: 100,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    transition: 'all 0.5s ease',
+                  },
+                  '&:hover::before': {
+                    transform: 'scale(1.5)',
+                    opacity: 0,
+                  },
+                }}
+              >
+                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                        {locations.length}
+                      </Typography>
+                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                        Total de Sedes
+                      </Typography>
+                    </Box>
+                    <Avatar
+                      sx={{
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        width: 56,
+                        height: 56,
+                      }}
+                    >
+                      <LocationIcon fontSize="large" />
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grow>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Grow in={true} timeout={1200}>
+              <Card 
+                sx={{
+                  borderRadius: 3,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)'
+                    : 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
+                  color: 'white',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'translateY(-4px) scale(1.02)',
+                    boxShadow: '0 12px 35px rgba(76, 175, 80, 0.3)',
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: -50,
+                    right: -50,
+                    width: 100,
+                    height: 100,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    transition: 'all 0.5s ease',
+                  },
+                  '&:hover::before': {
+                    transform: 'scale(1.5)',
+                    opacity: 0,
+                  },
+                }}
+              >
+                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                        {Object.values(stats).reduce((acc, stat) => 
+                          acc + (stat?.player_stats?.total_players || 0), 0
+                        )}
+                      </Typography>
+                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                        Total de Players
+                      </Typography>
+                    </Box>
+                    <Avatar
+                      sx={{
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        width: 56,
+                        height: 56,
+                      }}
+                    >
+                      <ComputerIcon fontSize="large" />
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grow>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Grow in={true} timeout={1400}>
+              <Card 
+                sx={{
+                  borderRadius: 3,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)'
+                    : 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
+                  color: 'white',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'translateY(-4px) scale(1.02)',
+                    boxShadow: '0 12px 35px rgba(33, 150, 243, 0.3)',
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: -50,
+                    right: -50,
+                    width: 100,
+                    height: 100,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    transition: 'all 0.5s ease',
+                  },
+                  '&:hover::before': {
+                    transform: 'scale(1.5)',
+                    opacity: 0,
+                  },
+                }}
+              >
+                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                        {Object.values(stats).reduce((acc, stat) => 
+                          acc + (stat?.player_stats?.online_players || 0), 0
+                        )}
+                      </Typography>
+                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                        Players Online
+                      </Typography>
+                    </Box>
+                    <Avatar
+                      sx={{
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        width: 56,
+                        height: 56,
+                      }}
+                    >
+                      <WifiIcon fontSize="large" />
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grow>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Grow in={true} timeout={1600}>
+              <Card 
+                sx={{
+                  borderRadius: 3,
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+                    : 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+                  color: 'white',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    transform: 'translateY(-4px) scale(1.02)',
+                    boxShadow: '0 12px 35px rgba(255, 152, 0, 0.3)',
+                  },
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: -50,
+                    right: -50,
+                    width: 100,
+                    height: 100,
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '50%',
+                    transition: 'all 0.5s ease',
+                  },
+                  '&:hover::before': {
+                    transform: 'scale(1.5)',
+                    opacity: 0,
+                  },
+                }}
+              >
+                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between">
+                    <Box>
+                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                        {Object.values(stats).reduce((acc, stat) => 
+                          acc + (stat?.storage_stats?.total_storage_gb || 0), 0
+                        ).toFixed(1)} GB
+                      </Typography>
+                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                        Armazenamento Total
+                      </Typography>
+                    </Box>
+                    <Avatar
+                      sx={{
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        width: 56,
+                        height: 56,
+                      }}
+                    >
+                      <StorageIcon fontSize="large" />
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grow>
+          </Grid>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <ComputerIcon color="success" sx={{ mr: 2 }} />
-                <Box>
-                  <Typography variant="h6">
-                    {Object.values(stats).reduce((acc, stat) => 
-                      acc + (stat?.player_stats?.total_players || 0), 0
-                    )}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Total de Players
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <WifiIcon color="info" sx={{ mr: 2 }} />
-                <Box>
-                  <Typography variant="h6">
-                    {Object.values(stats).reduce((acc, stat) => 
-                      acc + (stat?.player_stats?.online_players || 0), 0
-                    )}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Players Online
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center">
-                <StorageIcon color="warning" sx={{ mr: 2 }} />
-                <Box>
-                  <Typography variant="h6">
-                    {Object.values(stats).reduce((acc, stat) => 
-                      acc + (stat?.storage_stats?.total_storage_gb || 0), 0
-                    ).toFixed(1)} GB
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Armazenamento Total
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      </Fade>
 
       {/* Locations Table */}
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>Localização</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Players</TableCell>
-              <TableCell>Horário de Pico</TableCell>
-              <TableCell>Bandwidth</TableCell>
-              <TableCell>Armazenamento</TableCell>
-              <TableCell align="center">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredLocations.map((location) => {
-              const locationStats = stats[location.id];
-              return (
-                <TableRow key={location.id} hover>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="subtitle2">
-                        {location.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {location.timezone}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="body2">
-                        {location.city}, {location.state}
-                      </Typography>
-                      {location.address && (
-                        <Typography variant="caption" color="text.secondary">
-                          {location.address}
-                        </Typography>
-                      )}
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={location.is_active ? 'Ativa' : 'Inativa'}
-                      color={getStatusColor(location.is_active)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {locationStats ? (
-                      <Box>
-                        <Typography variant="body2">
-                          {locationStats.player_stats.online_players}/
-                          {locationStats.player_stats.total_players}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {getOnlinePercentage(locationStats).toFixed(1)}% online
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Carregando...
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Box display="flex" alignItems="center">
-                      <ScheduleIcon fontSize="small" sx={{ mr: 1 }} />
-                      <Typography variant="body2">
-                        {formatPeakHours(location.peak_hours_start, location.peak_hours_end)}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Box display="flex" alignItems="center">
-                      <WifiIcon fontSize="small" sx={{ mr: 1 }} />
-                      <Typography variant="body2">
-                        {location.network_bandwidth_mbps} Mbps
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    {locationStats ? (
-                      <Box>
-                        <Typography variant="body2">
-                          {locationStats.storage_stats.used_storage_gb.toFixed(1)}/
-                          {locationStats.storage_stats.total_storage_gb.toFixed(1)} GB
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {getStorageUsage(locationStats).toFixed(1)}% usado
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Carregando...
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Editar">
-                      <IconButton
-                        size="small"
-                        onClick={() => navigate(`/locations/${location.id}/edit`)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Ver Detalhes">
-                      <IconButton
-                        size="small"
-                        onClick={() => navigate(`/locations/${location.id}`)}
-                      >
-                        <LocationIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Deletar">
-                      <IconButton
-                        size="small"
-                        onClick={() => setDeleteDialog({ open: true, location })}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Fade in={true} timeout={1400}>
+        <TableContainer 
+          component={Paper}
+          sx={{
+            borderRadius: 3,
+            background: isDarkMode 
+              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+            border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+            overflow: 'hidden',
+            '& .MuiTable-root': {
+              '& .MuiTableHead-root': {
+                '& .MuiTableRow-root': {
+                  background: isDarkMode 
+                    ? 'linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%)'
+                    : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
+                  '& .MuiTableCell-root': {
+                    fontWeight: 'bold',
+                    fontSize: '0.9rem',
+                    borderBottom: `2px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+                  },
+                },
+              },
+              '& .MuiTableBody-root': {
+                '& .MuiTableRow-root': {
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    background: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+                    transform: 'scale(1.01)',
+                  },
+                  '& .MuiTableCell-root': {
+                    borderBottom: `1px solid ${isDarkMode ? '#333' : '#f0f0f0'}`,
+                  },
+                },
+              },
+            },
+          }}
+        >
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nome</TableCell>
+                <TableCell>Localização</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Players</TableCell>
+                <TableCell>Horário de Pico</TableCell>
+                <TableCell>Bandwidth</TableCell>
+                <TableCell>Armazenamento</TableCell>
+                <TableCell align="center">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredLocations.map((location, index) => {
+                const locationStats = stats[location.id];
+                return (
+                  <Grow in={true} timeout={1600 + index * 100} key={location.id}>
+                    <TableRow hover>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={2}>
+                          <Avatar
+                            sx={{
+                              bgcolor: location.is_active ? 'success.main' : 'error.main',
+                              width: 32,
+                              height: 32,
+                            }}
+                          >
+                            <BusinessIcon fontSize="small" />
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight="bold">
+                              {location.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {location.timezone}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {location.city}, {location.state}
+                          </Typography>
+                          {location.address && (
+                            <Typography variant="caption" color="text.secondary">
+                              {location.address}
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={location.is_active ? 'Ativa' : 'Inativa'}
+                          color={getStatusColor(location.is_active)}
+                          size="small"
+                          sx={{
+                            fontWeight: 'bold',
+                            borderRadius: 2,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {locationStats ? (
+                          <Box>
+                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {locationStats.player_stats.online_players}/
+                                {locationStats.player_stats.total_players}
+                              </Typography>
+                              <Chip
+                                label={`${getOnlinePercentage(locationStats).toFixed(0)}%`}
+                                size="small"
+                                color={getOnlinePercentage(locationStats) > 80 ? 'success' : 
+                                       getOnlinePercentage(locationStats) > 50 ? 'warning' : 'error'}
+                                sx={{ fontSize: '0.7rem', height: 20 }}
+                              />
+                            </Box>
+                            <LinearProgress
+                              variant="determinate"
+                              value={getOnlinePercentage(locationStats)}
+                              sx={{
+                                height: 4,
+                                borderRadius: 2,
+                                bgcolor: isDarkMode ? '#333' : '#e0e0e0',
+                                '& .MuiLinearProgress-bar': {
+                                  borderRadius: 2,
+                                },
+                              }}
+                            />
+                          </Box>
+                        ) : (
+                          <Skeleton variant="text" width="80%" height={20} />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Avatar
+                            sx={{
+                              bgcolor: 'info.main',
+                              width: 24,
+                              height: 24,
+                            }}
+                          >
+                            <ScheduleIcon fontSize="small" />
+                          </Avatar>
+                          <Typography variant="body2" fontWeight="medium">
+                            {formatPeakHours(location.peak_hours_start, location.peak_hours_end)}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Avatar
+                            sx={{
+                              bgcolor: 'primary.main',
+                              width: 24,
+                              height: 24,
+                            }}
+                          >
+                            <WifiIcon fontSize="small" />
+                          </Avatar>
+                          <Typography variant="body2" fontWeight="bold">
+                            {location.network_bandwidth_mbps} Mbps
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {locationStats ? (
+                          <Box>
+                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {locationStats.storage_stats.used_storage_gb.toFixed(1)}/
+                                {locationStats.storage_stats.total_storage_gb.toFixed(1)} GB
+                              </Typography>
+                              <Chip
+                                label={`${getStorageUsage(locationStats).toFixed(0)}%`}
+                                size="small"
+                                color={getStorageUsage(locationStats) < 70 ? 'success' : 
+                                       getStorageUsage(locationStats) < 90 ? 'warning' : 'error'}
+                                sx={{ fontSize: '0.7rem', height: 20 }}
+                              />
+                            </Box>
+                            <LinearProgress
+                              variant="determinate"
+                              value={getStorageUsage(locationStats)}
+                              sx={{
+                                height: 4,
+                                borderRadius: 2,
+                                bgcolor: isDarkMode ? '#333' : '#e0e0e0',
+                                '& .MuiLinearProgress-bar': {
+                                  borderRadius: 2,
+                                },
+                              }}
+                            />
+                          </Box>
+                        ) : (
+                          <Skeleton variant="text" width="80%" height={20} />
+                        )}
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box display="flex" gap={0.5} justifyContent="center">
+                          <Tooltip title="Editar">
+                            <IconButton
+                              size="small"
+                              onClick={() => navigate(`/locations/${location.id}/edit`)}
+                              sx={{
+                                bgcolor: 'primary.main',
+                                color: 'white',
+                                '&:hover': {
+                                  bgcolor: 'primary.dark',
+                                  transform: 'scale(1.1)',
+                                },
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Ver Detalhes">
+                            <IconButton
+                              size="small"
+                              onClick={() => navigate(`/locations/${location.id}`)}
+                              sx={{
+                                bgcolor: 'info.main',
+                                color: 'white',
+                                '&:hover': {
+                                  bgcolor: 'info.dark',
+                                  transform: 'scale(1.1)',
+                                },
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              <LocationIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Deletar">
+                            <IconButton
+                              size="small"
+                              onClick={() => setDeleteDialog({ open: true, location })}
+                              sx={{
+                                bgcolor: 'error.main',
+                                color: 'white',
+                                '&:hover': {
+                                  bgcolor: 'error.dark',
+                                  transform: 'scale(1.1)',
+                                },
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  </Grow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Fade>
 
       {filteredLocations.length === 0 && (
         <Box textAlign="center" py={4}>
@@ -423,7 +873,7 @@ const LocationList = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
   );
 };
 

@@ -26,6 +26,12 @@ import {
   SpeedDial,
   SpeedDialAction,
   SpeedDialIcon,
+  Snackbar,
+  AlertTitle,
+  Button,
+  Menu,
+  MenuItem,
+  ListItemButton,
 } from '@mui/material';
 import {
   VideoLibrary as ContentIcon,
@@ -47,6 +53,10 @@ import {
   Settings as SettingsIcon,
   TrendingDown as TrendingDownIcon,
   Remove as RemoveIcon,
+  GetApp as ExportIcon,
+  Notifications as NotificationIcon,
+  Close as CloseIcon,
+  Keyboard as KeyboardIcon,
 } from '@mui/icons-material';
 import { Line } from 'react-chartjs-2';
 import {
@@ -221,6 +231,7 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
             sx={{
               textShadow: '0 2px 4px rgba(0,0,0,0.3)',
               transition: 'all 0.3s ease',
+              color: isDarkMode ? '#ffffff' : 'inherit',
             }}
           >
             {value}
@@ -248,6 +259,9 @@ const Dashboard = () => {
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
 
@@ -269,6 +283,121 @@ const Dashboard = () => {
       if (interval) clearInterval(interval);
     };
   }, [autoRefresh, user]);
+
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key) {
+          case 'r':
+            event.preventDefault();
+            loadDashboardData();
+            showNotification('Dashboard atualizado!', 'success');
+            break;
+          case 'e':
+            event.preventDefault();
+            exportData('json');
+            break;
+          case 'h':
+            event.preventDefault();
+            setKeyboardShortcutsOpen(true);
+            break;
+          case '1':
+            event.preventDefault();
+            window.location.href = '/content/new';
+            break;
+          case '2':
+            event.preventDefault();
+            window.location.href = '/campaigns/new';
+            break;
+          case '3':
+            event.preventDefault();
+            window.location.href = '/players/new';
+            break;
+          case '4':
+            event.preventDefault();
+            window.location.href = '/schedules/new';
+            break;
+          default:
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
+  // Show notification function
+  const showNotification = (message, severity = 'info', duration = 4000) => {
+    const id = Date.now();
+    const notification = {
+      id,
+      message,
+      severity,
+      open: true,
+    };
+    
+    setNotifications(prev => [...prev, notification]);
+    
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, duration);
+  };
+
+  // Close notification
+  const handleCloseNotification = (id) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  // Export data functionality
+  const exportData = (format) => {
+    try {
+      const exportData = {
+        stats,
+        alerts,
+        performance,
+        health,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (format === 'json') {
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        const exportFileDefaultName = `dashboard-data-${new Date().toISOString().split('T')[0]}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+        
+        showNotification('Dados exportados com sucesso!', 'success');
+      } else if (format === 'csv') {
+        // Simple CSV export for stats
+        const csvContent = [
+          ['Métrica', 'Valor'],
+          ['Total de Conteúdos', stats?.overview.total_content || 0],
+          ['Total de Campanhas', stats?.overview.total_campaigns || 0],
+          ['Players Online', `${stats?.overview.online_players || 0}/${stats?.overview.total_players || 0}`],
+          ['Armazenamento Usado', `${stats?.storage.percentage?.toFixed(1) || 0}%`],
+          ['Status do Sistema', health?.status || 'N/A'],
+          ['Saúde Geral', `${health?.overall_health || 0}%`],
+        ].map(row => row.join(',')).join('\n');
+        
+        const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+        const exportFileDefaultName = `dashboard-stats-${new Date().toISOString().split('T')[0]}.csv`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+        
+        showNotification('Relatório CSV exportado!', 'success');
+      }
+    } catch (error) {
+      showNotification('Erro ao exportar dados', 'error');
+    }
+    setExportMenuAnchor(null);
+  };
 
   const loadDashboardData = async (silent = false) => {
     try {
@@ -503,6 +632,34 @@ const Dashboard = () => {
             </Box>
           </Box>
           <Box display="flex" gap={1}>
+            <Tooltip title="Atalhos do teclado (Ctrl+H)">
+              <IconButton 
+                onClick={() => setKeyboardShortcutsOpen(true)}
+                sx={{
+                  bgcolor: 'info.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'info.dark',
+                  },
+                }}
+              >
+                <KeyboardIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Exportar dados">
+              <IconButton 
+                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+                sx={{
+                  bgcolor: 'secondary.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: 'secondary.dark',
+                  },
+                }}
+              >
+                <ExportIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
               <IconButton 
                 onClick={() => setAutoRefresh(!autoRefresh)}
@@ -853,6 +1010,92 @@ const Dashboard = () => {
           />
         ))}
       </SpeedDial>
+
+      {/* Notifications */}
+      {notifications.map((notification) => (
+        <Snackbar
+          key={notification.id}
+          open={notification.open}
+          autoHideDuration={6000}
+          onClose={() => handleCloseNotification(notification.id)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert 
+            severity={notification.severity} 
+            variant="filled" 
+            sx={{ borderRadius: 2 }}
+          >
+            {notification.message}
+          </Alert>
+        </Snackbar>
+      ))}
+
+      {/* Export Menu */}
+      <Menu
+        anchorEl={exportMenuAnchor}
+        open={Boolean(exportMenuAnchor)}
+        onClose={() => setExportMenuAnchor(null)}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            minWidth: 200,
+            background: isDarkMode 
+              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+            border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+          },
+        }}
+      >
+        <MenuItem onClick={() => exportData('json')}>
+          <ListItemIcon>
+            <ExportIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Exportar JSON" secondary="Dados completos" />
+        </MenuItem>
+        <MenuItem onClick={() => exportData('csv')}>
+          <ListItemIcon>
+            <ExportIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Exportar CSV" secondary="Relatório resumido" />
+        </MenuItem>
+      </Menu>
+
+      {/* Keyboard Shortcuts Dialog */}
+      <Snackbar
+        open={keyboardShortcutsOpen}
+        autoHideDuration={8000}
+        onClose={() => setKeyboardShortcutsOpen(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          severity="info" 
+          variant="filled"
+          sx={{ 
+            borderRadius: 2,
+            minWidth: 400,
+          }}
+          action={
+            <IconButton
+              size="small"
+              color="inherit"
+              onClick={() => setKeyboardShortcutsOpen(false)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          }
+        >
+          <AlertTitle>Atalhos do Teclado</AlertTitle>
+          <Box component="ul" sx={{ m: 0, pl: 2 }}>
+            <li><strong>Ctrl+R:</strong> Atualizar dashboard</li>
+            <li><strong>Ctrl+E:</strong> Exportar dados (JSON)</li>
+            <li><strong>Ctrl+H:</strong> Mostrar atalhos</li>
+            <li><strong>Ctrl+1:</strong> Novo conteúdo</li>
+            <li><strong>Ctrl+2:</strong> Nova campanha</li>
+            <li><strong>Ctrl+3:</strong> Novo player</li>
+            <li><strong>Ctrl+4:</strong> Novo agendamento</li>
+          </Box>
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
