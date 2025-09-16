@@ -27,7 +27,11 @@ class Schedule(db.Model):
     
     # Status
     is_active = db.Column(db.Boolean, default=True)
-    priority = db.Column(db.Integer, default=1)
+    priority = db.Column(db.Integer, default=1)  # 1-10 scale (1=baixa, 10=alta)
+    
+    # Configurações de persistência/overlay
+    is_persistent = db.Column(db.Boolean, default=False)  # Se deve ficar fixo na tela
+    content_type = db.Column(db.String(20), default='main')  # 'main' ou 'overlay'
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -47,6 +51,8 @@ class Schedule(db.Model):
             'repeat_interval': self.repeat_interval,
             'is_active': self.is_active,
             'priority': self.priority,
+            'is_persistent': self.is_persistent,
+            'content_type': self.content_type,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'campaign': self.campaign.to_dict() if self.campaign else None,
             'player': self.player.to_dict() if self.player else None

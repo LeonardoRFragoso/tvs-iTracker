@@ -237,8 +237,8 @@ class ScheduleExecutor:
                 # Atualizar status do player para online e atualizar last_ping
                 try:
                     player.status = 'online'
-                    player.last_ping = datetime.now()  # Atualizar last_ping para dashboard
-                    player.last_seen = datetime.now()
+                    player.last_ping = datetime.utcnow()  # Use utcnow() for consistency
+                    player.last_seen = datetime.utcnow()
                     db.session.commit()
                     logger.info(f"Status do player {player.name} atualizado para online com last_ping")
                 except Exception as e:

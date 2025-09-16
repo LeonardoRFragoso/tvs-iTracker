@@ -6,6 +6,7 @@ import json
 from models.player import Player, db
 from models.user import User
 from models.location import Location
+from services.auto_sync_service import auto_sync_service
 
 player_bp = Blueprint('player', __name__)
 
@@ -383,6 +384,37 @@ def sync_player(player_id):
         print(f"[SYNC] Erro durante sincronização: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/sync-all', methods=['POST'])
+@jwt_required()
+def sync_all_players():
+    """Sincroniza todos os players automaticamente"""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        
+        if user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão para sincronizar players'}), 403
+        
+        print("[SYNC_ALL] Iniciando sincronização manual de todos os players...")
+        
+        # Executar sincronização
+        result = auto_sync_service.sync_all_players()
+        
+        if result:
+            return jsonify({
+                'message': 'Sincronização de todos os players concluída',
+                'synced_players': result['synced_players'],
+                'online_players': result['online_players'],
+                'total_players': result['total_players'],
+                'discovered_devices': result['discovered_devices']
+            }), 200
+        else:
+            return jsonify({'error': 'Falha na sincronização'}), 500
+        
+    except Exception as e:
+        print(f"[SYNC_ALL] Erro durante sincronização: {e}")
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/<player_id>/force-online', methods=['POST'])

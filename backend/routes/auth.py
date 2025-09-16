@@ -3,6 +3,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 from models.user import User, db
+from services.auto_sync_service import auto_sync_service
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -30,6 +31,31 @@ def login():
         
         # Criar token JWT
         access_token = create_access_token(identity=user.id)
+        
+        # Iniciar sincronização automática de players em background
+        try:
+            print("[AUTH] Iniciando sincronização automática de players após login...")
+            
+            # Executar sync em thread separada para não bloquear o login
+            import threading
+            from flask import current_app
+            
+            # Capturar a instância da aplicação antes de criar a thread
+            app = current_app._get_current_object()
+            
+            def sync_with_context():
+                with app.app_context():
+                    auto_sync_service.sync_all_players()
+            
+            sync_thread = threading.Thread(
+                target=sync_with_context,
+                daemon=True
+            )
+            sync_thread.start()
+            print("[AUTH] Sincronização automática iniciada em background")
+        except Exception as sync_error:
+            print(f"[AUTH] Erro ao iniciar sincronização automática: {sync_error}")
+            # Não falhar o login se a sincronização falhar
         
         return jsonify({
             'access_token': access_token,

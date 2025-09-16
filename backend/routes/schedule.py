@@ -100,7 +100,10 @@ def create_schedule():
             days_of_week=data.get('days_of_week', '1,2,3,4,5'),
             repeat_type=data.get('repeat_type', 'daily'),
             repeat_interval=data.get('repeat_interval', 1),
-            priority=data.get('priority', 1)
+            priority=data.get('priority', 1),
+            is_persistent=data.get('is_persistent', False),
+            content_type=data.get('content_type', 'main'),
+            is_active=data.get('is_active', True)
         )
         
         db.session.add(schedule)
@@ -177,6 +180,12 @@ def update_schedule(schedule_id):
         
         if 'priority' in data:
             schedule.priority = data['priority']
+        
+        if 'is_persistent' in data:
+            schedule.is_persistent = data['is_persistent']
+        
+        if 'content_type' in data:
+            schedule.content_type = data['content_type']
         
         if 'is_active' in data:
             schedule.is_active = data['is_active']

@@ -37,7 +37,7 @@ class Campaign(db.Model):
             if sorted_contents and sorted_contents[0].content:
                 first_content = sorted_contents[0].content
                 if hasattr(first_content, 'thumbnail_path') and first_content.thumbnail_path:
-                    first_content_thumbnail = f"/api/content/thumbnails/{first_content.thumbnail_path.split('/')[-1]}"
+                    first_content_thumbnail = f"/content/thumbnails/{first_content.thumbnail_path.split('/')[-1]}"
         
         return {
             'id': self.id,
