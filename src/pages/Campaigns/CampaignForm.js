@@ -315,16 +315,16 @@ const CampaignForm = () => {
   const getThumbUrlFor = (content) => {
     if (!content) return null;
     const t = content.thumbnail_path || content.thumbnail;
-    if (t) return `${API_HOST}/content/thumbnails/${t}`;
+    if (t) return `${API_HOST}/api/content/thumbnails/${encodeURIComponent(t)}`;
     const fp = content.file_path || content.path;
     const type = getTypeFor(content);
-    if (fp && type === 'image') return `${API_HOST}/api/content/media/${fp}`;
+    if (fp && type === 'image') return `${API_HOST}/api/content/media/${encodeURIComponent(fp)}`;
     return null;
   };
   const getMediaUrlFor = (content) => {
     if (!content) return null;
     const fp = content.file_path || content.path;
-    if (fp) return `${API_HOST}/api/content/media/${fp}`;
+    if (fp) return `${API_HOST}/api/content/media/${encodeURIComponent(fp)}`;
     return null;
   };
   const formatDuration = (seconds) => {
@@ -341,6 +341,23 @@ const CampaignForm = () => {
   };
   const getTotalDuration = () => {
     return (campaignContents || []).reduce((sum, c) => sum + (c?.duration || 0), 0);
+  };
+
+  const getMimeTypeFor = (content) => {
+    if (!content) return undefined;
+    const type = getTypeFor(content);
+    const fp = (content.file_path || '').toLowerCase();
+    if (type === 'video') {
+      if (fp.endsWith('.mp4') || fp.endsWith('.m4v')) return 'video/mp4';
+      if (fp.endsWith('.webm')) return 'video/webm';
+      if (fp.endsWith('.ogg') || fp.endsWith('.ogv')) return 'video/ogg';
+    }
+    if (type === 'audio') {
+      if (fp.endsWith('.mp3')) return 'audio/mpeg';
+      if (fp.endsWith('.ogg')) return 'audio/ogg';
+      if (fp.endsWith('.wav')) return 'audio/wav';
+    }
+    return undefined;
   };
 
   // Generic input handlers
@@ -1272,7 +1289,6 @@ const CampaignForm = () => {
                           <video
                             key={mediaUrl}
                             ref={videoRef}
-                            src={mediaUrl}
                             poster={thumbUrl || undefined}
                             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                             controls
@@ -1280,6 +1296,7 @@ const CampaignForm = () => {
                             playsInline
                             preload="auto"
                             autoPlay={previewPlaying}
+                            crossOrigin="anonymous"
                             onLoadedMetadata={(e) => {
                               try { e.currentTarget.currentTime = 0; } catch (_) {}
                               if (previewPlaying) {
@@ -1287,7 +1304,12 @@ const CampaignForm = () => {
                               }
                               setPreviewElapsed(0);
                             }}
-                          />
+                            onError={(e) => {
+                              console.error('Video load error for URL:', mediaUrl, e);
+                            }}
+                          >
+                            <source src={mediaUrl} type={getMimeTypeFor(current) || 'video/mp4'} />
+                          </video>
                         ) : thumbUrl || mediaUrl ? (
                           <img
                             src={thumbUrl || mediaUrl}

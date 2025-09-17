@@ -26,6 +26,7 @@ import {
   Fade,
   Grow,
   Skeleton,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,9 +42,12 @@ import {
   Settings as SettingsIcon,
   PlayArrow as PlayIcon,
   Stop as StopIcon,
+  Sync as SyncIcon,
+  PowerSettingsNew as PowerIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSocket } from '../../contexts/SocketContext';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -51,6 +55,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api
 const PlayerList = () => {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
+  const { sendPlayerCommand } = useSocket();
   
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -132,7 +137,12 @@ const PlayerList = () => {
 
   const handlePlayerAction = async (player, action) => {
     try {
-      await axios.post(`${API_BASE_URL}/players/${player.id}/${action}`);
+      if (action === 'sync') {
+        await axios.post(`${API_BASE_URL}/players/${player.id}/sync`);
+      } else {
+        // For restart/stop/start, use WebSocket command
+        sendPlayerCommand(player.id, action);
+      }
       setSuccess(`Comando ${action} enviado para ${player.name}`);
       handleMenuClose();
       // Reload players to get updated status
@@ -611,20 +621,54 @@ const PlayerList = () => {
                       <Typography variant="caption" color="text.secondary">
                         IP: {player.ip_address || 'N/A'}
                       </Typography>
-                      <IconButton
-                        onClick={(e) => handleMenuClick(e, player)}
-                        size="small"
-                        sx={{
-                          transition: 'all 0.3s ease',
-                          '&:hover': {
-                            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            color: 'white',
-                            transform: 'scale(1.1)',
-                          }
-                        }}
-                      >
-                        <MoreVertIcon />
-                      </IconButton>
+                      <Box display="flex" alignItems="center">
+                        <Tooltip title="Sincronizar" arrow>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => { e.stopPropagation(); handlePlayerAction(player, 'sync'); }}
+                            sx={{
+                              mr: 0.5,
+                              transition: 'all 0.3s ease',
+                              '&:hover': {
+                                background: 'rgba(33, 150, 243, 0.08)',
+                                transform: 'scale(1.1)',
+                              }
+                            }}
+                          >
+                            <SyncIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Reiniciar" arrow>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => { e.stopPropagation(); handlePlayerAction(player, 'restart'); }}
+                            sx={{
+                              mr: 0.5,
+                              transition: 'all 0.3s ease',
+                              '&:hover': {
+                                background: 'rgba(255, 119, 48, 0.10)',
+                                transform: 'scale(1.1)',
+                              }
+                            }}
+                          >
+                            <PowerIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <IconButton
+                          onClick={(e) => { e.stopPropagation(); handleMenuClick(e, player); }}
+                          size="small"
+                          sx={{
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              color: 'white',
+                              transform: 'scale(1.1)',
+                            }
+                          }}
+                        >
+                          <MoreVertIcon />
+                        </IconButton>
+                      </Box>
                     </Box>
                   </CardContent>
                 </Card>
@@ -816,7 +860,7 @@ const PlayerList = () => {
             }
           }}
         >
-          <PlayIcon sx={{ mr: 1 }} />
+          <PowerIcon sx={{ mr: 1 }} />
           Reiniciar
         </MenuItem>
         <MenuItem 
