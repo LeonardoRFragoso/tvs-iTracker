@@ -1,11 +1,19 @@
 from database import db
 from datetime import datetime, time
 import json
+import uuid
+
+# Module-level helper to format datetime in Brazilian standard
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
 
 class Schedule(db.Model):
     __tablename__ = 'schedules'
     
-    id = db.Column(db.String(36), primary_key=True)
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(255), nullable=False)
     campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False)
     player_id = db.Column(db.String(36), db.ForeignKey('players.id'), nullable=False)
@@ -45,8 +53,8 @@ class Schedule(db.Model):
             'name': self.name,
             'campaign_id': self.campaign_id,
             'player_id': self.player_id,
-            'start_date': self.start_date.isoformat() if self.start_date else None,
-            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'start_date': fmt_br_datetime(self.start_date),
+            'end_date': fmt_br_datetime(self.end_date),
             'start_time': self.start_time.strftime('%H:%M:%S') if self.start_time else None,
             'end_time': self.end_time.strftime('%H:%M:%S') if self.end_time else None,
             'days_of_week': self.days_of_week,
@@ -59,8 +67,8 @@ class Schedule(db.Model):
             'content_filter': json.loads(self.content_filter) if self.content_filter else None,
             'playback_mode_override': self.playback_mode_override,
             'content_selection': self.content_selection,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': fmt_br_datetime(self.created_at),
+            'updated_at': fmt_br_datetime(self.updated_at),
             'player': self.player.to_dict() if self.player else None,
             'campaign': self.campaign.to_dict() if self.campaign else None
         }
@@ -78,6 +86,14 @@ class Schedule(db.Model):
             except:
                 filters = {}
         
+        # Definir filtro padrão por slot caso não haja filtro explícito
+        content_type_filter = filters.get('content_type') if isinstance(filters, dict) else None
+        if not content_type_filter:
+            if self.content_type == 'overlay':
+                content_type_filter = 'image'
+            elif self.content_type == 'main':
+                content_type_filter = 'video'
+        
         # Contexto do agendamento para filtros
         schedule_context = {
             'hour': datetime.now().hour,
@@ -87,7 +103,7 @@ class Schedule(db.Model):
         
         # Obter conteúdos da campanha
         contents = self.campaign.get_contents_for_playback(
-            content_filter=filters.get('content_type'),
+            content_filter=content_type_filter,
             location_filter=schedule_context.get('player_location')
         )
         

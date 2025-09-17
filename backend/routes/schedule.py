@@ -8,6 +8,78 @@ from models.user import User
 
 schedule_bp = Blueprint('schedule', __name__)
 
+# Brazilian datetime formatting/parsing helpers
+BR_DATETIME_FORMAT = '%d/%m/%Y %H:%M:%S'
+
+
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime(BR_DATETIME_FORMAT) if dt else None
+    except Exception:
+        return None
+
+
+def parse_flexible_datetime(value, end_of_day=False):
+    """Parses a datetime from either BR format (DD/MM/YYYY [HH:MM:SS]) or ISO.
+    If only a date is provided (BR), sets time to 00:00:00 or 23:59:59 when end_of_day=True.
+    """
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        # BR format
+        if '/' in s:
+            # Has time component?
+            if ' ' in s:
+                try:
+                    return datetime.strptime(s, BR_DATETIME_FORMAT)
+                except Exception:
+                    # Try without seconds (HH:MM)
+                    try:
+                        return datetime.strptime(s, '%d/%m/%Y %H:%M')
+                    except Exception:
+                        pass
+            # Date-only
+            try:
+                d = datetime.strptime(s, '%d/%m/%Y')
+                if end_of_day:
+                    return d.replace(hour=23, minute=59, second=59)
+                return d.replace(hour=0, minute=0, second=0)
+            except Exception:
+                pass
+        # ISO fallback
+        try:
+            return datetime.fromisoformat(s.replace('Z', '+00:00'))
+        except Exception:
+            pass
+    raise ValueError(f'Formato de data inválido: {value}')
+
+
+def parse_flexible_time(value):
+    """Parses time from 'HH:MM[:SS]' or from ISO datetime string."""
+    if not value:
+        return None
+    if isinstance(value, time):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        if 'T' in s:
+            # Extract time part
+            s = s.replace('Z', '').split('T')[1]
+            if '.' in s:
+                s = s.split('.')[0]
+        # Now s is expected HH:MM or HH:MM:SS
+        try:
+            return datetime.strptime(s, '%H:%M:%S').time()
+        except ValueError:
+            return datetime.strptime(s, '%H:%M').time()
+    raise ValueError(f'Formato de horário inválido: {value}')
+
+
+schedule_bp = Blueprint('schedule', __name__)
+
 @schedule_bp.route('/', methods=['GET'])
 @jwt_required()
 def list_schedules():
@@ -80,10 +152,10 @@ def create_schedule():
         
         print(f"[DEBUG] Campaign: {campaign.name}, Player: {player.name}")
         
-        # Converter datas
+        # Converter datas (aceita BR e ISO). Para end_date, assumir fim do dia quando vier sem horário.
         try:
-            start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-            end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+            start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
+            end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
             print(f"[DEBUG] Dates converted - Start: {start_date}, End: {end_date}")
         except Exception as e:
             print(f"[DEBUG] Date conversion error: {e}")
@@ -92,46 +164,14 @@ def create_schedule():
         if start_date >= end_date:
             return jsonify({'error': 'Data de início deve ser anterior à data de fim'}), 400
         
-        # Converter horários se fornecidos
+        # Converter horários se fornecidos (aceita HH:MM[:SS] e ISO)
         start_time = None
         end_time = None
-        
         try:
             if data.get('start_time'):
-                time_str = data['start_time']
-                print(f"[DEBUG] Original start_time string: {time_str}")
-                # Handle both datetime format and time format
-                if 'T' in time_str:
-                    # Extract time from datetime string without timezone conversion
-                    # Parse the datetime string and extract only the time part
-                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
-                    print(f"[DEBUG] Extracted time part: {dt_str}")
-                    if '.' in dt_str:
-                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
-                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
-                    start_time = datetime.strptime(dt_str, '%H:%M:%S').time()
-                else:
-                    # Handle direct time format (e.g., '15:45')
-                    start_time = datetime.strptime(time_str, '%H:%M').time()
-                print(f"[DEBUG] Final start_time object: {start_time}")
-            
+                start_time = parse_flexible_time(data['start_time'])
             if data.get('end_time'):
-                time_str = data['end_time']
-                print(f"[DEBUG] Original end_time string: {time_str}")
-                # Handle both datetime format and time format
-                if 'T' in time_str:
-                    # Extract time from datetime string without timezone conversion
-                    # Parse the datetime string and extract only the time part
-                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
-                    print(f"[DEBUG] Extracted time part: {dt_str}")
-                    if '.' in dt_str:
-                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
-                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
-                    end_time = datetime.strptime(dt_str, '%H:%M:%S').time()
-                else:
-                    # Handle direct time format (e.g., '03:00')
-                    end_time = datetime.strptime(time_str, '%H:%M').time()
-                print(f"[DEBUG] Final end_time object: {end_time}")
+                end_time = parse_flexible_time(data['end_time'])
         except Exception as e:
             print(f"[DEBUG] Time conversion error: {e}")
             return jsonify({'error': f'Erro na conversão de horários: {str(e)}'}), 400
@@ -206,55 +246,25 @@ def update_schedule(schedule_id):
         if 'name' in data:
             schedule.name = data['name']
         
-        if 'start_date' in data:
-            schedule.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
+        if 'start_date' in data and data['start_date']:
+            schedule.start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
         
-        if 'end_date' in data:
-            schedule.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+        if 'end_date' in data and data['end_date']:
+            schedule.end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
         
         if 'start_time' in data:
             if data['start_time'] is not None and data['start_time'] != '':
-                time_str = data['start_time']
                 try:
-                    # Handle both datetime format and time-only strings without TZ conversion
-                    if 'T' in time_str:
-                        dt_str = time_str.replace('Z', '').split('T')[1]
-                        if '.' in dt_str:
-                            dt_str = dt_str.split('.')[0]
-                        schedule.start_time = datetime.strptime(dt_str, '%H:%M:%S').time()
-                    else:
-                        # Support both HH:MM:SS and HH:MM inputs
-                        try:
-                            schedule.start_time = datetime.strptime(time_str, '%H:%M:%S').time()
-                        except ValueError:
-                            schedule.start_time = datetime.strptime(time_str, '%H:%M').time()
+                    schedule.start_time = parse_flexible_time(data['start_time'])
                 except Exception as e:
                     return jsonify({'error': f'Erro na conversão de horários (start_time): {str(e)}'}), 400
-            else:
-                # Empty string provided: keep current value unchanged to avoid DB NOT NULL violations
-                pass
         
         if 'end_time' in data:
             if data['end_time'] is not None and data['end_time'] != '':
-                time_str = data['end_time']
                 try:
-                    # Handle both datetime format and time-only strings without TZ conversion
-                    if 'T' in time_str:
-                        dt_str = time_str.replace('Z', '').split('T')[1]
-                        if '.' in dt_str:
-                            dt_str = dt_str.split('.')[0]
-                        schedule.end_time = datetime.strptime(dt_str, '%H:%M:%S').time()
-                    else:
-                        # Support both HH:MM:SS and HH:MM inputs
-                        try:
-                            schedule.end_time = datetime.strptime(time_str, '%H:%M:%S').time()
-                        except ValueError:
-                            schedule.end_time = datetime.strptime(time_str, '%H:%M').time()
+                    schedule.end_time = parse_flexible_time(data['end_time'])
                 except Exception as e:
                     return jsonify({'error': f'Erro na conversão de horários (end_time): {str(e)}'}), 400
-            else:
-                # Empty string provided: keep current value unchanged to avoid DB NOT NULL violations
-                pass
         
         if 'days_of_week' in data:
             schedule.days_of_week = data['days_of_week']
@@ -336,9 +346,9 @@ def get_active_schedules_for_player(player_id):
             if current_weekday not in days_of_week:
                 continue
             
-            # Verificar horário se definido
+            # Verificar horário se definido (overnight tratado no model is_active_now)
             if schedule.start_time and schedule.end_time:
-                if not (schedule.start_time <= current_time <= schedule.end_time):
+                if not (schedule.start_time <= current_time <= schedule.end_time or schedule.start_time > schedule.end_time and (current_time >= schedule.start_time or current_time <= schedule.end_time)):
                     continue
             
             active_schedules.append(schedule.to_dict())
@@ -346,7 +356,7 @@ def get_active_schedules_for_player(player_id):
         return jsonify({
             'schedules': active_schedules,
             'player_id': player_id,
-            'current_time': now.isoformat()
+            'current_time': fmt_br_datetime(now)
         }), 200
         
     except Exception as e:
@@ -395,48 +405,17 @@ def check_schedule_conflicts():
         
         player_id = data.get('player_id')
         campaign_id = data.get('campaign_id')
-        start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-        end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+        start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
+        end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
         
         start_time = None
         end_time = None
         
         try:
             if data.get('start_time'):
-                time_str = data['start_time']
-                print(f"[DEBUG] Original start_time string: {time_str}")
-                # Handle both datetime format and time format
-                if 'T' in time_str:
-                    # Extract time from datetime string without timezone conversion
-                    # Parse the datetime string and extract only the time part
-                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
-                    print(f"[DEBUG] Extracted time part: {dt_str}")
-                    if '.' in dt_str:
-                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
-                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
-                    start_time = datetime.strptime(dt_str, '%H:%M:%S').time()
-                else:
-                    # Handle direct time format
-                    start_time = datetime.strptime(time_str, '%H:%M').time()
-                print(f"[DEBUG] Final start_time object: {start_time}")
-        
+                start_time = parse_flexible_time(data['start_time'])
             if data.get('end_time'):
-                time_str = data['end_time']
-                print(f"[DEBUG] Original end_time string: {time_str}")
-                # Handle both datetime format and time format
-                if 'T' in time_str:
-                    # Extract time from datetime string without timezone conversion
-                    # Parse the datetime string and extract only the time part
-                    dt_str = time_str.replace('Z', '').split('T')[1]  # Get time part only
-                    print(f"[DEBUG] Extracted time part: {dt_str}")
-                    if '.' in dt_str:
-                        dt_str = dt_str.split('.')[0]  # Remove milliseconds
-                        print(f"[DEBUG] After removing milliseconds: {dt_str}")
-                    end_time = datetime.strptime(dt_str, '%H:%M:%S').time()
-                else:
-                    # Handle direct time format
-                    end_time = datetime.strptime(time_str, '%H:%M').time()
-                print(f"[DEBUG] Final end_time object: {end_time}")
+                end_time = parse_flexible_time(data['end_time'])
         except Exception as e:
             print(f"[DEBUG] Time conversion error: {e}")
             return jsonify({'error': f'Erro na conversão de horários: {str(e)}'}), 400
@@ -482,7 +461,17 @@ def check_schedule_conflicts():
             
             # Verificar sobreposição de horários
             if start_time and end_time and schedule.start_time and schedule.end_time:
-                if not (start_time < schedule.end_time and end_time > schedule.start_time):
+                # Considera overnight nos dois intervalos
+                def overlaps(a_start, a_end, b_start, b_end):
+                    if a_start <= a_end and b_start <= b_end:
+                        return a_start < b_end and a_end > b_start
+                    if a_start > a_end and b_start <= b_end:
+                        return a_start <= b_end or a_end >= b_start
+                    if a_start <= a_end and b_start > b_end:
+                        return b_start <= a_end or b_end >= a_start
+                    # ambos overnight
+                    return True
+                if not overlaps(start_time, end_time, schedule.start_time, schedule.end_time):
                     continue
             
             conflicts.append(schedule.to_dict())

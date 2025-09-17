@@ -31,6 +31,8 @@ import {
   Skeleton,
   Tabs,
   Tab,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -74,6 +76,42 @@ import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+// BR datetime helpers
+const pad2 = (n) => String(n).padStart(2, '0');
+const toBRDateTime = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  const hh = pad2(d.getHours());
+  const min = pad2(d.getMinutes());
+  const ss = pad2(d.getSeconds());
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+};
+const parseDateTimeFlexible = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (s.includes('/')) {
+      const [datePart, timePart] = s.split(' ');
+      const [dd, mm, yyyy] = datePart.split('/').map(v => parseInt(v, 10));
+      let hh = 0, mi = 0, ss = 0;
+      if (timePart) {
+        const t = timePart.split(':');
+        hh = parseInt(t[0] || '0', 10);
+        mi = parseInt(t[1] || '0', 10);
+        ss = parseInt(t[2] || '0', 10);
+      }
+      return new Date(yyyy, mm - 1, dd, hh, mi, ss);
+    }
+    const iso = new Date(s);
+    if (!isNaN(iso.getTime())) return iso;
+  }
+  return null;
+};
+
 const CampaignForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -83,8 +121,13 @@ const CampaignForm = () => {
     name: '',
     description: '',
     status: 'inactive',
+    is_active: false,
     start_date: null,
     end_date: null,
+    playback_mode: 'sequential',
+    content_duration: 10,
+    loop_enabled: false,
+    shuffle_enabled: false,
   });
   const [campaignContents, setCampaignContents] = useState([]);
   const [availableContents, setAvailableContents] = useState([]);
@@ -117,8 +160,13 @@ const CampaignForm = () => {
         name: campaign.name,
         description: campaign.description || '',
         status: campaign.is_active ? 'active' : 'inactive',
-        start_date: campaign.start_date ? new Date(campaign.start_date) : null,
-        end_date: campaign.end_date ? new Date(campaign.end_date) : null,
+        is_active: !!campaign.is_active,
+        start_date: campaign.start_date ? parseDateTimeFlexible(campaign.start_date) : null,
+        end_date: campaign.end_date ? parseDateTimeFlexible(campaign.end_date) : null,
+        playback_mode: campaign.playback_mode || 'sequential',
+        content_duration: typeof campaign.content_duration === 'number' ? campaign.content_duration : 10,
+        loop_enabled: !!campaign.loop_enabled,
+        shuffle_enabled: !!campaign.shuffle_enabled,
       });
       setCampaignContents(campaign.contents || []);
     } catch (err) {
@@ -139,12 +187,22 @@ const CampaignForm = () => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+  const handleInputChange = (arg1, arg2) => {
+    // Supports both onChange(event) and onChange(name, value)
+    if (typeof arg1 === 'string') {
+      const name = arg1;
+      const value = arg2;
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+      }));
+    } else if (arg1 && arg1.target) {
+      const { name, value, type, checked } = arg1.target;
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value,
+      }));
+    }
   };
 
   const handleDateChange = (field, value) => {
@@ -231,9 +289,9 @@ const CampaignForm = () => {
 
       const submitData = {
         ...formData,
-        start_date: formData.start_date ? formData.start_date.toISOString() : null,
-        end_date: formData.end_date ? formData.end_date.toISOString() : null,
-        is_active: formData.status === 'active', // Map status to is_active boolean
+        start_date: formData.start_date ? toBRDateTime(formData.start_date) : null,
+        end_date: formData.end_date ? toBRDateTime(formData.end_date) : null,
+        is_active: typeof formData.is_active === 'boolean' ? formData.is_active : formData.status === 'active',
         content_ids: campaignContents.map(content => content.id),
       };
       
@@ -273,7 +331,10 @@ const CampaignForm = () => {
   };
 
   const getTotalDuration = () => {
-    return campaignContents.reduce((total, content) => total + (content.duration || 0), 0);
+    return campaignContents.reduce((total, item) => {
+      const dur = item?.duration ?? item?.duration_override ?? item?.content?.duration ?? 0;
+      return total + (typeof dur === 'number' ? dur : 0);
+    }, 0);
   };
 
   const sensors = useSensors(
@@ -340,8 +401,8 @@ const CampaignForm = () => {
           </Avatar>
         </ListItemAvatar>
         <ListItemText
-          primary={content.title}
-          secondary={`${formatDuration(content.duration)} • ${content.type}`}
+          primary={content.title || content?.content?.title || 'Sem título'}
+          secondary={`${formatDuration(content.duration ?? content.duration_override ?? content?.content?.duration ?? 0)} • ${(content.type || content?.content?.content_type || 'desconhecido')}`}
         />
         <ListItemSecondaryAction>
           <IconButton

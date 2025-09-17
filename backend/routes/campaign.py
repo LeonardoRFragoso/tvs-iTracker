@@ -1,12 +1,53 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime
 import json
-from models.campaign import Campaign, CampaignContent, db
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from datetime import datetime, timedelta
+from sqlalchemy import func, text
+from collections import defaultdict
+from models.campaign import Campaign, CampaignContent, db, PlaybackEvent
 from models.content import Content
+from models.player import Player
 from models.user import User
+import os
 
 campaign_bp = Blueprint('campaign', __name__)
+
+# Brazilian datetime helpers
+BR_DATETIME_FORMAT = '%d/%m/%Y %H:%M:%S'
+
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime(BR_DATETIME_FORMAT) if dt else None
+    except Exception:
+        return None
+
+
+def parse_flexible_datetime(value, end_of_day=False):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        s = value.strip()
+        if '/' in s:
+            if ' ' in s:
+                for fmt in (BR_DATETIME_FORMAT, '%d/%m/%Y %H:%M'):
+                    try:
+                        return datetime.strptime(s, fmt)
+                    except Exception:
+                        pass
+            try:
+                d = datetime.strptime(s, '%d/%m/%Y')
+                if end_of_day:
+                    return d.replace(hour=23, minute=59, second=59)
+                return d.replace(hour=0, minute=0, second=0)
+            except Exception:
+                pass
+        try:
+            return datetime.fromisoformat(s.replace('Z', '+00:00'))
+        except Exception:
+            pass
+    raise ValueError(f'Formato de data inválido: {value}')
 
 @campaign_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -89,12 +130,27 @@ def create_campaign():
                 print(f"[ERROR] Missing required field: {field}")
                 return jsonify({'error': f'{field} é obrigatório'}), 400
         
-        # Converter datas
-        start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-        end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+        # Converter datas (aceita BR e ISO). Considera fim do dia para end_date sem horário
+        start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
+        end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
         
         if start_date >= end_date:
             return jsonify({'error': 'Data de início deve ser anterior à data de fim'}), 400
+        
+        # Converter tipos com segurança
+        def to_int(value, default=None):
+            try:
+                return int(value)
+            except Exception:
+                return default
+        def to_bool(value, default=False):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.lower() in ['true', '1', 'yes', 'on']
+            if isinstance(value, (int, float)):
+                return bool(value)
+            return default
         
         campaign = Campaign(
             name=data['name'],
@@ -106,7 +162,12 @@ def create_campaign():
             regions=json.dumps(data.get('regions', [])),
             time_slots=json.dumps(data.get('time_slots', [])),
             days_of_week=json.dumps(data.get('days_of_week', [])),
-            user_id=user_id
+            user_id=user_id,
+            # Novos campos de reprodução
+            playback_mode=data.get('playback_mode', 'sequential'),
+            content_duration=to_int(data.get('content_duration', 10), default=10),
+            loop_enabled=to_bool(data.get('loop_enabled', False), default=False),
+            shuffle_enabled=to_bool(data.get('shuffle_enabled', False), default=False),
         )
         
         db.session.add(campaign)
@@ -170,14 +231,29 @@ def update_campaign(campaign_id):
         
         data = request.get_json()
         
+        # Helpers de conversão
+        def to_int(value, default=None):
+            try:
+                return int(value)
+            except Exception:
+                return default
+        def to_bool(value, default=False):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                return value.lower() in ['true', '1', 'yes', 'on']
+            if isinstance(value, (int, float)):
+                return bool(value)
+            return default
+        
         if 'name' in data:
             campaign.name = data['name']
         if 'description' in data:
             campaign.description = data['description']
-        if 'start_date' in data:
-            campaign.start_date = datetime.fromisoformat(data['start_date'].replace('Z', '+00:00'))
-        if 'end_date' in data:
-            campaign.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
+        if 'start_date' in data and data['start_date']:
+            campaign.start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
+        if 'end_date' in data and data['end_date']:
+            campaign.end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
         if 'priority' in data:
             campaign.priority = data['priority']
         if 'regions' in data:
@@ -188,6 +264,15 @@ def update_campaign(campaign_id):
             campaign.days_of_week = json.dumps(data['days_of_week'])
         if 'is_active' in data:
             campaign.is_active = data['is_active']
+        # Novos campos de reprodução
+        if 'playback_mode' in data:
+            campaign.playback_mode = data['playback_mode'] or 'sequential'
+        if 'content_duration' in data:
+            campaign.content_duration = to_int(data.get('content_duration'), default=10)
+        if 'loop_enabled' in data:
+            campaign.loop_enabled = to_bool(data.get('loop_enabled'), default=False)
+        if 'shuffle_enabled' in data:
+            campaign.shuffle_enabled = to_bool(data.get('shuffle_enabled'), default=False)
         
         campaign.updated_at = datetime.utcnow()
         db.session.commit()
@@ -378,4 +463,227 @@ def reorder_campaign_contents(campaign_id):
         
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@campaign_bp.route('/<campaign_id>/analytics', methods=['GET'])
+@jwt_required()
+def get_campaign_analytics(campaign_id):
+    """Retorna métricas de analytics da campanha para a aba Analytics do frontend.
+    Query params:
+      - range: 1d | 7d | 30d | 90d (default: 7d)
+    """
+    try:
+        # Validar campanha
+        campaign = Campaign.query.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campanha não encontrada'}), 404
+
+        # Intervalo de tempo
+        time_range = (request.args.get('range') or '7d').lower()
+        days_map = {'1d': 1, '7d': 7, '30d': 30, '90d': 90}
+        days = days_map.get(time_range, 7)
+        now = datetime.utcnow()
+        since = now - timedelta(days=days)
+
+        # Buscar eventos
+        events = PlaybackEvent.query.filter(
+            PlaybackEvent.campaign_id == campaign_id,
+            PlaybackEvent.started_at >= since
+        ).all()
+
+        total = len(events)
+        success_count = sum(1 for e in events if getattr(e, 'success', False))
+        unique_players = len({e.player_id for e in events if e.player_id})
+        total_duration_sec = sum(int(e.duration_seconds or 0) for e in events)
+        avg_content_duration_sec = int(total_duration_sec / total) if total > 0 else 0
+
+        summary = {
+            'total_executions': total,
+            # Em minutos para combinar com o frontend (formatDuration espera minutos)
+            'total_duration': int(total_duration_sec / 60),
+            'unique_players': unique_players,
+            'success_rate': round((success_count / total) * 100, 1) if total > 0 else 0.0,
+            # Em segundos para combinar com o frontend que exibe "Xs"
+            'avg_content_duration': avg_content_duration_sec,
+        }
+
+        # Performance por conteúdo
+        by_content = defaultdict(lambda: {'executions': 0, 'success': 0, 'duration_total': 0})
+        content_ids = set()
+        for e in events:
+            if not e.content_id:
+                continue
+            stats = by_content[e.content_id]
+            stats['executions'] += 1
+            if getattr(e, 'success', False):
+                stats['success'] += 1
+            stats['duration_total'] += int(e.duration_seconds or 0)
+            content_ids.add(e.content_id)
+
+        content_map = {c.id: c for c in (Content.query.filter(Content.id.in_(list(content_ids))).all() if content_ids else [])}
+        content_performance = []
+        for cid, stats in by_content.items():
+            c = content_map.get(cid)
+            name = c.title if c else 'Conteúdo'
+            ctype = getattr(c, 'content_type', 'unknown')
+            executions = stats['executions']
+            success_rate = round(stats['success'] / executions * 100, 1) if executions > 0 else 0.0
+            avg_duration = int(stats['duration_total'] / executions) if executions > 0 else 0
+            content_performance.append({
+                'name': name,
+                'executions': executions,
+                'success_rate': success_rate,
+                'avg_duration': avg_duration,
+                'type': ctype
+            })
+
+        # Distribuição por tipo
+        type_execs = defaultdict(int)
+        type_unique = defaultdict(set)
+        for cid, stats in by_content.items():
+            c = content_map.get(cid)
+            ctype = getattr(c, 'content_type', 'unknown')
+            type_execs[ctype] += stats['executions']
+            type_unique[ctype].add(cid)
+
+        type_label = {'video': 'Vídeos', 'image': 'Imagens', 'audio': 'Áudios'}
+        content_type_distribution = [{
+            'name': type_label.get(ctype, ctype.title()),
+            'value': execs,
+            'count': len(type_unique[ctype])
+        } for ctype, execs in type_execs.items()]
+
+        # Timeline por dia
+        timeline_map = {}
+        for i in range(days):
+            d = (since + timedelta(days=i)).date()
+            key = str(d)
+            timeline_map[key] = {'date': key, 'executions': 0, 'success': 0}
+        for e in events:
+            key = str(e.started_at.date())
+            if key in timeline_map:
+                timeline_map[key]['executions'] += 1
+                if getattr(e, 'success', False):
+                    timeline_map[key]['success'] += 1
+        execution_timeline = list(timeline_map.values())
+
+        # Performance por player
+        player_stats = defaultdict(lambda: {'executions': 0, 'success': 0})
+        for e in events:
+            if e.player_id:
+                player_stats[e.player_id]['executions'] += 1
+                if getattr(e, 'success', False):
+                    player_stats[e.player_id]['success'] += 1
+        player_ids = list(player_stats.keys())
+        player_map = {p.id: p for p in (Player.query.filter(Player.id.in_(player_ids)).all() if player_ids else [])}
+        player_performance = []
+        for pid, stats in player_stats.items():
+            p = player_map.get(pid)
+            name = getattr(p, 'name', 'Player')
+            executions = stats['executions']
+            success_rate = round(stats['success'] / executions * 100, 1) if executions > 0 else 0.0
+            player_performance.append({'name': name, 'executions': executions, 'success_rate': success_rate})
+
+        # Horários de pico
+        hour_stats = defaultdict(int)
+        for e in events:
+            if e.started_at:
+                h = e.started_at.hour
+                key = f"{h:02d}:00"
+                hour_stats[key] += 1
+        peak_hours = [{'hour': k, 'executions': v} for k, v in sorted(hour_stats.items(), key=lambda x: x[0])]
+
+        return jsonify({
+            'summary': summary,
+            'content_performance': content_performance,
+            'content_type_distribution': content_type_distribution,
+            'execution_timeline': execution_timeline,
+            'player_performance': player_performance,
+            'peak_hours': peak_hours
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@campaign_bp.route('/<campaign_id>/analytics/debug', methods=['GET'])
+@jwt_required()
+def debug_campaign_analytics(campaign_id):
+    """Diagnóstico da base de dados para Analytics da campanha.
+    Retorna: caminho do DB, existência e colunas de playback_events, contagem de eventos (total/sucesso/falha) e amostra dos últimos eventos.
+    """
+    try:
+        # Arquivo do banco em uso
+        engine = db.engine
+        db_file = engine.url.database
+        db_abspath = os.path.abspath(db_file) if db_file else None
+
+        # Verificar tabela playback_events e suas colunas (SQLite)
+        columns = []
+        has_table = False
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("PRAGMA table_info(playback_events)"))
+                rows = result.fetchall()
+                if rows:
+                    has_table = True
+                    for r in rows:
+                        # PRAGMA columns: cid, name, type, notnull, dflt_value, pk
+                        columns.append({
+                            'cid': r[0],
+                            'name': r[1],
+                            'type': r[2],
+                            'notnull': r[3],
+                            'default': r[4],
+                            'pk': r[5],
+                        })
+        except Exception as e:
+            # Falha ao executar PRAGMA
+            columns = [{'error': f'PRAGMA failed: {str(e)}'}]
+
+        totals = {
+            'total_events': 0,
+            'total_success': 0,
+            'total_failed': 0,
+        }
+        latest_events = []
+
+        # Se tabela existe, coletar métricas
+        if has_table:
+            try:
+                from models.campaign import PlaybackEvent
+                q = PlaybackEvent.query.filter(PlaybackEvent.campaign_id == campaign_id)
+                totals['total_events'] = q.count()
+                totals['total_success'] = q.filter(PlaybackEvent.success == True).count()
+                totals['total_failed'] = q.filter(PlaybackEvent.success == False).count()
+                latest = q.order_by(PlaybackEvent.started_at.desc()).limit(10).all()
+                latest_events = [
+                    {
+                        'id': e.id,
+                        'started_at': fmt_br_datetime(e.started_at),
+                        'duration_seconds': e.duration_seconds,
+                        'success': e.success,
+                        'player_id': e.player_id,
+                        'content_id': e.content_id,
+                        'schedule_id': e.schedule_id,
+                        'error_message': e.error_message,
+                    }
+                    for e in latest
+                ]
+            except Exception as e:
+                latest_events = [{'error': f'Query failed: {str(e)}'}]
+
+        return jsonify({
+            'db': {
+                'db_file': db_file,
+                'db_abspath': db_abspath,
+            },
+            'playback_events': {
+                'has_table': has_table,
+                'columns': columns,
+                'totals': totals,
+                'latest_events': latest_events,
+            }
+        }), 200
+
+    except Exception as e:
         return jsonify({'error': str(e)}), 500

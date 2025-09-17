@@ -52,6 +52,32 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+// BR datetime helpers for display and comparisons
+const parseDateTimeFlexible = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (s.includes('/')) {
+      // Expecting DD/MM/YYYY [HH:MM[:SS]]
+      const [datePart, timePart] = s.split(' ');
+      const [dd, mm, yyyy] = datePart.split('/').map(v => parseInt(v, 10));
+      let hh = 0, mi = 0, ss = 0;
+      if (timePart) {
+        const t = timePart.split(':');
+        hh = parseInt(t[0] || '0', 10);
+        mi = parseInt(t[1] || '0', 10);
+        ss = parseInt(t[2] || '0', 10);
+      }
+      const d = new Date(yyyy, (mm || 1) - 1, dd || 1, hh, mi, ss);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const iso = new Date(s);
+    if (!isNaN(iso.getTime())) return iso;
+  }
+  return null;
+};
+
 const ScheduleList = () => {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
@@ -176,7 +202,9 @@ const ScheduleList = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+    const d = parseDateTimeFlexible(dateString);
+    if (!d) return '';
+    return d.toLocaleDateString('pt-BR');
   };
 
   const formatTime = (timeString) => {
@@ -192,8 +220,9 @@ const ScheduleList = () => {
   const getStatusColor = (schedule) => {
     if (!schedule.is_active) return 'default';
     const now = new Date();
-    const startDate = new Date(schedule.start_date);
-    const endDate = new Date(schedule.end_date);
+    const startDate = parseDateTimeFlexible(schedule.start_date);
+    const endDate = parseDateTimeFlexible(schedule.end_date);
+    if (!startDate || !endDate) return 'default';
     
     if (now < startDate) return 'info';
     if (now > endDate) return 'error';
@@ -203,8 +232,9 @@ const ScheduleList = () => {
   const getStatusText = (schedule) => {
     if (!schedule.is_active) return 'Inativo';
     const now = new Date();
-    const startDate = new Date(schedule.start_date);
-    const endDate = new Date(schedule.end_date);
+    const startDate = parseDateTimeFlexible(schedule.start_date);
+    const endDate = parseDateTimeFlexible(schedule.end_date);
+    if (!startDate || !endDate) return 'Inativo';
     
     if (now < startDate) return 'Agendado';
     if (now > endDate) return 'Expirado';

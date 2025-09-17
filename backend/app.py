@@ -64,7 +64,7 @@ def handle_preflight():
 
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins=["http://localhost:3000", "http://127.0.0.1:3000"], 
-                  async_mode='threading', transports=['polling'], upgrade=False, 
+                  async_mode='threading', logger=False, engineio_logger=False, 
                   ping_timeout=60, ping_interval=25)
 
 # Importar modelos
@@ -116,9 +116,10 @@ scheduler.add_job(
 )
 
 # Iniciar o scheduler
-print("Iniciando scheduler...")
-scheduler.start()
-print("Scheduler iniciado com sucesso!")
+if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+    print("Iniciando scheduler...")
+    scheduler.start()
+    print("Scheduler iniciado com sucesso!")
 
 # Importar e configurar executor de agendamentos
 from services.schedule_executor import schedule_executor

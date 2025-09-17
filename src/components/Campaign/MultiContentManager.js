@@ -80,9 +80,17 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
   const loadCampaignContents = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/campaigns/${campaignId}/contents`);
-      setCampaignContents(response.data.campaign_contents || []);
-      setCampaign(response.data.campaign);
+      // Fetch contents and campaign details in parallel
+      const [contentsResp, campaignResp] = await Promise.all([
+        axios.get(`${API_BASE_URL}/campaigns/${campaignId}/contents`),
+        axios.get(`${API_BASE_URL}/campaigns/${campaignId}`)
+      ]);
+      // Support both response shapes
+      const data = contentsResp.data || {};
+      const items = data.contents || data.campaign_contents || [];
+      setCampaignContents(items);
+      // Campaign can come from either response
+      setCampaign((campaignResp.data && campaignResp.data.campaign) || data.campaign || null);
       setError('');
     } catch (err) {
       setError('Erro ao carregar conteúdos da campanha');
@@ -176,15 +184,17 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     // Atualizar ordem local imediatamente
     setCampaignContents(items);
 
-    // Preparar dados para API
-    const contentOrders = items.map((item, index) => ({
+    // Preparar dados para API compatível com ambas rotas
+    const content_orders = items.map((item, index) => ({
       content_id: item.content_id,
       order_index: index + 1
     }));
+    const content_order = items.map((item) => item.content_id);
 
     try {
       await axios.put(`${API_BASE_URL}/campaigns/${campaignId}/contents/reorder`, {
-        content_orders: contentOrders
+        content_orders,
+        content_order
       });
       if (onContentChange) onContentChange();
     } catch (err) {

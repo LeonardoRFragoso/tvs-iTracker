@@ -2,6 +2,13 @@ from datetime import datetime
 import uuid
 from database import db
 
+# Helper to format datetime in Brazilian standard
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
+
 class Content(db.Model):
     __tablename__ = 'contents'
     
@@ -40,8 +47,8 @@ class Content(db.Model):
             'tags': self.tags,
             'category': self.category,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': fmt_br_datetime(self.created_at),
+            'updated_at': fmt_br_datetime(self.updated_at),
             'user_id': self.user_id,
             'author': self.author.username if hasattr(self, 'author') and self.author else None
         }

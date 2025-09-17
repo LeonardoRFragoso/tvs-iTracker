@@ -79,6 +79,35 @@ def generate_image_thumbnail(image_path, thumbnail_path, size=(300, 200)):
         print(f"Erro ao gerar thumbnail de imagem: {str(e)}")
         return False
 
+def get_video_duration_seconds(video_path):
+    """Obtém a duração real do vídeo em segundos via ffprobe. Retorna int ou None."""
+    try:
+        cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0 and result.stdout.strip():
+            return int(float(result.stdout.strip()))
+        # Fallback: tentar extrair a partir do stderr do ffmpeg
+        cmd2 = ['ffmpeg', '-i', video_path]
+        result2 = subprocess.run(cmd2, capture_output=True, text=True)
+        out = result2.stderr or ''
+        if 'Duration:' in out:
+            try:
+                dur_str = out.split('Duration:')[1].split(',')[0].strip()  # HH:MM:SS.xx
+                h, m, s = dur_str.split(':')
+                s = float(s)
+                return int(float(h) * 3600 + float(m) * 60 + s)
+            except Exception:
+                return None
+        return None
+    except Exception:
+        return None
+
 # Endpoint para servir arquivos de mídia
 @content_bp.route('/media/<filename>')
 def serve_media(filename):
@@ -203,6 +232,15 @@ def update_content(content_id):
                 # Para outros tipos, thumbnail é opcional
                 if os.path.exists(thumbnail_path):
                     content.thumbnail_path = os.path.basename(thumbnail_path)
+                
+                # Atualizar duração em update de arquivo (multipart)
+                if content_type == 'video':
+                    try:
+                        real_dur_new = get_video_duration_seconds(file_path)
+                        if real_dur_new and real_dur_new > 0:
+                            content.duration = int(real_dur_new)
+                    except Exception:
+                        pass
         else:
             # JSON puro
             data = request.get_json(force=True, silent=False)
@@ -414,19 +452,23 @@ def create_content():
                 content_type = get_content_type(filename)
                 
                 # Para imagens, obter dimensões
-                duration = 10  # padrão
+                duration = 10  # padrão para imagens
                 if content_type == 'image':
                     try:
                         with Image.open(file_path) as img:
                             width, height = img.size
                     except:
                         pass
-                
+                elif content_type == 'video':
+                    # Calcular duração real do vídeo
+                    real_dur = get_video_duration_seconds(file_path)
+                    if real_dur and real_dur > 0:
+                        duration = int(real_dur)
+ 
                 # Gerar thumbnail
                 thumbnails_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails')
                 os.makedirs(thumbnails_dir, exist_ok=True)
                 thumbnail_path = os.path.join(thumbnails_dir, f"{uuid.uuid4()}.jpg")
-                
                 if content_type == 'video':
                     generate_video_thumbnail(file_path, thumbnail_path)
                 elif content_type == 'image':
@@ -439,7 +481,7 @@ def create_content():
                     file_path=unique_filename,
                     file_size=file_size,
                     mime_type=file.mimetype,
-                    duration=int(float(request.form.get('duration', duration))),
+                    duration=duration,
                     tags=request.form.get('tags', ''),
                     category=request.form.get('category', 'default'),
                     user_id=user_id,
@@ -488,4 +530,33 @@ def create_content():
         print(f"Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@content_bp.route('/api/content/recalc-durations', methods=['POST'])
+@jwt_required()
+def recalc_video_durations():
+    """Recalcula a duração de todos os vídeos (admin/manager)."""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user or user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão'}), 403
+
+        base_dir = current_app.config['UPLOAD_FOLDER']
+        videos = Content.query.filter(Content.content_type == 'video').all()
+        updated = 0
+        for c in videos:
+            if not c.file_path:
+                continue
+            full_path = os.path.join(base_dir, c.file_path)
+            if not os.path.exists(full_path):
+                continue
+            dur = get_video_duration_seconds(full_path)
+            if dur and dur > 0 and dur != c.duration:
+                c.duration = int(dur)
+                updated += 1
+        db.session.commit()
+        return jsonify({'updated': updated, 'total_videos': len(videos)}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500

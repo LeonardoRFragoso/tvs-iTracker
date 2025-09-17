@@ -36,6 +36,13 @@ class ContentDistribution(db.Model):
     scheduled_for = db.Column(db.DateTime)  # Para distribuição agendada
     expires_at = db.Column(db.DateTime)     # Quando o conteúdo expira no player
     
+    # Helper to format datetime in Brazilian standard
+    def fmt_br_datetime(dt):
+        try:
+            return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+        except Exception:
+            return None
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -51,11 +58,11 @@ class ContentDistribution(db.Model):
             'retry_count': self.retry_count,
             'max_retries': self.max_retries,
             'last_error': self.last_error,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'started_at': self.started_at.isoformat() if self.started_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
-            'scheduled_for': self.scheduled_for.isoformat() if self.scheduled_for else None,
-            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'created_at': self.fmt_br_datetime(self.created_at),
+            'started_at': self.fmt_br_datetime(self.started_at),
+            'completed_at': self.fmt_br_datetime(self.completed_at),
+            'scheduled_for': self.fmt_br_datetime(self.scheduled_for),
+            'expires_at': self.fmt_br_datetime(self.expires_at),
             'estimated_time_remaining': self.estimated_time_remaining,
             'download_percentage': round((self.bytes_downloaded / self.file_size_bytes * 100), 2) if self.file_size_bytes > 0 else 0
         }

@@ -38,6 +38,40 @@ import axios from '../../config/axios';
 
 const API_BASE_URL = `${axios.defaults.baseURL}/api`;
 
+// Helpers for BR datetime handling
+const pad2 = (n) => String(n).padStart(2, '0');
+const toBRDateTime = (date, { endOfDay = false } = {}) => {
+  if (!date) return '';
+  const d = new Date(date);
+  const dd = pad2(d.getDate());
+  const mm = pad2(d.getMonth() + 1);
+  const yyyy = d.getFullYear();
+  let hh = d.getHours();
+  let min = d.getMinutes();
+  let ss = d.getSeconds();
+  if (endOfDay) { hh = 23; min = 59; ss = 59; }
+  return `${dd}/${mm}/${yyyy} ${pad2(hh)}:${pad2(min)}:${pad2(ss)}`;
+};
+const parseDateStringFlexible = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    // BR "DD/MM/YYYY [HH:MM:SS]"
+    if (s.includes('/')) {
+      const datePart = s.split(' ')[0];
+      const [dd, mm, yyyy] = datePart.split('/').map((x) => parseInt(x, 10));
+      if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
+        return new Date(yyyy, mm - 1, dd, 0, 0, 0);
+      }
+    }
+    // ISO fallback
+    const iso = new Date(s);
+    if (!isNaN(iso.getTime())) return iso;
+  }
+  return null;
+};
+
 const ScheduleForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -100,12 +134,8 @@ const ScheduleForm = () => {
       // Função para converter string de tempo (HH:MM:SS) em objeto Date
       const parseTimeString = (timeString) => {
         if (!timeString) return null;
-        
         try {
-          // Se já é um objeto Date, retornar
           if (timeString instanceof Date) return timeString;
-          
-          // Se é uma string de tempo (HH:MM:SS ou HH:MM)
           if (typeof timeString === 'string') {
             const timeParts = timeString.split(':');
             if (timeParts.length >= 2) {
@@ -113,41 +143,12 @@ const ScheduleForm = () => {
               const hours = parseInt(timeParts[0], 10);
               const minutes = parseInt(timeParts[1], 10);
               const seconds = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
-              
               return new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, seconds);
             }
           }
-          
           return null;
         } catch (error) {
           console.error('Erro ao fazer parse do tempo:', timeString, error);
-          return null;
-        }
-      };
-      
-      // Função para converter string de data em objeto Date
-      const parseDateString = (dateString) => {
-        if (!dateString) return null;
-        
-        try {
-          // Se já é um objeto Date, retornar
-          if (dateString instanceof Date) return dateString;
-          
-          // Se é uma string de data
-          if (typeof dateString === 'string') {
-            // Remover parte do tempo se existir (2025-09-16T03:00:00 → 2025-09-16)
-            const datePart = dateString.split('T')[0];
-            const date = new Date(datePart + 'T00:00:00');
-            
-            // Verificar se a data é válida
-            if (!isNaN(date.getTime())) {
-              return date;
-            }
-          }
-          
-          return null;
-        } catch (error) {
-          console.error('Erro ao fazer parse da data:', dateString, error);
           return null;
         }
       };
@@ -156,8 +157,8 @@ const ScheduleForm = () => {
         name: schedule.name || '',
         campaign_id: schedule.campaign_id || '',
         player_id: schedule.player_id || '',
-        start_date: parseDateString(schedule.start_date),
-        end_date: parseDateString(schedule.end_date),
+        start_date: parseDateStringFlexible(schedule.start_date),
+        end_date: parseDateStringFlexible(schedule.end_date),
         start_time: parseTimeString(schedule.start_time),
         end_time: parseTimeString(schedule.end_time),
         days_of_week: schedule.days_of_week ? schedule.days_of_week.split(',').map(d => parseInt(d.trim())) : [1,2,3,4,5],
@@ -201,8 +202,8 @@ const ScheduleForm = () => {
       const conflictData = {
         player_id: formData.player_id,
         campaign_id: formData.campaign_id,
-        start_date: formData.start_date,
-        end_date: formData.end_date,
+        start_date: toBRDateTime(formData.start_date, { endOfDay: false }),
+        end_date: toBRDateTime(formData.end_date, { endOfDay: true }),
         days_of_week: formData.days_of_week.join(','),
       };
 
@@ -265,18 +266,12 @@ const ScheduleForm = () => {
         throw new Error('Selecione pelo menos um dia da semana');
       }
 
-      const formatDate = (date) => {
-        if (!date) return '';
-        if (typeof date === 'string') return date;
-        return date.toISOString();
-      };
-
       const submitData = {
         name: formData.name,
         campaign_id: formData.campaign_id,
         player_id: formData.player_id,
-        start_date: formatDate(formData.start_date),
-        end_date: formatDate(formData.end_date),
+        start_date: toBRDateTime(formData.start_date, { endOfDay: false }),
+        end_date: toBRDateTime(formData.end_date, { endOfDay: true }),
         days_of_week: formData.days_of_week.join(','),
         repeat_type: formData.repeat_type,
         repeat_interval: formData.repeat_interval,

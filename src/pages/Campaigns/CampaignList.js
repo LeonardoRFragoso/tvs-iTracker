@@ -39,12 +39,39 @@ import {
   Pause as PauseIcon,
   Campaign as CampaignIcon,
   Visibility as VisibilityIcon,
+  Assessment as AnalyticsIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
 
 const API_BASE_URL = `${axios.defaults.baseURL}/api`;
+
+// BR datetime helpers for display
+const parseDateTimeFlexible = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (s.includes('/')) {
+      // Expecting DD/MM/YYYY [HH:MM[:SS]]
+      const [datePart, timePart] = s.split(' ');
+      const [dd, mm, yyyy] = datePart.split('/').map(v => parseInt(v, 10));
+      let hh = 0, mi = 0, ss = 0;
+      if (timePart) {
+        const t = timePart.split(':');
+        hh = parseInt(t[0] || '0', 10);
+        mi = parseInt(t[1] || '0', 10);
+        ss = parseInt(t[2] || '0', 10);
+      }
+      const d = new Date(yyyy, (mm || 1) - 1, dd || 1, hh, mi, ss);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const iso = new Date(s);
+    if (!isNaN(iso.getTime())) return iso;
+  }
+  return null;
+};
 
 const CampaignList = () => {
   const navigate = useNavigate();
@@ -192,7 +219,9 @@ const CampaignList = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
+    const d = parseDateTimeFlexible(dateString);
+    if (!d) return '';
+    return d.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -684,6 +713,25 @@ const CampaignList = () => {
         >
           <VisibilityIcon sx={{ mr: 1 }} />
           Visualizar
+        </MenuItem>
+        <MenuItem 
+          onClick={() => {
+            navigate(`/campaigns/${selectedCampaign?.id}#analytics`);
+            handleMenuClose();
+          }}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(33, 150, 243, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          <AnalyticsIcon sx={{ mr: 1 }} />
+          Analytics
         </MenuItem>
         <MenuItem 
           onClick={() => {

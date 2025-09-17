@@ -1,11 +1,19 @@
 from database import db
 from datetime import datetime
 import json
+import uuid
+
+# Helper to format datetime in Brazilian standard
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
 
 class Campaign(db.Model):
     __tablename__ = 'campaigns'
     
-    id = db.Column(db.String(36), primary_key=True)
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
@@ -40,8 +48,8 @@ class Campaign(db.Model):
             'name': self.name,
             'description': self.description,
             'is_active': self.is_active,
-            'start_date': self.start_date.isoformat() if self.start_date else None,
-            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'start_date': fmt_br_datetime(self.start_date),
+            'end_date': fmt_br_datetime(self.end_date),
             'priority': self.priority,
             'regions': json.loads(self.regions) if self.regions else [],
             'time_slots': json.loads(self.time_slots) if self.time_slots else [],
@@ -50,8 +58,8 @@ class Campaign(db.Model):
             'content_duration': self.content_duration,
             'loop_enabled': self.loop_enabled,
             'shuffle_enabled': self.shuffle_enabled,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': fmt_br_datetime(self.created_at),
+            'updated_at': fmt_br_datetime(self.updated_at),
             'content_count': len([c for c in self.contents if c.is_active]),
             'total_content_count': len(self.contents),
             'user_id': self.user_id
@@ -155,7 +163,7 @@ class Campaign(db.Model):
 class CampaignContent(db.Model):
     __tablename__ = 'campaign_contents'
     
-    id = db.Column(db.String(36), primary_key=True)
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False)
     content_id = db.Column(db.String(36), db.ForeignKey('contents.id'), nullable=False)
     
@@ -185,8 +193,8 @@ class CampaignContent(db.Model):
             'location_filter': json.loads(self.location_filter) if self.location_filter else None,
             'schedule_filter': json.loads(self.schedule_filter) if self.schedule_filter else None,
             'playback_settings': json.loads(self.playback_settings) if self.playback_settings else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'created_at': fmt_br_datetime(self.created_at),
+            'updated_at': fmt_br_datetime(self.updated_at),
             'content': self.content.to_dict() if self.content else None
         }
     
@@ -233,3 +241,38 @@ class CampaignContent(db.Model):
             return True
         except:
             return True  # Se erro no JSON, assumir disponível
+
+class PlaybackEvent(db.Model):
+    __tablename__ = 'playback_events'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False)
+    schedule_id = db.Column(db.String(36), db.ForeignKey('schedules.id'), nullable=True)
+    player_id = db.Column(db.String(36), db.ForeignKey('players.id'), nullable=True)
+    content_id = db.Column(db.String(36), db.ForeignKey('contents.id'), nullable=True)
+
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    duration_seconds = db.Column(db.Integer, default=0)
+    success = db.Column(db.Boolean, default=True)
+    error_message = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'campaign_id': self.campaign_id,
+            'schedule_id': self.schedule_id,
+            'player_id': self.player_id,
+            'content_id': self.content_id,
+            'started_at': fmt_br_datetime(self.started_at),
+            'duration_seconds': self.duration_seconds or 0,
+            'success': self.success,
+            'error_message': self.error_message,
+            'created_at': fmt_br_datetime(self.created_at),
+            'updated_at': fmt_br_datetime(self.updated_at),
+        }
+
+    def __repr__(self):
+        return f'<PlaybackEvent campaign={self.campaign_id} content={self.content_id} success={self.success}>'

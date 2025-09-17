@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import axios from '../../config/axios';
 const API_BASE_URL = `${axios.defaults.baseURL}/api`;
+import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
 const CampaignDetail = () => {
   const { id } = useParams();
@@ -59,6 +60,15 @@ const CampaignDetail = () => {
 
   useEffect(() => {
     fetchCampaignDetails();
+  }, [id]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#analytics') {
+      setTimeout(() => {
+        const el = document.getElementById('analytics');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
   }, [id]);
 
   const fetchCampaignDetails = async () => {
@@ -452,6 +462,13 @@ const CampaignDetail = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Analytics Section */}
+      <Box id="analytics" sx={{ mt: 3 }}>
+        <Paper sx={{ p: 3 }}>
+          <CampaignAnalytics campaignId={id} />
+        </Paper>
+      </Box>
 
       {/* Content Selection Dialog */}
       <Dialog

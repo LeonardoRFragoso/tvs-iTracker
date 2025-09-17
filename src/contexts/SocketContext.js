@@ -21,15 +21,20 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     if (user) {
       const token = localStorage.getItem('access_token');
-      const socketInstance = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000', {
-        auth: {
-          token: token
-        },
-        transports: ['polling'], // Usar apenas polling para evitar problemas de WebSocket
-        upgrade: false, // Desabilitar upgrade automático para WebSocket
-        rememberUpgrade: false,
+      const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+      const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
+
+      const socketInstance = io(socketUrl, {
+        auth: { token },
+        // In development, force polling to avoid Werkzeug 500 on websocket transport
+        transports: isDev ? ['polling'] : ['websocket', 'polling'],
+        upgrade: !isDev,
+        rememberUpgrade: !isDev,
         timeout: 20000,
-        forceNew: true
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
       });
 
       socketInstance.on('connect', () => {

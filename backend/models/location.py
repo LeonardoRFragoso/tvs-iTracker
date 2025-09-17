@@ -2,6 +2,13 @@ from datetime import datetime, time
 import uuid
 from database import db
 
+# Helper to format datetime in Brazilian standard
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
+
 class Location(db.Model):
     __tablename__ = 'locations'
     
@@ -41,7 +48,7 @@ class Location(db.Model):
             'is_active': self.is_active,
             'player_count': len(self.players),
             'online_players': len([p for p in self.players if p.is_online]),
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': fmt_br_datetime(self.created_at)
         }
     
     def __repr__(self):

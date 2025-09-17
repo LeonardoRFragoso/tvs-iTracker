@@ -4,7 +4,7 @@ from typing import List
 from database import db
 from models.schedule import Schedule
 from models.player import Player
-from models.campaign import Campaign, CampaignContent
+from models.campaign import Campaign, CampaignContent, PlaybackEvent
 from models.content import Content
 from services.chromecast_service import chromecast_service
 from sqlalchemy import or_
@@ -215,6 +215,24 @@ class ScheduleExecutor:
                     logger.error(f"Erro ao atualizar status do player: {e}")
                     db.session.rollback()
                 
+                # Registrar evento de reprodução (falha)
+                try:
+                    event = PlaybackEvent(
+                        campaign_id=str(campaign.id),
+                        schedule_id=str(schedule.id),
+                        player_id=str(player.id),
+                        content_id=str(content.id),
+                        started_at=datetime.now(),
+                        duration_seconds=int(next_content_item.get_effective_duration() or 0),
+                        success=False,
+                        error_message="Chromecast connection failed"
+                    )
+                    db.session.add(event)
+                    db.session.commit()
+                except Exception as e:
+                    logger.error(f"Erro ao registrar PlaybackEvent (falha): {e}")
+                    db.session.rollback()
+                
                 return
             
             # Usar o device_id original para load_media (compatibilidade)
@@ -234,6 +252,23 @@ class ScheduleExecutor:
             if success:
                 logger.info(f"Conteúdo '{content.title}' enviado para {player.name}")
                 print(f"[SUCCESS] Conteúdo '{content.title}' enviado para {player.name}")
+                
+                # Registrar evento de reprodução (sucesso)
+                try:
+                    event = PlaybackEvent(
+                        campaign_id=str(campaign.id),
+                        schedule_id=str(schedule.id),
+                        player_id=str(player.id),
+                        content_id=str(content.id),
+                        started_at=datetime.now(),
+                        duration_seconds=int(next_content_item.get_effective_duration() or 0),
+                        success=True
+                    )
+                    db.session.add(event)
+                    db.session.commit()
+                except Exception as e:
+                    logger.error(f"Erro ao registrar PlaybackEvent (sucesso): {e}")
+                    db.session.rollback()
                 
                 # Atualizar controle de conteúdo atual
                 self._update_current_content_for_player(player.id, schedule.id, content.id)
@@ -268,6 +303,24 @@ class ScheduleExecutor:
                 logger.error(f"Falha ao enviar conteúdo para {player.name}")
                 print(f"[ERROR] Falha ao carregar mídia no Chromecast {player.name}")
                 
+                # Registrar evento de reprodução (falha)
+                try:
+                    event = PlaybackEvent(
+                        campaign_id=str(campaign.id),
+                        schedule_id=str(schedule.id),
+                        player_id=str(player.id),
+                        content_id=str(content.id),
+                        started_at=datetime.now(),
+                        duration_seconds=int(next_content_item.get_effective_duration() or 0),
+                        success=False,
+                        error_message="Chromecast load_media failed"
+                    )
+                    db.session.add(event)
+                    db.session.commit()
+                except Exception as e:
+                    logger.error(f"Erro ao registrar PlaybackEvent (falha): {e}")
+                    db.session.rollback()
+                 
         except Exception as e:
             logger.error(f"Erro ao executar agendamento Chromecast: {e}")
             print(f"[ERROR] Erro ao executar agendamento Chromecast: {e}")
@@ -359,6 +412,24 @@ class ScheduleExecutor:
             
             logger.info(f"Comando de reprodução enviado para player web {player.name}")
             
+            # Registrar evento de reprodução (sucesso presumido no envio do comando)
+            try:
+                effective_duration = content.duration or (campaign.content_duration if campaign else 10)
+                event = PlaybackEvent(
+                    campaign_id=str(campaign.id),
+                    schedule_id=str(schedule.id),
+                    player_id=str(player.id),
+                    content_id=str(content.id),
+                    started_at=datetime.now(),
+                    duration_seconds=int(effective_duration or 0),
+                    success=True
+                )
+                db.session.add(event)
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"Erro ao registrar PlaybackEvent (web): {e}")
+                db.session.rollback()
+             
         except Exception as e:
             logger.error(f"Erro ao executar agendamento web: {e}")
     

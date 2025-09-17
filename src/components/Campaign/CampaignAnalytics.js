@@ -71,66 +71,16 @@ const CampaignAnalytics = ({ campaignId }) => {
     try {
       setLoading(true);
       setError('');
-      
-      // Simular dados de analytics (em produção, viria de uma API real)
-      const mockAnalytics = {
-        summary: {
-          total_executions: 156,
-          total_duration: 2340, // em minutos
-          unique_players: 8,
-          success_rate: 94.2,
-          avg_content_duration: 15
-        },
-        content_performance: [
-          { name: 'Vídeo Promocional', executions: 45, success_rate: 96.8, avg_duration: 30, type: 'video' },
-          { name: 'Banner Principal', executions: 38, success_rate: 98.2, avg_duration: 10, type: 'image' },
-          { name: 'Música Ambiente', executions: 32, success_rate: 89.5, avg_duration: 120, type: 'audio' },
-          { name: 'Slideshow Produtos', executions: 28, success_rate: 92.1, avg_duration: 20, type: 'image' },
-          { name: 'Vídeo Institucional', executions: 13, success_rate: 100, avg_duration: 45, type: 'video' }
-        ],
-        content_type_distribution: [
-          { name: 'Vídeos', value: 58, count: 2 },
-          { name: 'Imagens', value: 66, count: 2 },
-          { name: 'Áudios', value: 32, count: 1 }
-        ],
-        execution_timeline: [
-          { date: '2025-09-10', executions: 12, success: 11 },
-          { date: '2025-09-11', executions: 18, success: 17 },
-          { date: '2025-09-12', executions: 22, success: 21 },
-          { date: '2025-09-13', executions: 25, success: 23 },
-          { date: '2025-09-14', executions: 28, success: 26 },
-          { date: '2025-09-15', executions: 31, success: 30 },
-          { date: '2025-09-16', executions: 20, success: 19 }
-        ],
-        player_performance: [
-          { name: 'Chromecast Escritório', executions: 45, success_rate: 97.8 },
-          { name: 'TV Recepção', executions: 38, success_rate: 94.7 },
-          { name: 'Monitor Sala 1', executions: 32, success_rate: 90.6 },
-          { name: 'Display Entrada', executions: 28, success_rate: 96.4 },
-          { name: 'Painel Corredor', executions: 13, success_rate: 100 }
-        ],
-        peak_hours: [
-          { hour: '08:00', executions: 8 },
-          { hour: '09:00', executions: 12 },
-          { hour: '10:00', executions: 15 },
-          { hour: '11:00', executions: 18 },
-          { hour: '12:00', executions: 22 },
-          { hour: '13:00', executions: 25 },
-          { hour: '14:00', executions: 28 },
-          { hour: '15:00', executions: 24 },
-          { hour: '16:00', executions: 20 },
-          { hour: '17:00', executions: 16 },
-          { hour: '18:00', executions: 12 }
-        ]
-      };
 
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setAnalytics(mockAnalytics);
+      const response = await axios.get(`${API_BASE_URL}/campaigns/${campaignId}/analytics`, {
+        params: { range: timeRange }
+      });
 
+      setAnalytics(response.data || null);
     } catch (err) {
-      setError('Erro ao carregar analytics da campanha');
+      setError(err.response?.data?.error || 'Erro ao carregar analytics da campanha');
       console.error('Load analytics error:', err);
+      setAnalytics(null);
     } finally {
       setLoading(false);
     }

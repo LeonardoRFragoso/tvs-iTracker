@@ -2,6 +2,14 @@ from datetime import datetime
 import uuid
 from database import db
 
+# Helper to format datetime in Brazilian standard
+
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
+
 class User(db.Model):
     __tablename__ = 'users'
     
@@ -26,8 +34,8 @@ class User(db.Model):
             'email': self.email,
             'role': self.role,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'last_login': self.last_login.isoformat() if self.last_login else None
+            'created_at': fmt_br_datetime(self.created_at),
+            'last_login': fmt_br_datetime(self.last_login)
         }
     
     def __repr__(self):

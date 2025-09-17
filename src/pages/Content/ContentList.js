@@ -52,6 +52,32 @@ import { useTheme } from '../../contexts/ThemeContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+// BR datetime helpers for display
+const parseDateTimeFlexible = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (s.includes('/')) {
+      // Expecting DD/MM/YYYY [HH:MM[:SS]]
+      const [datePart, timePart] = s.split(' ');
+      const [dd, mm, yyyy] = datePart.split('/').map(v => parseInt(v, 10));
+      let hh = 0, mi = 0, ss = 0;
+      if (timePart) {
+        const t = timePart.split(':');
+        hh = parseInt(t[0] || '0', 10);
+        mi = parseInt(t[1] || '0', 10);
+        ss = parseInt(t[2] || '0', 10);
+      }
+      const d = new Date(yyyy, (mm || 1) - 1, dd || 1, hh, mi, ss);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const iso = new Date(s);
+    if (!isNaN(iso.getTime())) return iso;
+  }
+  return null;
+};
+
 // Skeleton loading component for content cards
 const ContentCardSkeleton = ({ delay = 0 }) => (
   <Grow in={true} timeout={1000 + delay * 100}>
@@ -594,7 +620,10 @@ const ContentList = () => {
                           {content.duration && ` • ${formatDuration(content.duration)}`}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" display="block">
-                          {new Date(content.created_at).toLocaleDateString('pt-BR')}
+                          {(() => {
+                            const d = parseDateTimeFlexible(content.created_at);
+                            return d ? d.toLocaleDateString('pt-BR') : '';
+                          })()}
                         </Typography>
                       </Box>
                       <Avatar

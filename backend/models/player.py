@@ -2,6 +2,13 @@ from datetime import datetime, timedelta
 import uuid
 from database import db
 
+# Helper to format datetime in Brazilian standard
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
+
 class Player(db.Model):
     __tablename__ = 'players'
     
@@ -98,8 +105,8 @@ class Player(db.Model):
             'is_online': self.is_online,
             'is_active': self.is_active,
             'status': self.status,
-            'last_ping': self.last_ping.isoformat() if self.last_ping else None,
-            'last_content_sync': self.last_content_sync.isoformat() if self.last_content_sync else None,
+            'last_ping': fmt_br_datetime(self.last_ping),
+            'last_content_sync': fmt_br_datetime(self.last_content_sync),
             'default_content_duration': self.default_content_duration,
             'transition_effect': self.transition_effect,
             'volume_level': self.volume_level,
@@ -111,8 +118,8 @@ class Player(db.Model):
             'network_speed_mbps': self.network_speed_mbps,
             'total_content_downloaded_gb': self.total_content_downloaded_gb,
             'uptime_percentage': self.uptime_percentage,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+            'created_at': fmt_br_datetime(self.created_at),
+            'updated_at': fmt_br_datetime(self.updated_at)
         }
     
     def update_storage_usage(self, used_gb):

@@ -2,6 +2,13 @@ from datetime import datetime
 import uuid
 from database import db
 
+# Helper to format datetime in Brazilian standard
+def fmt_br_datetime(dt):
+    try:
+        return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
+    except Exception:
+        return None
+
 class Editorial(db.Model):
     __tablename__ = 'editorials'
     
@@ -51,9 +58,9 @@ class Editorial(db.Model):
             'categories': self.categories,
             'language': self.language,
             'is_active': self.is_active,
-            'last_update': self.last_update.isoformat() if self.last_update else None,
+            'last_update': fmt_br_datetime(self.last_update),
             'last_error': self.last_error,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': fmt_br_datetime(self.created_at),
             'items_count': len(self.items)
         }
     
@@ -86,8 +93,8 @@ class EditorialItem(db.Model):
             'image_url': self.image_url,
             'source_url': self.source_url,
             'author': self.author,
-            'published_at': self.published_at.isoformat() if self.published_at else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'published_at': fmt_br_datetime(self.published_at),
+            'created_at': fmt_br_datetime(self.created_at)
         }
     
     def __repr__(self):
