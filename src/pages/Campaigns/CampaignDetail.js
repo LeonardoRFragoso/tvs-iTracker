@@ -41,6 +41,7 @@ import {
   Remove
 } from '@mui/icons-material';
 import axios from '../../config/axios';
+const API_BASE_URL = `${axios.defaults.baseURL}/api`;
 
 const CampaignDetail = () => {
   const { id } = useParams();
@@ -66,9 +67,9 @@ const CampaignDetail = () => {
       
       // Buscar dados da campanha
       const [campaignRes, contentsRes, schedulesRes] = await Promise.all([
-        axios.get(`/api/campaigns/${id}`),
-        axios.get(`/api/campaigns/${id}/contents`),
-        axios.get(`/api/schedules/campaign/${id}`)
+        axios.get(`${API_BASE_URL}/campaigns/${id}`),
+        axios.get(`${API_BASE_URL}/campaigns/${id}/contents`),
+        axios.get(`${API_BASE_URL}/schedules/campaign/${id}`)
       ]);
 
       setCampaign(campaignRes.data.campaign || campaignRes.data);
@@ -84,7 +85,7 @@ const CampaignDetail = () => {
 
   const fetchAvailableContents = async () => {
     try {
-      const response = await axios.get('/api/content', {
+      const response = await axios.get(`${API_BASE_URL}/content`, {
         params: { per_page: 100 }
       });
       setAvailableContents(response.data.contents || []);
@@ -104,7 +105,7 @@ const CampaignDetail = () => {
     setActionLoading(true);
     try {
       const promises = selectedContents.map(contentId =>
-        axios.post(`/api/campaigns/${id}/contents`, { content_id: contentId })
+        axios.post(`${API_BASE_URL}/campaigns/${id}/contents`, { content_id: contentId })
       );
       
       await Promise.all(promises);
@@ -133,7 +134,7 @@ const CampaignDetail = () => {
   const handleRemoveContent = async (contentId) => {
     setActionLoading(true);
     try {
-      await axios.delete(`/api/campaigns/${id}/contents/${contentId}`);
+      await axios.delete(`${API_BASE_URL}/campaigns/${id}/contents/${contentId}`);
       
       setSnackbar({
         open: true,
@@ -175,6 +176,26 @@ const CampaignDetail = () => {
 
   const getStatusText = (isActive) => {
     return isActive ? 'Ativa' : 'Inativa';
+  };
+
+  // Helper: builds the best thumbnail URL or falls back to the original image
+  const getContentThumbnailUrl = (item) => {
+    try {
+      const thumb = item.content?.thumbnail_path || item.thumbnail_path;
+      if (thumb) {
+        const fname = String(thumb).split('/').pop();
+        return `${API_BASE_URL}/content/thumbnails/${fname}`;
+      }
+      const filePath = item.content?.file_path || item.file_path;
+      const type = item.content?.content_type || item.content_type;
+      if (filePath && type === 'image') {
+        const fname = String(filePath).split('/').pop();
+        return `${API_BASE_URL}/content/media/${fname}`;
+      }
+    } catch (e) {
+      // ignore parsing errors and return null
+    }
+    return null;
   };
 
   if (loading) {
@@ -326,11 +347,11 @@ const CampaignDetail = () => {
                       >
                         <Remove />
                       </IconButton>
-                      {(content.content?.thumbnail_path || content.thumbnail_path) && (
+                      {getContentThumbnailUrl(content) && (
                         <CardMedia
                           component="img"
                           height="140"
-                          image={`/api/content/thumbnails/${(content.content?.thumbnail_path || content.thumbnail_path).split('/').pop()}`}
+                          image={getContentThumbnailUrl(content)}
                           alt={content.content?.title || content.title}
                         />
                       )}

@@ -88,19 +88,29 @@ def serve_media(filename):
     except FileNotFoundError:
         return jsonify({'error': 'Arquivo não encontrado'}), 404
 
+# Alias com prefixo /api para compatibilidade com o frontend
+@content_bp.route('/api/content/media/<filename>')
+def serve_media_api(filename):
+    return serve_media(filename)
+
 # Endpoint para servir thumbnails
-@content_bp.route('/thumbnails/<filename>')
+@content_bp.route('/content/thumbnails/<filename>')
 def serve_thumbnail(filename):
     """Serve thumbnails do diretório de thumbnails"""
     try:
-        thumbnails_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails')
-        return send_from_directory(thumbnails_dir, filename)
+        thumbnail_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails')
+        return send_from_directory(thumbnail_dir, filename)
     except FileNotFoundError:
         return jsonify({'error': 'Thumbnail não encontrado'}), 404
 
+# Alias com prefixo /api para compatibilidade com o frontend
+@content_bp.route('/api/content/thumbnails/<filename>')
+def serve_thumbnail_api(filename):
+    return serve_thumbnail(filename)
+
 # Add route without trailing slash to avoid 308 redirects
-@content_bp.route('', methods=['GET', 'POST'])
-@content_bp.route('/', methods=['GET', 'POST'])
+@content_bp.route('/api/content', methods=['GET', 'POST'])
+@content_bp.route('/api/content/', methods=['GET', 'POST'])
 @jwt_required()
 def handle_content():
     if request.method == 'GET':
@@ -108,7 +118,7 @@ def handle_content():
     else:
         return create_content()
 
-@content_bp.route('/<content_id>', methods=['GET'])
+@content_bp.route('/api/content/<content_id>', methods=['GET'])
 @jwt_required()
 def get_content(content_id):
     try:
@@ -127,7 +137,7 @@ def get_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/<content_id>', methods=['PUT'])
+@content_bp.route('/api/content/<content_id>', methods=['PUT'])
 @jwt_required()
 def update_content(content_id):
     try:
@@ -142,20 +152,73 @@ def update_content(content_id):
         if content.user_id != user_id and user.role not in ['admin', 'manager']:
             return jsonify({'error': 'Sem permissão para editar este conteúdo'}), 403
         
-        data = request.get_json()
+        # Atualização pode vir como multipart/form-data (com arquivo) ou JSON
+        is_multipart = 'file' in request.files or request.content_type and 'multipart/form-data' in request.content_type
         
-        if 'title' in data:
-            content.title = data['title']
-        if 'description' in data:
-            content.description = data['description']
-        if 'duration' in data:
-            content.duration = data['duration']
-        if 'tags' in data:
-            content.tags = data['tags']
-        if 'category' in data:
-            content.category = data['category']
-        if 'is_active' in data:
-            content.is_active = data['is_active']
+        if is_multipart:
+            # Campos de formulário
+            form = request.form
+            file = request.files.get('file')
+            
+            # Atualizar campos textuais
+            if 'title' in form:
+                content.title = form.get('title', content.title)
+            if 'description' in form:
+                content.description = form.get('description', content.description)
+            if 'category' in form:
+                content.category = form.get('category', content.category)
+            if 'tags' in form:
+                content.tags = form.get('tags', content.tags)
+            if 'duration' in form and form.get('duration') not in (None, ''):
+                try:
+                    content.duration = int(float(form.get('duration')))
+                except ValueError:
+                    pass
+            if 'is_active' in form:
+                content.is_active = form.get('is_active') in ['true', 'True', True]
+            
+            # Atualizar arquivo, se enviado
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                unique_filename = f"{uuid.uuid4()}_{filename}"
+                file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+                file.save(file_path)
+                
+                # Atualizar metadados do arquivo
+                content.file_path = unique_filename
+                content.file_size = os.path.getsize(file_path)
+                content.mime_type = file.mimetype
+                
+                # Atualizar content_type inferindo pela extensão
+                content.content_type = get_content_type(filename)
+                
+                # Regenerar thumbnail
+                thumbnails_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails')
+                os.makedirs(thumbnails_dir, exist_ok=True)
+                thumbnail_path = os.path.join(thumbnails_dir, f"{uuid.uuid4()}.jpg")
+                if content.content_type == 'video':
+                    generate_video_thumbnail(file_path, thumbnail_path)
+                elif content.content_type == 'image':
+                    generate_image_thumbnail(file_path, thumbnail_path)
+                # Para outros tipos, thumbnail é opcional
+                if os.path.exists(thumbnail_path):
+                    content.thumbnail_path = os.path.basename(thumbnail_path)
+        else:
+            # JSON puro
+            data = request.get_json(force=True, silent=False)
+            
+            if 'title' in data:
+                content.title = data['title']
+            if 'description' in data:
+                content.description = data['description']
+            if 'duration' in data:
+                content.duration = data['duration']
+            if 'tags' in data:
+                content.tags = data['tags']
+            if 'category' in data:
+                content.category = data['category']
+            if 'is_active' in data:
+                content.is_active = data['is_active']
         
         content.updated_at = datetime.utcnow()
         db.session.commit()
@@ -173,7 +236,7 @@ def update_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/<content_id>', methods=['DELETE'])
+@content_bp.route('/api/content/<content_id>', methods=['DELETE'])
 @jwt_required()
 def delete_content(content_id):
     try:
@@ -241,7 +304,7 @@ def delete_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/categories', methods=['GET'])
+@content_bp.route('/api/content/categories', methods=['GET'])
 @jwt_required()
 def get_categories():
     try:
@@ -258,7 +321,7 @@ def get_categories():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/stats', methods=['GET'])
+@content_bp.route('/api/content/stats', methods=['GET'])
 @jwt_required()
 def get_content_stats():
     try:

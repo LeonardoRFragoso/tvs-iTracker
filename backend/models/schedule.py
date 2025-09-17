@@ -1,109 +1,243 @@
-from datetime import datetime
-import uuid
 from database import db
+from datetime import datetime, time
+import json
 
 class Schedule(db.Model):
     __tablename__ = 'schedules'
     
-    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = db.Column(db.String(36), primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    
-    # Relacionamentos
     campaign_id = db.Column(db.String(36), db.ForeignKey('campaigns.id'), nullable=False)
     player_id = db.Column(db.String(36), db.ForeignKey('players.id'), nullable=False)
     
-    # Definir relacionamentos sem backref (já existem nos outros modelos)
-    campaign = db.relationship('Campaign', overlaps="schedules", lazy=True)
-    player = db.relationship('Player', overlaps="schedules", lazy=True)
-    
-    # Configurações de agendamento
+    # Campos de agendamento
     start_date = db.Column(db.DateTime, nullable=False)
     end_date = db.Column(db.DateTime, nullable=False)
-    start_time = db.Column(db.Time)  # Hora de início diária
-    end_time = db.Column(db.Time)    # Hora de fim diária
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    days_of_week = db.Column(db.String(20), nullable=False)  # "0,1,2,3,4,5,6"
     
-    # Dias da semana (0=domingo, 6=sábado)
-    days_of_week = db.Column(db.String(20), default='1,2,3,4,5')  # Segunda a sexta por padrão
-    
-    # Configurações de repetição
-    repeat_type = db.Column(db.String(20), default='daily')  # daily, weekly, monthly
+    # Campos de repetição
+    repeat_type = db.Column(db.String(20), default='daily')
     repeat_interval = db.Column(db.Integer, default=1)
     
-    # Status
+    # Campos de controle
+    priority = db.Column(db.Integer, default=1)
+    is_persistent = db.Column(db.Boolean, default=False)
+    content_type = db.Column(db.String(20), default='main')  # main, overlay
     is_active = db.Column(db.Boolean, default=True)
-    priority = db.Column(db.Integer, default=1)  # 1-10 scale (1=baixa, 10=alta)
     
-    # Configurações de persistência/overlay
-    is_persistent = db.Column(db.Boolean, default=False)  # Se deve ficar fixo na tela
-    content_type = db.Column(db.String(20), default='main')  # 'main' ou 'overlay'
+    # Novos campos para múltiplos conteúdos
+    content_filter = db.Column(db.Text)  # JSON com filtros de conteúdo
+    playback_mode_override = db.Column(db.String(50))  # override do modo de reprodução da campanha
+    content_selection = db.Column(db.String(20), default='all')  # all, specific, filtered
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    def to_dict(self):
-        try:
-            # Safely get campaign and player data
-            campaign_data = None
-            player_data = None
-            
-            if hasattr(self, 'campaign') and self.campaign:
-                campaign_data = {
-                    'id': self.campaign.id,
-                    'name': self.campaign.name,
-                    'description': getattr(self.campaign, 'description', '')
-                }
-            
-            if hasattr(self, 'player') and self.player:
-                player_data = {
-                    'id': self.player.id,
-                    'name': self.player.name,
-                    'location': getattr(self.player, 'location', '')
-                }
-            
-            return {
-                'id': self.id,
-                'name': self.name,
-                'campaign_id': self.campaign_id,
-                'player_id': self.player_id,
-                'start_date': self.start_date.isoformat() if self.start_date else None,
-                'end_date': self.end_date.isoformat() if self.end_date else None,
-                'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
-                'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
-                'days_of_week': self.days_of_week,
-                'repeat_type': self.repeat_type,
-                'repeat_interval': self.repeat_interval,
-                'is_active': self.is_active,
-                'priority': self.priority,
-                'is_persistent': self.is_persistent,
-                'content_type': self.content_type,
-                'created_at': self.created_at.isoformat() if self.created_at else None,
-                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-                'campaign': campaign_data,
-                'player': player_data
-            }
-        except Exception as e:
-            # Fallback to basic data if relationships fail
-            return {
-                'id': self.id,
-                'name': self.name,
-                'campaign_id': self.campaign_id,
-                'player_id': self.player_id,
-                'start_date': self.start_date.isoformat() if self.start_date else None,
-                'end_date': self.end_date.isoformat() if self.end_date else None,
-                'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
-                'end_time': self.end_time.strftime('%H:%M') if self.end_time else None,
-                'days_of_week': self.days_of_week,
-                'repeat_type': self.repeat_type,
-                'repeat_interval': self.repeat_interval,
-                'is_active': self.is_active,
-                'priority': self.priority,
-                'is_persistent': self.is_persistent,
-                'content_type': self.content_type,
-                'created_at': self.created_at.isoformat() if self.created_at else None,
-                'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-                'campaign': None,
-                'player': None
-            }
+    # Relacionamentos
+    campaign = db.relationship('Campaign', overlaps="schedules", lazy=True)
+    player = db.relationship('Player', overlaps="schedules", lazy=True)
     
-    def __repr__(self):
-        return f'<Schedule {self.name}>'
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'campaign_id': self.campaign_id,
+            'player_id': self.player_id,
+            'start_date': self.start_date.isoformat() if self.start_date else None,
+            'end_date': self.end_date.isoformat() if self.end_date else None,
+            'start_time': self.start_time.strftime('%H:%M:%S') if self.start_time else None,
+            'end_time': self.end_time.strftime('%H:%M:%S') if self.end_time else None,
+            'days_of_week': self.days_of_week,
+            'repeat_type': self.repeat_type,
+            'repeat_interval': self.repeat_interval,
+            'priority': self.priority,
+            'is_persistent': self.is_persistent,
+            'content_type': self.content_type,
+            'is_active': self.is_active,
+            'content_filter': json.loads(self.content_filter) if self.content_filter else None,
+            'playback_mode_override': self.playback_mode_override,
+            'content_selection': self.content_selection,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'player': self.player.to_dict() if self.player else None,
+            'campaign': self.campaign.to_dict() if self.campaign else None
+        }
+    
+    def get_filtered_contents(self):
+        """Retorna conteúdos da campanha filtrados pelas configurações do agendamento"""
+        if not self.campaign:
+            return []
+        
+        # Obter filtros do agendamento
+        filters = {}
+        if self.content_filter:
+            try:
+                filters = json.loads(self.content_filter)
+            except:
+                filters = {}
+        
+        # Contexto do agendamento para filtros
+        schedule_context = {
+            'hour': datetime.now().hour,
+            'weekday': datetime.now().weekday(),
+            'player_location': self.player.location_id if self.player else None
+        }
+        
+        # Obter conteúdos da campanha
+        contents = self.campaign.get_contents_for_playback(
+            content_filter=filters.get('content_type'),
+            location_filter=schedule_context.get('player_location')
+        )
+        
+        # Aplicar filtros específicos do agendamento
+        if self.content_selection == 'specific' and 'content_ids' in filters:
+            specific_ids = filters['content_ids']
+            contents = [c for c in contents if c.content_id in specific_ids]
+        
+        # Aplicar filtros de horário/contexto
+        filtered_contents = []
+        for content in contents:
+            if content.is_available_for_schedule(schedule_context):
+                filtered_contents.append(content)
+        
+        return filtered_contents
+    
+    def get_effective_playback_mode(self):
+        """Retorna o modo de reprodução efetivo (override ou da campanha)"""
+        if self.playback_mode_override:
+            return self.playback_mode_override
+        elif self.campaign:
+            return self.campaign.playback_mode
+        else:
+            return 'sequential'
+    
+    def is_active_now(self):
+        """Verifica se o agendamento deve estar ativo agora"""
+        now = datetime.now()
+        current_date = now.date()
+        current_time = now.time()
+        current_weekday = now.weekday()
+        
+        # Verificar se está no período de datas
+        if current_date < self.start_date.date() or current_date > self.end_date.date():
+            return False
+        
+        # Verificar dias da semana
+        if self.days_of_week:
+            allowed_days = [int(d.strip()) for d in self.days_of_week.split(',')]
+            if current_weekday not in allowed_days:
+                return False
+        
+        # Verificar horário
+        if self.start_time <= self.end_time:
+            # Horário normal (ex: 09:00 às 17:00)
+            if not (self.start_time <= current_time <= self.end_time):
+                return False
+        else:
+            # Horário overnight (ex: 22:00 às 06:00)
+            if not (current_time >= self.start_time or current_time <= self.end_time):
+                return False
+        
+        return True
+    
+    def set_content_filter(self, content_type=None, content_ids=None, location_filter=None, 
+                          time_filter=None, custom_filters=None):
+        """Define filtros de conteúdo para o agendamento"""
+        filters = {}
+        
+        if content_type:
+            filters['content_type'] = content_type
+        
+        if content_ids:
+            filters['content_ids'] = content_ids
+            self.content_selection = 'specific'
+        
+        if location_filter:
+            filters['location_filter'] = location_filter
+        
+        if time_filter:
+            filters['time_filter'] = time_filter
+        
+        if custom_filters:
+            filters.update(custom_filters)
+        
+        self.content_filter = json.dumps(filters) if filters else None
+    
+    def get_next_content(self, current_content_id=None):
+        """Retorna o próximo conteúdo a ser reproduzido"""
+        contents = self.get_filtered_contents()
+        
+        if not contents:
+            return None
+        
+        playback_mode = self.get_effective_playback_mode()
+        
+        if playback_mode == 'random':
+            import random
+            return random.choice(contents)
+        
+        elif playback_mode == 'single':
+            # Sempre retorna o primeiro conteúdo
+            return contents[0]
+        
+        elif playback_mode in ['sequential', 'loop']:
+            if not current_content_id:
+                return contents[0]
+            
+            # Encontrar índice atual
+            current_index = -1
+            for i, content in enumerate(contents):
+                if content.content_id == current_content_id:
+                    current_index = i
+                    break
+            
+            # Próximo índice
+            next_index = current_index + 1
+            
+            if next_index >= len(contents):
+                if playback_mode == 'loop' or (self.campaign and self.campaign.loop_enabled):
+                    next_index = 0  # Volta ao início
+                else:
+                    return None  # Fim da sequência
+            
+            return contents[next_index]
+        
+        return contents[0]  # Fallback
+    
+    def get_content_duration(self, content):
+        """Retorna a duração efetiva de um conteúdo no contexto deste agendamento"""
+        if hasattr(content, 'get_effective_duration'):
+            return content.get_effective_duration()
+        elif self.campaign:
+            return self.campaign.content_duration
+        else:
+            return 10  # Duração padrão
+    
+    def validate_schedule(self):
+        """Valida a configuração do agendamento"""
+        errors = []
+        
+        if not self.name or not self.name.strip():
+            errors.append("Nome é obrigatório")
+        
+        if not self.campaign_id:
+            errors.append("Campanha é obrigatória")
+        
+        if not self.player_id:
+            errors.append("Player é obrigatório")
+        
+        if self.start_date >= self.end_date:
+            errors.append("Data de início deve ser anterior à data de fim")
+        
+        if not self.days_of_week:
+            errors.append("Pelo menos um dia da semana deve ser selecionado")
+        
+        # Verificar se a campanha tem conteúdos
+        if self.campaign:
+            active_contents = self.campaign.get_active_contents()
+            if not active_contents:
+                errors.append("A campanha selecionada não possui conteúdos ativos")
+        
+        return errors

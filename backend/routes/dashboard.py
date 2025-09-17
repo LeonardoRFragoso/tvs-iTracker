@@ -43,13 +43,20 @@ def get_dashboard_stats():
             func.count(Player.id).label('count')
         ).join(Player, Location.id == Player.location_id).group_by(Location.name).all()
         
-        # Campanhas ativas hoje
-        today = datetime.utcnow().date()
-        active_campaigns_today = Campaign.query.filter(
-            Campaign.is_active == True,
-            Campaign.start_date <= datetime.utcnow(),
-            Campaign.end_date >= datetime.utcnow()
-        ).count()
+        # Campanhas ativas hoje (robusto a esquemas sem start/end_date)
+        try:
+            if hasattr(Campaign, 'start_date') and hasattr(Campaign, 'end_date'):
+                active_campaigns_today = Campaign.query.filter(
+                    Campaign.is_active == True,
+                    Campaign.start_date <= datetime.utcnow(),
+                    Campaign.end_date >= datetime.utcnow()
+                ).count()
+            else:
+                # Fallback: considerar campanhas ativas
+                active_campaigns_today = Campaign.query.filter(Campaign.is_active == True).count()
+        except Exception:
+            # Fallback final para evitar 500
+            active_campaigns_today = Campaign.query.filter(Campaign.is_active == True).count()
         
         # Uso de armazenamento
         total_storage_used = db.session.query(
@@ -144,13 +151,18 @@ def get_system_alerts():
                 'timestamp': player.last_ping.isoformat() if player.last_ping else None
             })
         
-        # Campanhas expirando em 24 horas
-        tomorrow = datetime.utcnow() + timedelta(days=1)
-        expiring_campaigns = Campaign.query.filter(
-            Campaign.is_active == True,
-            Campaign.end_date <= tomorrow,
-            Campaign.end_date >= datetime.utcnow()
-        ).all()
+        # Campanhas expirando em 24 horas (somente se coluna end_date existir)
+        expiring_campaigns = []
+        try:
+            if hasattr(Campaign, 'end_date'):
+                tomorrow = datetime.utcnow() + timedelta(days=1)
+                expiring_campaigns = Campaign.query.filter(
+                    Campaign.is_active == True,
+                    Campaign.end_date <= tomorrow,
+                    Campaign.end_date >= datetime.utcnow()
+                ).all()
+        except Exception:
+            expiring_campaigns = []
         
         for campaign in expiring_campaigns:
             alerts.append({

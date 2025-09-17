@@ -28,7 +28,7 @@ class ChromecastService:
                 cast.wait()
                 
                 device_info = {
-                    'id': cast.uuid,
+                    'id': str(cast.uuid),
                     'name': cast.name,
                     'model': cast.model_name,
                     'ip': cast.socket_client.host if cast.socket_client else 'unknown',
@@ -38,6 +38,11 @@ class ChromecastService:
                     'manufacturer': getattr(cast, 'manufacturer', 'Google')
                 }
                 devices.append(device_info)
+                # Indexar por ambos os tipos de chave para compatibilidade
+                try:
+                    self.discovered_devices[str(cast.uuid)] = cast
+                except Exception:
+                    pass
                 self.discovered_devices[cast.uuid] = cast
             
             # Parar o browser de descoberta
@@ -59,61 +64,61 @@ class ChromecastService:
             if device_id in self.discovered_devices:
                 cast = self.discovered_devices[device_id]
                 if self._test_connection(cast, device_id):
+                    logger.info(f"Conectado usando UUID exato: {device_id}")
                     return True, device_id
             
-            # Estratégia 2: Redescobrir dispositivos com timeout maior
-            logger.info(f"Dispositivo {device_id} não encontrado, redescobrir com timeout maior...")
-            self.discover_devices(timeout=10)
-            
-            # Tentar UUID novamente após descoberta
-            if device_id in self.discovered_devices:
-                cast = self.discovered_devices[device_id]
-                if self._test_connection(cast, device_id):
-                    return True, device_id
-            
-            # Estratégia 3: Buscar por nome do dispositivo se fornecido
+            # Estratégia 2: Buscar por nome e atualizar UUID automaticamente
             if device_name:
-                logger.info(f"Tentando encontrar dispositivo pelo nome: {device_name}")
-                for uuid, cast in self.discovered_devices.items():
-                    if cast.name and cast.name.lower() == device_name.lower():
-                        logger.info(f"Dispositivo encontrado pelo nome! UUID: {uuid}")
-                        if self._test_connection(cast, uuid):
-                            # Também armazenar com o UUID original para compatibilidade
-                            self.active_connections[device_id] = cast
-                            logger.info(f"Dispositivo também armazenado com UUID original: {device_id}")
-                            # Atualizar o UUID no banco se necessário
-                            self._update_device_uuid(device_id, uuid)
-                            return True, uuid
-            
-            # Estratégia 4: Descoberta forçada com múltiplas tentativas
-            logger.info("Tentando descoberta forçada com múltiplas tentativas...")
-            for attempt in range(3):
-                logger.info(f"Tentativa {attempt + 1}/3 de descoberta...")
-                devices = self.discover_devices(timeout=15)
+                logger.info(f"UUID {device_id} não encontrado, buscando por nome: {device_name}")
                 
-                # Verificar se encontrou o dispositivo por UUID
+                # Fazer múltiplas tentativas de descoberta
+                for attempt in range(3):
+                    logger.info(f"Tentativa {attempt + 1}/3 de descoberta por nome...")
+                    
+                    # Redescobrir dispositivos
+                    self.discover_devices(timeout=8)
+                    
+                    # Buscar dispositivo pelo nome
+                    found_device = self._find_device_by_name(device_name)
+                    if found_device:
+                        cast, real_uuid = found_device
+                        
+                        # Testar conexão
+                        if self._test_connection(cast, real_uuid):
+                            logger.info(f"✅ Dispositivo '{device_name}' encontrado com UUID: {real_uuid}")
+                            
+                            # SEMPRE atualizar UUID no banco quando encontrar por nome
+                            if device_id != real_uuid:
+                                logger.info(f"🔄 Atualizando UUID no banco: {device_id} → {real_uuid}")
+                                self._update_device_uuid_by_name(device_name, real_uuid)
+                            
+                            # Armazenar conexão com AMBOS os UUIDs para compatibilidade
+                            self.active_connections[real_uuid] = cast
+                            if device_id != real_uuid:
+                                self.active_connections[device_id] = cast  # Compatibilidade
+                            
+                            return True, real_uuid
+                    
+                    # Esperar antes da próxima tentativa (exceto na última)
+                    if attempt < 2:
+                        time.sleep(2)
+            
+            # Estratégia 3: Tentar descoberta geral como fallback
+            logger.warning(f"Não foi possível encontrar dispositivo por nome, tentando descoberta geral...")
+            for attempt in range(2):
+                self.discover_devices(timeout=10)
+                
+                # Verificar se UUID apareceu na descoberta geral
                 if device_id in self.discovered_devices:
                     cast = self.discovered_devices[device_id]
                     if self._test_connection(cast, device_id):
+                        logger.info(f"Dispositivo encontrado na descoberta geral: {device_id}")
                         return True, device_id
                 
-                # Verificar se encontrou por nome
-                if device_name:
-                    for uuid, cast in self.discovered_devices.items():
-                        if cast.name and cast.name.lower() == device_name.lower():
-                            logger.info(f"Dispositivo encontrado pelo nome na tentativa {attempt + 1}! UUID: {uuid}")
-                            if self._test_connection(cast, uuid):
-                                # Também armazenar com o UUID original para compatibilidade
-                                self.active_connections[device_id] = cast
-                                logger.info(f"Dispositivo também armazenado com UUID original: {device_id}")
-                                self._update_device_uuid(device_id, uuid)
-                                return True, uuid
-                
-                if attempt < 2:  # Não esperar na última tentativa
-                    import time
-                    time.sleep(2)
+                if attempt < 1:
+                    time.sleep(3)
             
-            logger.error(f"Dispositivo {device_id} não encontrado após todas as tentativas")
+            logger.error(f"Dispositivo {device_id} (nome: {device_name}) não encontrado após todas as tentativas")
             return False, ""
             
         except Exception as e:
@@ -121,6 +126,84 @@ class ChromecastService:
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             return False, ""
+    
+    def _find_device_by_name(self, device_name: str) -> Optional[tuple]:
+        """Busca dispositivo pelo nome e retorna (cast, uuid) se encontrado"""
+        try:
+            device_name_lower = device_name.lower()
+            
+            for uuid, cast in self.discovered_devices.items():
+                if not cast.name:
+                    continue
+                
+                cast_name_lower = cast.name.lower()
+                
+                # Verificações de correspondência de nome (em ordem de prioridade)
+                name_matches = (
+                    cast_name_lower == device_name_lower or                    # Exato
+                    cast_name_lower == f"{device_name_lower} teste" or         # Com sufixo "teste"
+                    device_name_lower in cast_name_lower or                    # Contém o nome
+                    cast_name_lower in device_name_lower                       # Nome contém o cast
+                )
+                
+                if name_matches:
+                    logger.info(f"📺 Dispositivo encontrado por nome: '{cast.name}' → UUID: {uuid}")
+                    return (cast, uuid)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar dispositivo por nome: {e}")
+            return None
+    
+    def _update_device_uuid_by_name(self, device_name: str, new_uuid: str):
+        """Atualiza UUID do dispositivo no banco de dados baseado no nome"""
+        try:
+            logger.info(f"🔄 Atualizando UUID do dispositivo '{device_name}' para {new_uuid}")
+            
+            # Importar aqui para evitar import circular
+            from models.player import Player
+            from database import db
+            from datetime import datetime
+            
+            # Converter UUID para string se necessário
+            new_uuid_str = str(new_uuid) if hasattr(new_uuid, 'hex') else new_uuid
+            
+            # Buscar player pelo nome do Chromecast ou nome do player
+            player = Player.query.filter(
+                db.or_(
+                    Player.chromecast_name.ilike(f'%{device_name}%'),
+                    Player.name.ilike(f'%{device_name}%')
+                )
+            ).first()
+            
+            if player:
+                old_uuid = player.chromecast_id
+                player.chromecast_id = new_uuid_str
+                player.chromecast_name = device_name
+                player.status = 'online'
+                player.last_ping = datetime.now()
+                player.last_seen = datetime.now()
+                
+                db.session.commit()
+                
+                logger.info(f"✅ UUID do player '{player.name}' atualizado:")
+                logger.info(f"   Antigo UUID: {old_uuid}")
+                logger.info(f"   Novo UUID: {new_uuid_str}")
+                logger.info(f"   Chromecast Name: {device_name}")
+                
+            else:
+                logger.warning(f"⚠️  Player com nome '{device_name}' não encontrado no banco")
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao atualizar UUID no banco: {e}")
+            # Fazer rollback da sessão em caso de erro
+            try:
+                from database import db
+                db.session.rollback()
+                logger.info("Rollback da sessão realizado")
+            except Exception as rollback_error:
+                logger.error(f"Erro ao fazer rollback: {rollback_error}")
     
     def _test_connection(self, cast, device_id: str) -> bool:
         """Testa se a conexão com o dispositivo está funcionando"""
@@ -138,34 +221,6 @@ class ChromecastService:
         except Exception as e:
             logger.error(f"Erro ao testar conexão com {device_id}: {e}")
             return False
-    
-    def _update_device_uuid(self, old_uuid: str, new_uuid: str):
-        """Atualiza UUID do dispositivo no banco de dados se necessário"""
-        try:
-            if old_uuid != new_uuid:
-                logger.info(f"Atualizando UUID do dispositivo de {old_uuid} para {new_uuid}")
-                # Importar aqui para evitar import circular
-                from models.player import Player
-                from database import db
-                
-                # Converter UUID para string se necessário
-                new_uuid_str = str(new_uuid) if hasattr(new_uuid, 'hex') else new_uuid
-                old_uuid_str = str(old_uuid) if hasattr(old_uuid, 'hex') else old_uuid
-                
-                player = Player.query.filter_by(chromecast_id=old_uuid_str).first()
-                if player:
-                    player.chromecast_id = new_uuid_str
-                    db.session.commit()
-                    logger.info(f"UUID do player {player.name} atualizado no banco")
-        except Exception as e:
-            logger.error(f"Erro ao atualizar UUID no banco: {e}")
-            # Fazer rollback da sessão em caso de erro
-            try:
-                from database import db
-                db.session.rollback()
-                logger.info("Rollback da sessão realizado")
-            except Exception as rollback_error:
-                logger.error(f"Erro ao fazer rollback: {rollback_error}")
     
     def connect_to_device_by_name(self, device_name: str) -> tuple[bool, str]:
         """Conecta a um dispositivo pelo nome e retorna (sucesso, uuid)"""
@@ -262,12 +317,58 @@ class ChromecastService:
                 mc = MediaController()
                 cast.register_handler(mc)
             
-            # Carregar mídia - corrigir parâmetro subtitle para subtitles
+            # Garantir que o Default Media Receiver esteja ativo (CC1AD845)
+            try:
+                logger.info("[CHROMECAST] Iniciando Default Media Receiver (CC1AD845)")
+                cast.start_app("CC1AD845")
+                time.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"[CHROMECAST] Não foi possível iniciar o Default Media Receiver: {e}")
+            
+            # Carregar mídia - para imagens, enviar também thumb
             logger.info(f"[CHROMECAST] Chamando play_media...")
-            mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
+            is_image = content_type.startswith('image/')
+            try:
+                if is_image:
+                    mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None, thumb=media_url)
+                else:
+                    mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
+            except TypeError:
+                # Compatibilidade com versões antigas sem parâmetro thumb
+                mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
+            
             logger.info(f"[CHROMECAST] play_media chamado, aguardando ativação...")
             mc.block_until_active()
-            logger.info(f"[CHROMECAST] Media controller ativo!")
+            time.sleep(0.3)
+            
+            # Logar status detalhado
+            status = getattr(mc, 'status', None)
+            if status:
+                logger.info(f"[CHROMECAST] Media Status após play:")
+                logger.info(f"    - player_state: {status.player_state}")
+                logger.info(f"    - content_id: {status.content_id}")
+                logger.info(f"    - content_type: {status.content_type}")
+                logger.info(f"    - title: {status.title}")
+                logger.info(f"    - duration: {status.duration}")
+            else:
+                logger.info(f"[CHROMECAST] Media Status indisponível")
+            
+            # Fallback: se permanecer IDLE com imagem, tentar novamente uma vez
+            try:
+                if is_image and (not status or status.player_state in (None, 'IDLE')):
+                    logger.info("[CHROMECAST] Fallback para imagem: reexecutando play_media após iniciar Default Receiver")
+                    cast.start_app("CC1AD845")
+                    time.sleep(0.5)
+                    try:
+                        mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None, thumb=media_url)
+                    except TypeError:
+                        mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
+                    mc.block_until_active()
+                    time.sleep(0.3)
+                    status = getattr(mc, 'status', None)
+                    logger.info(f"[CHROMECAST] Status após fallback: {getattr(status, 'player_state', None)}")
+            except Exception as e:
+                logger.warning(f"[CHROMECAST] Erro no fallback de imagem: {e}")
             
             logger.info(f"Mídia carregada no Chromecast {device_id}: {title}")
             return True

@@ -70,6 +70,7 @@ socketio = SocketIO(app, cors_allowed_origins=["http://localhost:3000", "http://
 # Importar modelos
 from models.user import User
 from models.content import Content
+from models.content_distribution import ContentDistribution
 from models.campaign import Campaign
 from models.player import Player
 from models.schedule import Schedule
@@ -77,27 +78,23 @@ from models.editorial import Editorial
 
 # Importar rotas
 from routes.auth import auth_bp
+from routes.location import location_bp
 from routes.content import content_bp
 from routes.campaign import campaign_bp
+from routes.campaign_content import campaign_content_bp
 from routes.player import player_bp
 from routes.schedule import schedule_bp
-# from routes.editorial import editorial_bp
 from routes.dashboard import dashboard_bp
-from routes.location import location_bp
-from routes.content_distribution import content_distribution_bp
-from routes.cast import cast_bp
 
 # Registrar blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
-app.register_blueprint(content_bp, url_prefix='/api/content')
-app.register_blueprint(campaign_bp, url_prefix='/api/campaigns')
-app.register_blueprint(schedule_bp, url_prefix='/api/schedules')
-# app.register_blueprint(editorial_bp, url_prefix='/api/editorials')
-app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
-app.register_blueprint(player_bp, url_prefix='/api/players')
 app.register_blueprint(location_bp, url_prefix='/api/locations')
-app.register_blueprint(cast_bp, url_prefix='/api/cast')
-app.register_blueprint(content_distribution_bp, url_prefix='/api/distributions')
+app.register_blueprint(content_bp)  
+app.register_blueprint(campaign_bp, url_prefix='/api/campaigns')
+app.register_blueprint(campaign_content_bp)  
+app.register_blueprint(player_bp, url_prefix='/api/players')
+app.register_blueprint(schedule_bp, url_prefix='/api/schedules')
+app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
 
 # Configurar scheduler para tarefas automáticas
 scheduler = BackgroundScheduler()

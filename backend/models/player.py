@@ -51,7 +51,7 @@ class Player(db.Model):
     
     # Relacionamentos
     schedules = db.relationship('Schedule', lazy=True)
-    distributions = db.relationship('ContentDistribution', backref='player', lazy=True)
+    distributions = db.relationship('ContentDistribution', lazy=True)
     
     @property
     def is_online(self):

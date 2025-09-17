@@ -17,7 +17,7 @@ class User(db.Model):
     
     # Relacionamentos usando strings para evitar problemas de importação circular
     contents = db.relationship('Content', backref='author', lazy=True)
-    campaigns = db.relationship('Campaign', backref='creator', lazy=True)
+    campaigns = db.relationship('Campaign', backref='creator', lazy=True)  # Restaurado
     
     def to_dict(self):
         return {

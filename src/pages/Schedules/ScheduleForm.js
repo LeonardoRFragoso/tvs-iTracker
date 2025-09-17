@@ -34,9 +34,9 @@ import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
-import axios from 'axios';
+import axios from '../../config/axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = `${axios.defaults.baseURL}/api`;
 
 const ScheduleForm = () => {
   const navigate = useNavigate();
@@ -97,14 +97,69 @@ const ScheduleForm = () => {
       const response = await axios.get(`${API_BASE_URL}/schedules/${id}`);
       const schedule = response.data.schedule;
       
+      // Função para converter string de tempo (HH:MM:SS) em objeto Date
+      const parseTimeString = (timeString) => {
+        if (!timeString) return null;
+        
+        try {
+          // Se já é um objeto Date, retornar
+          if (timeString instanceof Date) return timeString;
+          
+          // Se é uma string de tempo (HH:MM:SS ou HH:MM)
+          if (typeof timeString === 'string') {
+            const timeParts = timeString.split(':');
+            if (timeParts.length >= 2) {
+              const today = new Date();
+              const hours = parseInt(timeParts[0], 10);
+              const minutes = parseInt(timeParts[1], 10);
+              const seconds = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
+              
+              return new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, seconds);
+            }
+          }
+          
+          return null;
+        } catch (error) {
+          console.error('Erro ao fazer parse do tempo:', timeString, error);
+          return null;
+        }
+      };
+      
+      // Função para converter string de data em objeto Date
+      const parseDateString = (dateString) => {
+        if (!dateString) return null;
+        
+        try {
+          // Se já é um objeto Date, retornar
+          if (dateString instanceof Date) return dateString;
+          
+          // Se é uma string de data
+          if (typeof dateString === 'string') {
+            // Remover parte do tempo se existir (2025-09-16T03:00:00 → 2025-09-16)
+            const datePart = dateString.split('T')[0];
+            const date = new Date(datePart + 'T00:00:00');
+            
+            // Verificar se a data é válida
+            if (!isNaN(date.getTime())) {
+              return date;
+            }
+          }
+          
+          return null;
+        } catch (error) {
+          console.error('Erro ao fazer parse da data:', dateString, error);
+          return null;
+        }
+      };
+      
       setFormData({
         name: schedule.name || '',
         campaign_id: schedule.campaign_id || '',
         player_id: schedule.player_id || '',
-        start_date: schedule.start_date ? schedule.start_date.split('T')[0] : '',
-        end_date: schedule.end_date ? schedule.end_date.split('T')[0] : '',
-        start_time: schedule.start_time || '',
-        end_time: schedule.end_time || '',
+        start_date: parseDateString(schedule.start_date),
+        end_date: parseDateString(schedule.end_date),
+        start_time: parseTimeString(schedule.start_time),
+        end_time: parseTimeString(schedule.end_time),
         days_of_week: schedule.days_of_week ? schedule.days_of_week.split(',').map(d => parseInt(d.trim())) : [1,2,3,4,5],
         repeat_type: schedule.repeat_type || 'daily',
         repeat_interval: schedule.repeat_interval || 1,
@@ -152,10 +207,10 @@ const ScheduleForm = () => {
       };
 
       if (formData.start_time) {
-        conflictData.start_time = formData.start_time;
+        conflictData.start_time = formatTime(formData.start_time);
       }
       if (formData.end_time) {
-        conflictData.end_time = formData.end_time;
+        conflictData.end_time = formatTime(formData.end_time);
       }
       if (isEdit) {
         conflictData.exclude_schedule_id = id;
@@ -216,29 +271,12 @@ const ScheduleForm = () => {
         return date.toISOString();
       };
 
-      const formatTime = (time) => {
-        if (!time) return '';
-        if (typeof time === 'string') return time;
-        // Convert Date object to local time string instead of UTC
-        const hours = time.getHours().toString().padStart(2, '0');
-        const minutes = time.getMinutes().toString().padStart(2, '0');
-        const seconds = time.getSeconds().toString().padStart(2, '0');
-        // Create a fake datetime string with local time to avoid UTC conversion
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = (today.getMonth() + 1).toString().padStart(2, '0');
-        const day = today.getDate().toString().padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000Z`;
-      };
-
       const submitData = {
         name: formData.name,
         campaign_id: formData.campaign_id,
         player_id: formData.player_id,
         start_date: formatDate(formData.start_date),
         end_date: formatDate(formData.end_date),
-        start_time: formatTime(formData.start_time),
-        end_time: formatTime(formData.end_time),
         days_of_week: formData.days_of_week.join(','),
         repeat_type: formData.repeat_type,
         repeat_interval: formData.repeat_interval,
@@ -247,6 +285,14 @@ const ScheduleForm = () => {
         content_type: formData.content_type,
         is_active: formData.is_active,
       };
+
+      // Include times only if set, to avoid sending empty strings
+      if (formData.start_time) {
+        submitData.start_time = formatTime(formData.start_time);
+      }
+      if (formData.end_time) {
+        submitData.end_time = formatTime(formData.end_time);
+      }
 
       let response;
       if (isEdit) {
@@ -267,6 +313,25 @@ const ScheduleForm = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper to format a Date object (time) into 'HH:MM:SS' string
+  const formatTime = (time) => {
+    if (!time) return '';
+    if (typeof time === 'string') {
+      const parts = time.split(':');
+      if (parts.length >= 2) {
+        const hh = parts[0].padStart(2, '0');
+        const mm = parts[1].padStart(2, '0');
+        const ss = parts[2] ? parts[2].padStart(2, '0') : '00';
+        return `${hh}:${mm}:${ss}`;
+      }
+      return time;
+    }
+    const hours = time.getHours().toString().padStart(2, '0');
+    const minutes = time.getMinutes().toString().padStart(2, '0');
+    const seconds = time.getSeconds().toString().padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
   };
 
   if (initialLoading) {

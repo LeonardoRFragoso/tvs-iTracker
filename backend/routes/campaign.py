@@ -31,8 +31,39 @@ def list_campaigns():
             page=page, per_page=per_page, error_out=False
         )
         
+        # Enriquecer cada campanha com 'thumbnail' e 'contents' (mínimo para length)
+        enriched = []
+        for c in pagination.items:
+            cdict = c.to_dict()
+            try:
+                # Primeiro conteúdo ativo ordenado para thumbnail
+                first_cc = CampaignContent.query.filter_by(
+                    campaign_id=c.id,
+                    is_active=True
+                ).order_by(CampaignContent.order_index).first()
+                thumb_path = None
+                if first_cc and first_cc.content:
+                    content = first_cc.content
+                    if content.thumbnail_path:
+                        # Não incluir '/api' aqui; o frontend prefixa API_BASE_URL
+                        thumb_path = f"/content/thumbnails/{content.thumbnail_path}"
+                    elif content.file_path and content.content_type == 'image':
+                        thumb_path = f"/content/media/{content.file_path}"
+                cdict['thumbnail'] = thumb_path
+                
+                # Lista mínima de contents para que CampaignList use length com segurança
+                active_cc_list = CampaignContent.query.filter_by(
+                    campaign_id=c.id,
+                    is_active=True
+                ).order_by(CampaignContent.order_index).all()
+                cdict['contents'] = [{'id': cc.content_id} for cc in active_cc_list]
+            except Exception:
+                cdict['thumbnail'] = None
+                cdict['contents'] = []
+            enriched.append(cdict)
+        
         return jsonify({
-            'campaigns': [campaign.to_dict() for campaign in pagination.items],
+            'campaigns': enriched,
             'total': pagination.total,
             'pages': pagination.pages,
             'current_page': page,

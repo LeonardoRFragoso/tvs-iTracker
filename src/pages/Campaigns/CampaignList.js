@@ -26,6 +26,7 @@ import {
   Fade,
   Grow,
   Skeleton,
+  Snackbar,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,9 +42,9 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import axios from 'axios';
+import axios from '../../config/axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = `${axios.defaults.baseURL}/api`;
 
 const CampaignList = () => {
   const navigate = useNavigate();
@@ -58,6 +59,8 @@ const CampaignList = () => {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, campaign: null });
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   useEffect(() => {
     loadCampaigns();
@@ -70,7 +73,9 @@ const CampaignList = () => {
         page,
         per_page: 10,
         search: searchTerm || undefined,
-        status: filterStatus !== '' ? filterStatus : undefined,
+        // Map frontend filter to backend expected param (is_active)
+        ...(filterStatus === 'active' ? { is_active: true } : {}),
+        ...(filterStatus === 'inactive' ? { is_active: false } : {}),
       };
 
       const response = await axios.get(`${API_BASE_URL}/campaigns`, { params });
@@ -97,15 +102,36 @@ const CampaignList = () => {
 
   const handleStatusToggle = async (campaign) => {
     try {
-      const newStatus = campaign.status === 'active' ? 'inactive' : 'active';
+      setActionLoadingId(campaign.id);
+      // Prefer boolean is_active if available; otherwise infer from status string
+      const currentActive = typeof campaign.is_active === 'boolean'
+        ? campaign.is_active
+        : (campaign.status === 'active');
+      const newIsActive = !currentActive;
+
+      // Close menu immediately for visual feedback
+      handleMenuClose();
+
       await axios.put(`${API_BASE_URL}/campaigns/${campaign.id}`, {
-        ...campaign,
-        status: newStatus,
+        is_active: newIsActive,
       });
+
+      setSnackbar({
+        open: true,
+        message: newIsActive ? 'Campanha ativada com sucesso' : 'Campanha pausada com sucesso',
+        severity: 'success',
+      });
+
       loadCampaigns();
     } catch (err) {
-      setError('Erro ao alterar status da campanha');
       console.error('Toggle status error:', err);
+      setSnackbar({
+        open: true,
+        message: 'Erro ao alterar status da campanha',
+        severity: 'error',
+      });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -403,13 +429,13 @@ const CampaignList = () => {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        background: `linear-gradient(135deg, ${getStatusGradient(campaign.status)})`,
+                        background: `linear-gradient(135deg, ${getStatusGradient(campaign.status || (campaign.is_active ? 'active' : 'inactive'))})`,
                         opacity: 0.1,
                       }}
                     />
                     <Chip
-                      label={getStatusText(campaign.status)}
-                      color={getStatusColor(campaign.status)}
+                      label={getStatusText(campaign.status || (campaign.is_active ? 'active' : 'inactive'))}
+                      color={getStatusColor(campaign.status || (campaign.is_active ? 'active' : 'inactive'))}
                       size="small"
                       sx={{
                         position: 'absolute',
@@ -680,6 +706,7 @@ const CampaignList = () => {
         </MenuItem>
         <MenuItem 
           onClick={() => handleStatusToggle(selectedCampaign)}
+          disabled={Boolean(selectedCampaign && actionLoadingId === selectedCampaign.id)}
           sx={{
             borderRadius: '8px',
             mx: 1,
@@ -691,7 +718,9 @@ const CampaignList = () => {
             }
           }}
         >
-          {selectedCampaign?.status === 'active' ? (
+          {(typeof selectedCampaign?.is_active === 'boolean' 
+            ? selectedCampaign.is_active 
+            : selectedCampaign?.status === 'active') ? (
             <>
               <PauseIcon sx={{ mr: 1 }} />
               Pausar
@@ -772,6 +801,25 @@ const CampaignList = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          sx={{
+            borderRadius: '12px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

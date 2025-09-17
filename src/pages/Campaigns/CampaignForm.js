@@ -29,6 +29,8 @@ import {
   Fade,
   Grow,
   Skeleton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -40,6 +42,8 @@ import {
   DragIndicator as DragIcon,
   Campaign as CampaignIcon,
   Schedule as ScheduleIcon,
+  Assessment as AnalyticsIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -65,6 +69,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import axios from 'axios';
+import MultiContentManager from '../../components/Campaign/MultiContentManager';
+import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -88,6 +94,7 @@ const CampaignForm = () => {
   const [success, setSuccess] = useState('');
   const [contentDialog, setContentDialog] = useState(false);
   const [selectedContents, setSelectedContents] = useState([]);
+  const [currentTab, setCurrentTab] = useState(0);
 
   useEffect(() => {
     const initializeForm = async () => {
@@ -353,6 +360,11 @@ const CampaignForm = () => {
         </ListItemSecondaryAction>
       </ListItem>
     );
+  };
+
+  const handleContentChange = () => {
+    // Callback para quando conteúdos são alterados
+    // Pode ser usado para atualizar estatísticas ou recarregar dados
   };
 
   return (
@@ -1049,6 +1061,169 @@ const CampaignForm = () => {
             </Box>
           </DialogActions>
         </Dialog>
+
+        {/* Tabs */}
+        <Paper sx={{ mt: 3 }}>
+          <Tabs 
+            value={currentTab} 
+            onChange={(e, newValue) => setCurrentTab(newValue)}
+            variant="fullWidth"
+          >
+            <Tab icon={<SettingsIcon />} label="Configurações Gerais" />
+            {isEdit && <Tab icon={<ContentIcon />} label="Conteúdos" />}
+            {isEdit && <Tab icon={<AnalyticsIcon />} label="Analytics" />}
+          </Tabs>
+        </Paper>
+
+        {/* Tab Content */}
+        {currentTab === 0 && (
+          <form onSubmit={handleSubmit}>
+            <Grid container spacing={3}>
+              {/* Informações Básicas */}
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Informações Básicas
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Nome da Campanha"
+                          value={formData.name}
+                          onChange={(e) => handleInputChange('name', e.target.value)}
+                          required
+                          disabled={loading}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.is_active}
+                              onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                              disabled={loading}
+                            />
+                          }
+                          label="Campanha Ativa"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          multiline
+                          rows={3}
+                          label="Descrição"
+                          value={formData.description}
+                          onChange={(e) => handleInputChange('description', e.target.value)}
+                          disabled={loading}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Configurações de Reprodução */}
+              <Grid item xs={12}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Configurações de Reprodução
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          select
+                          label="Modo de Reprodução"
+                          value={formData.playback_mode}
+                          onChange={(e) => handleInputChange('playback_mode', e.target.value)}
+                          disabled={loading}
+                        >
+                          <MenuItem value="sequential">Sequencial</MenuItem>
+                          <MenuItem value="random">Aleatório</MenuItem>
+                          <MenuItem value="single">Único</MenuItem>
+                          <MenuItem value="loop">Loop</MenuItem>
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Duração Padrão (segundos)"
+                          value={formData.content_duration}
+                          onChange={(e) => handleInputChange('content_duration', parseInt(e.target.value) || 10)}
+                          disabled={loading}
+                          inputProps={{ min: 1, max: 3600 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.loop_enabled}
+                              onChange={(e) => handleInputChange('loop_enabled', e.target.checked)}
+                              disabled={loading}
+                            />
+                          }
+                          label="Loop Habilitado"
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.shuffle_enabled}
+                              onChange={(e) => handleInputChange('shuffle_enabled', e.target.checked)}
+                              disabled={loading}
+                            />
+                          }
+                          label="Embaralhar Conteúdos"
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Actions */}
+              <Grid item xs={12}>
+                <Box display="flex" gap={2} justifyContent="flex-end">
+                  <Button
+                    variant="outlined"
+                    onClick={() => navigate('/campaigns')}
+                    disabled={loading}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    disabled={loading}
+                  >
+                    {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar Campanha')}
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
+          </form>
+        )}
+
+        {/* Tab de Conteúdos */}
+        {currentTab === 1 && isEdit && (
+          <MultiContentManager 
+            campaignId={id} 
+            onContentChange={handleContentChange}
+          />
+        )}
+
+        {/* Tab de Analytics */}
+        {currentTab === 2 && isEdit && (
+          <CampaignAnalytics campaignId={id} />
+        )}
       </Box>
     </LocalizationProvider>
   );

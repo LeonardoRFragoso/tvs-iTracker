@@ -181,6 +181,7 @@ const PlayerForm = () => {
                       <MenuItem value="web">Web Browser</MenuItem>
                       <MenuItem value="android">Android</MenuItem>
                       <MenuItem value="windows">Windows</MenuItem>
+                      <MenuItem value="chromecast">Chromecast</MenuItem>
                     </TextField>
                   </Grid>
                   <Grid item xs={12}>

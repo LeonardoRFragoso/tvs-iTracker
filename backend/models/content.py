@@ -24,7 +24,7 @@ class Content(db.Model):
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=False)
     
     # Relacionamentos
-    campaign_contents = db.relationship('CampaignContent', backref='content', lazy=True)
+    campaign_contents = db.relationship('CampaignContent', lazy=True)
     
     def to_dict(self):
         return {

@@ -213,32 +213,48 @@ def update_schedule(schedule_id):
             schedule.end_date = datetime.fromisoformat(data['end_date'].replace('Z', '+00:00'))
         
         if 'start_time' in data:
-            if data['start_time']:
+            if data['start_time'] is not None and data['start_time'] != '':
                 time_str = data['start_time']
-                # Handle both datetime format and time format
-                if 'T' in time_str:
-                    # Extract time from datetime string
-                    dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-                    schedule.start_time = dt.time()
-                else:
-                    # Handle direct time format
-                    schedule.start_time = datetime.strptime(time_str, '%H:%M').time()
+                try:
+                    # Handle both datetime format and time-only strings without TZ conversion
+                    if 'T' in time_str:
+                        dt_str = time_str.replace('Z', '').split('T')[1]
+                        if '.' in dt_str:
+                            dt_str = dt_str.split('.')[0]
+                        schedule.start_time = datetime.strptime(dt_str, '%H:%M:%S').time()
+                    else:
+                        # Support both HH:MM:SS and HH:MM inputs
+                        try:
+                            schedule.start_time = datetime.strptime(time_str, '%H:%M:%S').time()
+                        except ValueError:
+                            schedule.start_time = datetime.strptime(time_str, '%H:%M').time()
+                except Exception as e:
+                    return jsonify({'error': f'Erro na conversão de horários (start_time): {str(e)}'}), 400
             else:
-                schedule.start_time = None
+                # Empty string provided: keep current value unchanged to avoid DB NOT NULL violations
+                pass
         
         if 'end_time' in data:
-            if data['end_time']:
+            if data['end_time'] is not None and data['end_time'] != '':
                 time_str = data['end_time']
-                # Handle both datetime format and time format
-                if 'T' in time_str:
-                    # Extract time from datetime string
-                    dt = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-                    schedule.end_time = dt.time()
-                else:
-                    # Handle direct time format
-                    schedule.end_time = datetime.strptime(time_str, '%H:%M').time()
+                try:
+                    # Handle both datetime format and time-only strings without TZ conversion
+                    if 'T' in time_str:
+                        dt_str = time_str.replace('Z', '').split('T')[1]
+                        if '.' in dt_str:
+                            dt_str = dt_str.split('.')[0]
+                        schedule.end_time = datetime.strptime(dt_str, '%H:%M:%S').time()
+                    else:
+                        # Support both HH:MM:SS and HH:MM inputs
+                        try:
+                            schedule.end_time = datetime.strptime(time_str, '%H:%M:%S').time()
+                        except ValueError:
+                            schedule.end_time = datetime.strptime(time_str, '%H:%M').time()
+                except Exception as e:
+                    return jsonify({'error': f'Erro na conversão de horários (end_time): {str(e)}'}), 400
             else:
-                schedule.end_time = None
+                # Empty string provided: keep current value unchanged to avoid DB NOT NULL violations
+                pass
         
         if 'days_of_week' in data:
             schedule.days_of_week = data['days_of_week']
