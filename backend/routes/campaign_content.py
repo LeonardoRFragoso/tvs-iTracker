@@ -87,6 +87,12 @@ def add_content_to_campaign(campaign_id):
         )
         
         db.session.add(campaign_content)
+        # Marcar compilado como stale
+        try:
+            campaign.compiled_stale = True
+            campaign.compiled_video_status = 'stale'
+        except Exception:
+            pass
         db.session.commit()
         
         return jsonify({
@@ -112,6 +118,13 @@ def remove_content_from_campaign(campaign_id, content_id):
             return jsonify({'error': 'Conteúdo não encontrado na campanha'}), 404
         
         db.session.delete(campaign_content)
+        try:
+            campaign = Campaign.query.get(campaign_id)
+            if campaign:
+                campaign.compiled_stale = True
+                campaign.compiled_video_status = 'stale'
+        except Exception:
+            pass
         db.session.commit()
         
         return jsonify({'message': 'Conteúdo removido da campanha com sucesso'}), 200
@@ -154,6 +167,14 @@ def update_campaign_content(campaign_id, content_id):
         if 'playback_settings' in data:
             campaign_content.playback_settings = json.dumps(data['playback_settings']) if data['playback_settings'] else None
         
+        # Marcar compilado como stale
+        try:
+            campaign = Campaign.query.get(campaign_id)
+            if campaign:
+                campaign.compiled_stale = True
+                campaign.compiled_video_status = 'stale'
+        except Exception:
+            pass
         db.session.commit()
         
         return jsonify({
@@ -196,7 +217,15 @@ def reorder_campaign_contents(campaign_id):
             if campaign_content:
                 campaign_content.order_index = order_index
         
-        db.session.commit()
+        # Marcar compilado como stale após reordenar
+        try:
+            campaign = Campaign.query.get(campaign_id)
+            if campaign:
+                campaign.compiled_stale = True
+                campaign.compiled_video_status = 'stale'
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
         
         return jsonify({'message': 'Conteúdos reordenados com sucesso'}), 200
         
@@ -291,13 +320,25 @@ def preview_campaign_playback(campaign_id):
                 'location_filter': json.loads(cc.location_filter) if cc.location_filter else None
             })
         
+        # Compiled metadata
+        compiled = {
+            'status': getattr(campaign, 'compiled_video_status', 'none'),
+            'url': (f"/uploads/{campaign.compiled_video_path}" if getattr(campaign, 'compiled_video_path', None) else None),
+            'duration': getattr(campaign, 'compiled_video_duration', None),
+            'stale': getattr(campaign, 'compiled_stale', True),
+            'updated_at': getattr(campaign, 'compiled_video_updated_at', None).strftime('%d/%m/%Y %H:%M:%S') if getattr(campaign, 'compiled_video_updated_at', None) else None,
+            'resolution': getattr(campaign, 'compiled_video_resolution', None),
+            'fps': getattr(campaign, 'compiled_video_fps', None)
+        }
+        
         return jsonify({
             'preview': preview_data,
             'total_contents': len(preview_data),
             'total_duration': total_duration,
             'playback_mode': campaign.playback_mode,
             'loop_enabled': campaign.loop_enabled,
-            'shuffle_enabled': campaign.shuffle_enabled
+            'shuffle_enabled': campaign.shuffle_enabled,
+            'compiled': compiled
         }), 200
         
     except Exception as e:

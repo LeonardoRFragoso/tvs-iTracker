@@ -66,6 +66,7 @@ jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins=["http://localhost:3000", "http://127.0.0.1:3000"], 
                   async_mode='threading', logger=False, engineio_logger=False, 
                   ping_timeout=60, ping_interval=25)
+app.socketio = socketio
 
 # Importar modelos
 from models.user import User
@@ -357,7 +358,7 @@ def handle_content_download_request(data):
         emit('error', {'message': str(e)})
 
 # Rota para servir arquivos de upload
-@app.route('/uploads/<filename>')
+@app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 

@@ -176,6 +176,20 @@ def create_schedule():
             print(f"[DEBUG] Time conversion error: {e}")
             return jsonify({'error': f'Erro na conversão de horários: {str(e)}'}), 400
         
+        # Suporte a dia inteiro (24/7)
+        is_all_day = bool(data.get('is_all_day', False))
+        if is_all_day:
+            start_time = time(0, 0, 0)
+            end_time = time(23, 59, 59)
+        else:
+            # Garantir que horários estejam definidos (modelo não permite NULL)
+            if start_time is None and end_time is None:
+                # Default amigável: considerar 24/7
+                start_time = time(0, 0, 0)
+                end_time = time(23, 59, 59)
+            elif start_time is None or end_time is None:
+                return jsonify({'error': 'start_time e end_time são obrigatórios (ou marque Dia inteiro 24/7)'}), 400
+        
         print(f"[DEBUG] Creating schedule object...")
         schedule = Schedule(
             name=data['name'],
@@ -287,6 +301,16 @@ def update_schedule(schedule_id):
         if 'is_active' in data:
             schedule.is_active = data['is_active']
         
+        # Suporte a dia inteiro (24/7) em update
+        if 'is_all_day' in data:
+            if bool(data['is_all_day']):
+                schedule.start_time = time(0, 0, 0)
+                schedule.end_time = time(23, 59, 59)
+            else:
+                # Se remover is_all_day, garantir que horários estejam definidos
+                if schedule.start_time is None or schedule.end_time is None:
+                    return jsonify({'error': 'Defina start_time e end_time ao desmarcar Dia inteiro (24/7)'}), 400
+        
         schedule.updated_at = datetime.utcnow()
         db.session.commit()
         
@@ -326,11 +350,8 @@ def delete_schedule(schedule_id):
 def get_active_schedules_for_player(player_id):
     """Obter agendamentos ativos para um player específico"""
     try:
-        now = datetime.utcnow()
-        current_time = now.time()
-        current_weekday = now.weekday() + 1  # 1=segunda, 7=domingo
-        
-        # Buscar agendamentos ativos para o player
+        now = datetime.now()  # usar horário local para consistência
+        # Buscar agendamentos do player cujo período de datas engloba o now
         schedules = Schedule.query.filter(
             Schedule.player_id == player_id,
             Schedule.is_active == True,
@@ -338,20 +359,8 @@ def get_active_schedules_for_player(player_id):
             Schedule.end_date >= now
         ).all()
         
-        active_schedules = []
-        
-        for schedule in schedules:
-            # Verificar dia da semana
-            days_of_week = [int(d) for d in schedule.days_of_week.split(',') if d.strip()]
-            if current_weekday not in days_of_week:
-                continue
-            
-            # Verificar horário se definido (overnight tratado no model is_active_now)
-            if schedule.start_time and schedule.end_time:
-                if not (schedule.start_time <= current_time <= schedule.end_time or schedule.start_time > schedule.end_time and (current_time >= schedule.start_time or current_time <= schedule.end_time)):
-                    continue
-            
-            active_schedules.append(schedule.to_dict())
+        # Delegar a lógica de horário/dia para o model (is_active_now)
+        active_schedules = [s.to_dict() for s in schedules if s.is_active_now()]
         
         return jsonify({
             'schedules': active_schedules,
@@ -419,6 +428,11 @@ def check_schedule_conflicts():
         except Exception as e:
             print(f"[DEBUG] Time conversion error: {e}")
             return jsonify({'error': f'Erro na conversão de horários: {str(e)}'}), 400
+        
+        # Suporte a dia inteiro (24/7) em verificação de conflitos
+        if bool(data.get('is_all_day', False)):
+            start_time = time(0, 0, 0)
+            end_time = time(23, 59, 59)
         
         days_of_week = data.get('days_of_week', '1,2,3,4,5')
         exclude_schedule_id = data.get('exclude_schedule_id')

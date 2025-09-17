@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Card,
@@ -33,6 +33,8 @@ import {
   Tab,
   FormControlLabel,
   Switch,
+  LinearProgress,
+  Divider,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -46,6 +48,11 @@ import {
   Schedule as ScheduleIcon,
   Assessment as AnalyticsIcon,
   Settings as SettingsIcon,
+  KeyboardArrowUp as ArrowUpIcon,
+  KeyboardArrowDown as ArrowDownIcon,
+  PlayArrow as PlayIcon,
+  Pause as PauseIcon,
+  Stop as StopIcon,
 } from '@mui/icons-material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -70,11 +77,12 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import axios from 'axios';
+import axios from '../../config/axios';
 import MultiContentManager from '../../components/Campaign/MultiContentManager';
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = `${axios.defaults.baseURL}/api`;
+const API_HOST = axios.defaults.baseURL;
 
 // BR datetime helpers
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -139,89 +147,153 @@ const CampaignForm = () => {
   const [selectedContents, setSelectedContents] = useState([]);
   const [currentTab, setCurrentTab] = useState(0);
 
+  // Helpers for ordered selection inside the modal
+  const getSelectedContentObjects = () =>
+    selectedContents
+      .map(id => availableContents.find(c => c.id === id))
+      .filter(Boolean);
+
+  const moveSelected = (id, direction) => {
+    setSelectedContents(prev => {
+      const idx = prev.indexOf(id);
+      if (idx === -1) return prev;
+      const newIdx = direction === 'up' ? Math.max(0, idx - 1) : Math.min(prev.length - 1, idx + 1);
+      if (newIdx === idx) return prev;
+      const arr = [...prev];
+      const [item] = arr.splice(idx, 1);
+      arr.splice(newIdx, 0, item);
+      return arr;
+    });
+  };
+
+  const removeFromSelected = (id) => {
+    setSelectedContents(prev => prev.filter(x => x !== id));
+  };
+
+  const getSelectedTotalDuration = () => {
+    return getSelectedContentObjects().reduce((sum, c) => sum + (c?.duration || 0), 0);
+  };
+
+  // Inline preview state (modal)
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewElapsed, setPreviewElapsed] = useState(0);
+  const videoRef = useRef(null);
+
+  // Reset preview when dialog closes or selection changes significantly
   useEffect(() => {
-    const initializeForm = async () => {
-      setInitialLoading(true);
-      await loadAvailableContents();
-      if (isEdit) {
-        await loadCampaign();
+    setPreviewPlaying(false);
+    setPreviewIndex(0);
+    setPreviewElapsed(0);
+  }, [contentDialog, selectedContents.length]);
+
+  // Playback tick (images only). Videos are driven by <video> events.
+  useEffect(() => {
+    if (!previewPlaying) return;
+    const list = getSelectedContentObjects();
+    if (list.length === 0) return;
+    const current = list[previewIndex] || null;
+    const type = getTypeFor(current);
+    if (type === 'video') {
+      // Let the <video> element drive progress
+      const el = videoRef.current;
+      if (el) {
+        try { el.play(); } catch (_) {}
       }
-      setInitialLoading(false);
+      return;
+    }
+    const currentDur = getContentDuration(current);
+    if (!current || currentDur <= 0) return;
+
+    const timer = setInterval(() => {
+      setPreviewElapsed((prev) => {
+        if (prev + 1 >= currentDur) {
+          const next = previewIndex + 1;
+          if (next >= list.length) {
+            setPreviewPlaying(false);
+            setPreviewIndex(0);
+            return 0;
+          }
+          setPreviewIndex(next);
+          return 0;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [previewPlaying, previewIndex, selectedContents, availableContents, formData.content_duration]);
+
+  // Keep video element play/pause in sync with preview state
+  useEffect(() => {
+    const list = getSelectedContentObjects();
+    const current = list[previewIndex] || null;
+    const type = getTypeFor(current);
+    const el = videoRef.current;
+    if (!el) return;
+    if (type === 'video') {
+      if (previewPlaying) {
+        try { el.play(); } catch (_) {}
+      } else {
+        try { el.pause(); } catch (_) {}
+      }
+    } else {
+      // Not a video, ensure any current video is paused
+      try { el.pause(); } catch (_) {}
+    }
+  }, [previewPlaying, previewIndex, selectedContents]);
+
+  // Reset timers and seek to start when switching items
+  useEffect(() => {
+    setPreviewElapsed(0);
+    const list = getSelectedContentObjects();
+    const current = list[previewIndex] || null;
+    if (getTypeFor(current) === 'video' && videoRef.current) {
+      try {
+        videoRef.current.currentTime = 0;
+        if (previewPlaying) videoRef.current.play();
+      } catch (_) {}
+    } else if (videoRef.current) {
+      try { videoRef.current.pause(); } catch (_) {}
+    }
+  }, [previewIndex]);
+
+  // Wire timeupdate/ended to progress and auto-advance for videos
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const onTimeUpdate = () => {
+      setPreviewElapsed(Math.floor(el.currentTime || 0));
     };
-    
-    initializeForm();
-  }, [id, isEdit]);
+    const onEnded = () => {
+      const list = getSelectedContentObjects();
+      const next = previewIndex + 1;
+      if (next >= list.length) {
+        setPreviewPlaying(false);
+        setPreviewIndex(0);
+        setPreviewElapsed(0);
+      } else {
+        setPreviewIndex(next);
+        setPreviewElapsed(0);
+      }
+    };
+    el.addEventListener('timeupdate', onTimeUpdate);
+    el.addEventListener('ended', onEnded);
+    return () => {
+      el.removeEventListener('timeupdate', onTimeUpdate);
+      el.removeEventListener('ended', onEnded);
+    };
+  }, [previewIndex]);
 
-  const loadCampaign = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/campaigns/${id}`);
-      const campaign = response.data.campaign; 
-      setFormData({
-        name: campaign.name,
-        description: campaign.description || '',
-        status: campaign.is_active ? 'active' : 'inactive',
-        is_active: !!campaign.is_active,
-        start_date: campaign.start_date ? parseDateTimeFlexible(campaign.start_date) : null,
-        end_date: campaign.end_date ? parseDateTimeFlexible(campaign.end_date) : null,
-        playback_mode: campaign.playback_mode || 'sequential',
-        content_duration: typeof campaign.content_duration === 'number' ? campaign.content_duration : 10,
-        loop_enabled: !!campaign.loop_enabled,
-        shuffle_enabled: !!campaign.shuffle_enabled,
-      });
-      setCampaignContents(campaign.contents || []);
-    } catch (err) {
-      setError('Erro ao carregar campanha');
-      console.error('Load campaign error:', err);
-    }
-  };
-
-  const loadAvailableContents = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/content`, {
-        params: { per_page: 100 }
-      });
-      setAvailableContents(response.data.contents || []);
-    } catch (err) {
-      console.error('Load contents error:', err);
-      setAvailableContents([]);
-    }
-  };
-
-  const handleInputChange = (arg1, arg2) => {
-    // Supports both onChange(event) and onChange(name, value)
-    if (typeof arg1 === 'string') {
-      const name = arg1;
-      const value = arg2;
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
-    } else if (arg1 && arg1.target) {
-      const { name, value, type, checked } = arg1.target;
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value,
-      }));
-    }
-  };
-
-  const handleDateChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
+  // Add: Add selected contents to campaign respecting the chosen order
   const handleAddContents = () => {
-    const contentsToAdd = availableContents.filter(content => 
-      selectedContents.includes(content.id) && 
-      !campaignContents.find(cc => cc.id === content.id)
-    );
-    
+    const contentsToAdd = selectedContents
+      .map(id => availableContents.find(c => c.id === id))
+      .filter(content => content && !campaignContents.find(cc => cc.id === content.id));
+
     const newCampaignContents = contentsToAdd.map((content, index) => ({
       ...content,
       order: campaignContents.length + index,
-      duration: content.duration || 10,
+      duration: content?.duration ?? formData?.content_duration ?? 10,
     }));
 
     setCampaignContents(prev => [...prev, ...newCampaignContents]);
@@ -229,203 +301,243 @@ const CampaignForm = () => {
     setContentDialog(false);
   };
 
-  const handleRemoveContent = (contentId) => {
-    setCampaignContents(prev => 
-      prev.filter(content => content.id !== contentId)
-        .map((content, index) => ({ ...content, order: index }))
-    );
+  // DnD sensors for campaign content reordering (inline list)
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // Helpers to normalize content fields
+  const getTypeFor = (content) => {
+    if (!content) return null;
+    return content.type || content.content_type || null;
+  };
+  const getThumbUrlFor = (content) => {
+    if (!content) return null;
+    const t = content.thumbnail_path || content.thumbnail;
+    if (t) return `${API_HOST}/content/thumbnails/${t}`;
+    const fp = content.file_path || content.path;
+    const type = getTypeFor(content);
+    if (fp && type === 'image') return `${API_HOST}/api/content/media/${fp}`;
+    return null;
+  };
+  const getMediaUrlFor = (content) => {
+    if (!content) return null;
+    const fp = content.file_path || content.path;
+    if (fp) return `${API_HOST}/api/content/media/${fp}`;
+    return null;
+  };
+  const formatDuration = (seconds) => {
+    if (!seconds && seconds !== 0) return '0:00';
+    const s = Math.max(0, parseInt(seconds, 10) || 0);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  };
+  const getContentDuration = (content) => {
+    if (!content) return 0;
+    const d = content.duration;
+    return (typeof d === 'number' && d > 0) ? d : (parseInt(formData?.content_duration, 10) || 10);
+  };
+  const getTotalDuration = () => {
+    return (campaignContents || []).reduce((sum, c) => sum + (c?.duration || 0), 0);
   };
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-
-    if (active.id !== over?.id) {
-      setCampaignContents((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over.id);
-        
-        const reorderedItems = arrayMove(items, oldIndex, newIndex);
-        
-        // Update order property
-        return reorderedItems.map((item, index) => ({
-          ...item,
-          order: index,
-        }));
-      });
+  // Generic input handlers
+  const handleInputChange = (arg1, arg2) => {
+    // Supports both handleInputChange(event) and handleInputChange('field', value)
+    if (typeof arg1 === 'string') {
+      const key = arg1;
+      const value = arg2;
+      setFormData((prev) => ({ ...prev, [key]: value }));
+      return;
     }
+    const e = arg1;
+    if (!e || !e.target) return;
+    const { name, value, type, checked } = e.target;
+    if (!name) return;
+    setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
+  const handleDateChange = (field, value) => {
+    const d = value instanceof Date ? value : parseDateTimeFlexible(value);
+    setFormData((prev) => ({ ...prev, [field]: d }));
+  };
+
+  // DnD reorder handler for inline list
+  const handleDragEnd = (event) => {
+    const { active, over } = event || {};
+    if (!active || !over || active.id === over.id) return;
+    setCampaignContents((items) => {
+      const oldIndex = items.findIndex((i) => i.id === active.id);
+      const newIndex = items.findIndex((i) => i.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return items;
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  };
+
+  const handleRemoveContent = (id) => {
+    setCampaignContents((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  // Submit handler
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     setError('');
     setSuccess('');
-    setLoading(true);
-
     try {
-      // Validate required fields
-      if (!formData.name) {
-        setError('Nome da campanha é obrigatório');
-        setLoading(false);
+      // Client-side validation
+      const name = (formData.name || '').trim();
+      const sd = formData.start_date ? parseDateTimeFlexible(formData.start_date) : null;
+      const ed = formData.end_date ? parseDateTimeFlexible(formData.end_date) : null;
+      if (!name) {
+        setError('Nome da campanha é obrigatório.');
+        return;
+      }
+      if (!sd || !ed) {
+        setError('Data de início e data de fim são obrigatórias.');
+        return;
+      }
+      if (sd >= ed) {
+        setError('Data de início deve ser anterior à data de fim.');
         return;
       }
 
-      if (!formData.start_date) {
-        setError('Data de início é obrigatória');
-        setLoading(false);
-        return;
-      }
-
-      if (!formData.end_date) {
-        setError('Data de fim é obrigatória');
-        setLoading(false);
-        return;
-      }
-
-      if (formData.start_date >= formData.end_date) {
-        setError('Data de início deve ser anterior à data de fim');
-        setLoading(false);
-        return;
-      }
+      setLoading(true);
 
       const submitData = {
-        ...formData,
-        start_date: formData.start_date ? toBRDateTime(formData.start_date) : null,
-        end_date: formData.end_date ? toBRDateTime(formData.end_date) : null,
-        is_active: typeof formData.is_active === 'boolean' ? formData.is_active : formData.status === 'active',
-        content_ids: campaignContents.map(content => content.id),
+        name,
+        description: formData.description || '',
+        start_date: toBRDateTime(sd),
+        end_date: toBRDateTime(ed),
+        is_active: !!formData.is_active,
+        playback_mode: formData.playback_mode || 'sequential',
+        content_duration: parseInt(formData.content_duration, 10) || 10,
+        loop_enabled: !!formData.loop_enabled,
+        shuffle_enabled: !!formData.shuffle_enabled,
       };
-      
-      // Remove the status field since backend doesn't expect it
-      delete submitData.status;
 
-      console.log('[DEBUG] Submit data being sent:', submitData);
-
-      let response;
-      if (isEdit) {
-        response = await axios.put(`${API_BASE_URL}/campaigns/${id}`, submitData);
-      } else {
-        response = await axios.post(`${API_BASE_URL}/campaigns`, submitData);
+      // Include content_ids only for creation flow
+      if (!isEdit && campaignContents && campaignContents.length > 0) {
+        submitData.content_ids = campaignContents.map((c) => c.id);
       }
 
-      setSuccess(isEdit ? 'Campanha atualizada com sucesso!' : 'Campanha criada com sucesso!');
-      
-      setTimeout(() => {
-        navigate('/campaigns');
-      }, 2000);
+      // Debug log AFTER defining submitData (avoid reference errors)
+      // console.log('Submitting campaign:', submitData);
 
+      if (isEdit) {
+        await axios.put(`${API_BASE_URL}/campaigns/${id}`, submitData);
+        setSuccess('Campanha atualizada com sucesso!');
+      } else {
+        await axios.post(`${API_BASE_URL}/campaigns`, submitData);
+        setSuccess('Campanha criada com sucesso!');
+      }
+
+      // Navigate back after short delay
+      setTimeout(() => navigate('/campaigns'), 600);
     } catch (err) {
-      console.error('Submit error:', err);
-      console.error('Error response data:', err.response?.data);
-      console.error('Error response status:', err.response?.status);
-      setError(err.response?.data?.error || 'Erro ao salvar campanha');
+      const msg = err.response?.data?.error || 'Erro ao salvar campanha';
+      setError(msg);
+      console.error('Campaign submit error:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDuration = (seconds) => {
-    if (!seconds) return '0s';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  // Data loading
+  const loadAvailableContents = async () => {
+    try {
+      const resp = await axios.get(`${API_BASE_URL}/content?per_page=1000`);
+      setAvailableContents(resp.data?.contents || []);
+    } catch (err) {
+      console.error('Erro ao carregar conteúdos disponíveis:', err);
+    }
   };
 
-  const getTotalDuration = () => {
-    return campaignContents.reduce((total, item) => {
-      const dur = item?.duration ?? item?.duration_override ?? item?.content?.duration ?? 0;
-      return total + (typeof dur === 'number' ? dur : 0);
-    }, 0);
+  const loadCampaignIfEdit = async () => {
+    if (!isEdit) return;
+    try {
+      const resp = await axios.get(`${API_BASE_URL}/campaigns/${id}`);
+      const c = resp.data?.campaign || null;
+      if (c) {
+        setFormData((prev) => ({
+          ...prev,
+          name: c.name || '',
+          description: c.description || '',
+          is_active: !!c.is_active,
+          start_date: parseDateTimeFlexible(c.start_date),
+          end_date: parseDateTimeFlexible(c.end_date),
+          playback_mode: c.playback_mode || 'sequential',
+          content_duration: parseInt(c.content_duration, 10) || 10,
+          loop_enabled: !!c.loop_enabled,
+          shuffle_enabled: !!c.shuffle_enabled,
+        }));
+        // Map existing contents for inline list visualization (optional)
+        const cc = Array.isArray(c.contents) ? c.contents : [];
+        const mapped = cc
+          .map((ccItem) => ccItem?.content)
+          .filter(Boolean)
+          .map((content, idx) => ({ ...content, order: idx, duration: content?.duration }));
+        setCampaignContents(mapped);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar campanha:', err);
+    }
   };
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  const handleContentChange = () => {
+    // When content changes in MultiContentManager, refresh inline list state
+    loadCampaignIfEdit();
+  };
 
-  // Sortable Item Component
+  useEffect(() => {
+    const init = async () => {
+      await Promise.all([
+        loadAvailableContents(),
+        loadCampaignIfEdit(),
+      ]);
+      setInitialLoading(false);
+    };
+    init();
+  }, [id]);
+
+  // Sortable item for inline list
   const SortableContentItem = ({ content, onRemove }) => {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: content.id });
-
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: content.id });
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
-      opacity: isDragging ? 0.5 : 1,
+      background: isDragging ? 'rgba(255, 119, 48, 0.08)' : 'transparent',
+      borderRadius: 8,
+      border: '1px solid',
+      borderColor: 'divider',
+      marginBottom: 8,
     };
-
     return (
-      <ListItem
-        ref={setNodeRef}
-        style={style}
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 2,
-          mb: 1,
-          background: isDragging 
-            ? (theme) => theme.palette.mode === 'dark'
-              ? 'rgba(255, 119, 48, 0.1)'
-              : 'rgba(33, 150, 243, 0.1)'
-            : 'transparent',
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            transition: 'transform 0.2s ease-in-out',
-            boxShadow: (theme) => theme.shadows[4],
-          },
-        }}
-      >
-        <Box
-          {...attributes}
-          {...listeners}
-          sx={{ mr: 1, cursor: 'grab' }}
-        >
-          <DragIcon color="action" />
-        </Box>
+      <ListItem ref={setNodeRef} style={style} {...attributes}>
         <ListItemAvatar>
-          <Avatar
-            sx={{
-              background: (theme) => theme.palette.mode === 'dark'
-                ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-            }}
-          >
-            <ContentIcon />
-          </Avatar>
+          {getThumbUrlFor(content) ? (
+            <Avatar variant="rounded" src={getThumbUrlFor(content)} alt={content.title} />
+          ) : (
+            <Avatar>
+              <ContentIcon fontSize="small" />
+            </Avatar>
+          )}
         </ListItemAvatar>
         <ListItemText
-          primary={content.title || content?.content?.title || 'Sem título'}
-          secondary={`${formatDuration(content.duration ?? content.duration_override ?? content?.content?.duration ?? 0)} • ${(content.type || content?.content?.content_type || 'desconhecido')}`}
+          primary={content.title || 'Conteúdo'}
+          secondary={`${getTypeFor(content) || 'desconhecido'} • ${formatDuration(content.duration || 0)}`}
         />
+        <Box {...listeners} sx={{ mr: 1, cursor: 'grab', color: 'text.secondary' }}>
+          <DragIcon />
+        </Box>
         <ListItemSecondaryAction>
-          <IconButton
-            edge="end"
-            onClick={() => onRemove(content.id)}
-            sx={{
-              '&:hover': {
-                color: 'error.main',
-                transform: 'scale(1.1)',
-                transition: 'all 0.2s ease-in-out',
-              },
-            }}
-          >
+          <IconButton size="small" color="error" onClick={() => onRemove(content.id)}>
             <DeleteIcon />
           </IconButton>
         </ListItemSecondaryAction>
       </ListItem>
     );
-  };
-
-  const handleContentChange = () => {
-    // Callback para quando conteúdos são alterados
-    // Pode ser usado para atualizar estatísticas ou recarregar dados
   };
 
   return (
@@ -562,6 +674,7 @@ const CampaignForm = () => {
                             value={formData.name}
                             onChange={handleInputChange}
                             required
+                            disabled={loading}
                             sx={{
                               '& .MuiOutlinedInput-root': {
                                 borderRadius: 2,
@@ -826,7 +939,7 @@ const CampaignForm = () => {
                     <Button
                       type="submit"
                       variant="contained"
-                      disabled={loading || !formData.name}
+                      disabled={loading || !formData.name || !formData.start_date || !formData.end_date}
                       startIcon={<SaveIcon />}
                       sx={{
                         borderRadius: 2,
@@ -900,24 +1013,13 @@ const CampaignForm = () => {
               </Typography>
             </Box>
           </DialogTitle>
-          <DialogContent sx={{ p: 0, minHeight: '400px', maxHeight: '500px', overflow: 'auto' }}>
+          <DialogContent sx={{ p: 0 }}>
             {availableContents.filter(content => !campaignContents.find(cc => cc.id === content.id)).length === 0 ? (
               <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                py: 8,
-                px: 4,
-                textAlign: 'center'
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                py: 8, px: 4, textAlign: 'center'
               }}>
-                <Avatar sx={{ 
-                  width: 80, 
-                  height: 80, 
-                  mb: 3,
-                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                  opacity: 0.7
-                }}>
+                <Avatar sx={{ width: 80, height: 80, mb: 3, background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', opacity: 0.7 }}>
                   <ContentIcon sx={{ fontSize: 40 }} />
                 </Avatar>
                 <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
@@ -930,198 +1032,348 @@ const CampaignForm = () => {
             ) : (
               <Box sx={{ p: 2 }}>
                 <Grid container spacing={2}>
-                  {availableContents
-                    .filter(content => !campaignContents.find(cc => cc.id === content.id))
-                    .map((content, index) => (
-                      <Grid item xs={12} sm={6} key={content.id}>
-                        <Grow in timeout={300 + index * 50}>
-                          <Card
-                            sx={{
-                              cursor: 'pointer',
-                              transition: 'all 0.3s ease',
-                              border: selectedContents.includes(content.id) 
-                                ? '2px solid #ff7730' 
-                                : '2px solid transparent',
-                              background: (theme) => selectedContents.includes(content.id)
-                                ? (theme.palette.mode === 'dark' 
-                                  ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                                  : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.02) 100%)')
-                                : (theme.palette.mode === 'dark' 
-                                  ? 'rgba(40, 40, 40, 0.8)'
-                                  : 'rgba(255, 255, 255, 0.8)'),
-                              '&:hover': {
-                                transform: 'translateY(-4px)',
-                                boxShadow: '0 12px 24px rgba(255, 119, 48, 0.2)',
-                                border: '2px solid rgba(255, 119, 48, 0.5)',
-                              },
-                            }}
-                            onClick={() => {
-                              if (selectedContents.includes(content.id)) {
-                                setSelectedContents(prev => prev.filter(id => id !== content.id));
-                              } else {
-                                setSelectedContents(prev => [...prev, content.id]);
-                              }
-                            }}
-                          >
-                            <CardContent sx={{ p: 3 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                                <Checkbox
-                                  checked={selectedContents.includes(content.id)}
+                  {/* Coluna esquerda: lista de conteúdos disponíveis */}
+                  <Grid item xs={12} md={7}>
+                    <Box sx={{ maxHeight: 460, overflow: 'auto', pr: 1 }}>
+                      <Grid container spacing={2}>
+                        {availableContents
+                          .filter(content => !campaignContents.find(cc => cc.id === content.id))
+                          .map((content, index) => (
+                            <Grid item xs={12} sm={6} key={content.id}>
+                              <Grow in timeout={300 + index * 50}>
+                                <Card
                                   sx={{
-                                    color: '#ff7730',
-                                    '&.Mui-checked': {
-                                      color: '#ff7730',
-                                    },
-                                    mt: -1,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s ease',
+                                    border: selectedContents.includes(content.id) ? '2px solid #ff7730' : '2px solid transparent',
+                                    background: (theme) => selectedContents.includes(content.id)
+                                      ? (theme.palette.mode === 'dark' 
+                                        ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                                        : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.02) 100%)')
+                                      : (theme.palette.mode === 'dark' 
+                                        ? 'rgba(40, 40, 40, 0.8)'
+                                        : 'rgba(255, 255, 255, 0.8)'),
+                                    '&:hover': { transform: 'translateY(-4px)', boxShadow: '0 12px 24px rgba(255, 119, 48, 0.2)', border: '2px solid rgba(255, 119, 48, 0.5)' },
                                   }}
-                                />
-                                <Avatar
-                                  sx={{
-                                    width: 56,
-                                    height: 56,
-                                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                                    boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)',
+                                  onClick={() => {
+                                    if (selectedContents.includes(content.id)) {
+                                      setSelectedContents(prev => prev.filter(id => id !== content.id));
+                                    } else {
+                                      setSelectedContents(prev => [...prev, content.id]);
+                                    }
                                   }}
                                 >
-                                  <ContentIcon sx={{ fontSize: 28 }} />
-                                </Avatar>
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                  <Typography 
-                                    variant="h6" 
-                                    sx={{ 
-                                      fontWeight: 600, 
-                                      mb: 1,
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                  >
-                                    {content.title}
-                                  </Typography>
-                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                                    <Chip 
-                                      label={formatDuration(content.duration)} 
-                                      size="small"
-                                      sx={{ 
-                                        background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                                        color: 'white',
-                                        fontWeight: 600,
-                                        fontSize: '0.75rem'
-                                      }}
-                                    />
-                                    <Chip 
-                                      label={content.type} 
-                                      size="small"
-                                      variant="outlined"
-                                      sx={{ 
-                                        borderColor: '#ff7730',
-                                        color: '#ff7730',
-                                        fontWeight: 600,
-                                        fontSize: '0.75rem'
-                                      }}
-                                    />
-                                    <Chip 
-                                      label={content.category || 'Sem categoria'} 
-                                      size="small"
-                                      sx={{ 
-                                        backgroundColor: (theme) => theme.palette.mode === 'dark' 
-                                          ? 'rgba(255, 255, 255, 0.1)' 
-                                          : 'rgba(0, 0, 0, 0.05)',
-                                        fontSize: '0.75rem'
-                                      }}
-                                    />
-                                  </Box>
-                                  {content.description && (
-                                    <Typography 
-                                      variant="body2" 
-                                      color="text.secondary"
-                                      sx={{ 
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 2,
-                                        WebkitBoxOrient: 'vertical',
-                                        lineHeight: 1.4
-                                      }}
-                                    >
-                                      {content.description}
-                                    </Typography>
-                                  )}
+                                  <CardContent sx={{ p: 3 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                                      <Checkbox
+                                        checked={selectedContents.includes(content.id)}
+                                        sx={{ color: '#ff7730', '&.Mui-checked': { color: '#ff7730' }, mt: -1 }}
+                                      />
+                                      {getThumbUrlFor(content) ? (
+                                        <Box
+                                          component="img"
+                                          src={getThumbUrlFor(content)}
+                                          alt={content.title}
+                                          sx={{
+                                            width: 56,
+                                            height: 56,
+                                            borderRadius: 1,
+                                            objectFit: 'cover',
+                                            boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)'
+                                          }}
+                                        />
+                                      ) : (
+                                        <Avatar sx={{ width: 56, height: 56, background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)' }}>
+                                          <ContentIcon sx={{ fontSize: 28 }} />
+                                        </Avatar>
+                                      )}
+                                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                                        <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {content.title}
+                                        </Typography>
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                                          <Chip label={formatDuration(content.duration)} size="small" sx={{ background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', color: 'white', fontWeight: 600, fontSize: '0.75rem' }} />
+                                          <Chip label={content.type} size="small" variant="outlined" sx={{ borderColor: '#ff7730', color: '#ff7730', fontWeight: 600, fontSize: '0.75rem' }} />
+                                          <Chip label={content.category || 'Sem categoria'} size="small" sx={{ backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)', fontSize: '0.75rem' }} />
+                                        </Box>
+                                        {content.description && (
+                                          <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.4 }}>
+                                            {content.description}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Box>
+                                  </CardContent>
+                                </Card>
+                              </Grow>
+                            </Grid>
+                          ))}
+                        </Grid>
+                      </Box>
+                    </Grid>
+
+                    {/* Coluna direita: fila ordenável dos selecionados */}
+                    <Grid item xs={12} md={5}>
+                      <Paper sx={{ p: 2, height: '100%', maxHeight: 460, overflow: 'auto', borderRadius: 2 }}>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                          <Typography variant="subtitle1" fontWeight={600}>
+                            Selecionados ({selectedContents.length})
+                          </Typography>
+                          <Chip label={`Duração: ${formatDuration(getSelectedTotalDuration())}`} size="small" />
+                        </Box>
+                        {selectedContents.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">Nenhum conteúdo selecionado</Typography>
+                        ) : (
+                          <List dense>
+                            {selectedContents.map((id, index) => {
+                              const content = availableContents.find(c => c.id === id);
+                              if (!content) return null;
+                              return (
+                                <ListItem key={id} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 1 }}>
+                                  <ListItemAvatar>
+                                    {getThumbUrlFor(content) ? (
+                                      <Avatar
+                                        variant="rounded"
+                                        src={getThumbUrlFor(content)}
+                                        alt={content.title}
+                                        sx={{ width: 40, height: 40 }}
+                                      />
+                                    ) : (
+                                      <Avatar sx={{ width: 40, height: 40 }}>
+                                        <ContentIcon fontSize="small" />
+                                      </Avatar>
+                                    )}
+                                  </ListItemAvatar>
+                                  <ListItemText
+                                    primary={`${index + 1}. ${content.title}`}
+                                    secondary={`${formatDuration(content.duration || 0)} • ${getTypeFor(content) || 'desconhecido'}`}
+                                  />
+                                  <IconButton size="small" onClick={() => moveSelected(id, 'up')} disabled={index === 0}>
+                                    <ArrowUpIcon fontSize="small" />
+                                  </IconButton>
+                                  <IconButton size="small" onClick={() => moveSelected(id, 'down')} disabled={index === selectedContents.length - 1}>
+                                    <ArrowDownIcon fontSize="small" />
+                                  </IconButton>
+                                  <IconButton size="small" onClick={() => removeFromSelected(id)}>
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </ListItem>
+                              );
+                            })}
+                          </List>
+                        )}
+                      </Paper>
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ 
+              p: 4, 
+              background: (theme) => theme.palette.mode === 'dark' 
+                ? 'rgba(40, 40, 40, 0.8)' 
+                : 'rgba(250, 250, 250, 0.8)',
+              borderTop: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+              gap: 2,
+              justifyContent: 'space-between'
+            }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                {selectedContents.length > 0 
+                  ? `${selectedContents.length} conteúdo${selectedContents.length > 1 ? 's' : ''} selecionado${selectedContents.length > 1 ? 's' : ''} • Duração: ${formatDuration(getSelectedTotalDuration())}`
+                  : 'Nenhum conteúdo selecionado'
+                }
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  onClick={() => setContentDialog(false)}
+                  variant="outlined"
+                  sx={{
+                    borderRadius: '12px',
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    borderColor: '#ff7730',
+                    color: '#ff7730',
+                    '&:hover': {
+                      borderColor: '#ff9800',
+                      background: 'rgba(255, 119, 48, 0.05)',
+                      transform: 'translateY(-2px)',
+                    },
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleAddContents}
+                  variant="contained"
+                  disabled={selectedContents.length === 0}
+                  sx={{
+                    borderRadius: '12px',
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 8px 20px rgba(255, 119, 48, 0.4)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(0, 0, 0, 0.12)',
+                      color: 'rgba(0, 0, 0, 0.26)',
+                    },
+                  }}
+                >
+                  Adicionar {selectedContents.length > 0 && `(${selectedContents.length})`}
+                </Button>
+              </Box>
+            </DialogActions>
+
+            {/* Inline Preview */}
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1, px: 4 }}>
+              Preview
+            </Typography>
+            {selectedContents.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 4 }}>
+                Selecione conteúdos para pré-visualizar.
+              </Typography>
+            ) : (
+              <Box sx={{ p: 4 }}>
+                {(() => {
+                  const selected = getSelectedContentObjects();
+                  const current = selected[previewIndex] || null;
+                  const currentDur = getContentDuration(current);
+                  const elapsedBefore = selected.slice(0, previewIndex).reduce((s, c) => s + getContentDuration(c), 0);
+                  const totalDur = selected.reduce((s, c) => s + getContentDuration(c), 0) || 0;
+                  const itemPct = currentDur ? Math.min(100, Math.round((previewElapsed / currentDur) * 100)) : 0;
+                  const totalPct = totalDur ? Math.min(100, Math.round(((elapsedBefore + previewElapsed) / totalDur) * 100)) : 0;
+                  const currentType = getTypeFor(current);
+                  const thumbUrl = getThumbUrlFor(current);
+                  const mediaUrl = getMediaUrlFor(current);
+                  return (
+                    <Box>
+                      {/* Media area */}
+                      <Box sx={{
+                        width: '100%',
+                        height: 220,
+                        mb: 1,
+                        borderRadius: 1,
+                        overflow: 'hidden',
+                        bgcolor: 'black',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {currentType === 'video' && mediaUrl ? (
+                          <video
+                            key={mediaUrl}
+                            ref={videoRef}
+                            src={mediaUrl}
+                            poster={thumbUrl || undefined}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            controls
+                            muted
+                            playsInline
+                            preload="auto"
+                            autoPlay={previewPlaying}
+                            onLoadedMetadata={(e) => {
+                              try { e.currentTarget.currentTime = 0; } catch (_) {}
+                              if (previewPlaying) {
+                                try { e.currentTarget.play(); } catch (_) {}
+                              }
+                              setPreviewElapsed(0);
+                            }}
+                          />
+                        ) : thumbUrl || mediaUrl ? (
+                          <img
+                            src={thumbUrl || mediaUrl}
+                            alt={current?.title || 'preview'}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Box sx={{ color: 'text.secondary' }}>Sem mídia para pré-visualizar</Box>
+                        )}
+                      </Box>
+                      {/* Filmstrip with thumbnails of the sequence */}
+                      <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, mb: 1 }}>
+                        {selected.map((c, idx) => {
+                          const t = getThumbUrlFor(c) || getMediaUrlFor(c);
+                          return (
+                            <Box
+                              key={c?.id || idx}
+                              onClick={() => { setPreviewIndex(idx); setPreviewElapsed(0); setPreviewPlaying(true); }}
+                              sx={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 1,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                outline: idx === previewIndex ? '2px solid #ff7730' : '1px solid',
+                                outlineColor: (theme) => idx === previewIndex ? '#ff7730' : (theme.palette.divider),
+                                bgcolor: 'black',
+                                flex: '0 0 auto',
+                              }}
+                            >
+                              {t ? (
+                                <Box component="img" src={t} alt={c?.title || ''} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
+                                  <ContentIcon fontSize="small" />
                                 </Box>
-                              </Box>
-                            </CardContent>
-                          </Card>
-                        </Grow>
-                      </Grid>
-                    ))}
-                </Grid>
+                              )}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={0.5}>
+                        <Typography variant="body2" fontWeight={600}>
+                          {current ? `${previewIndex + 1}/${selected.length} • ${current.title}` : '—'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {(() => {
+                            const videoDur = (currentType === 'video' && videoRef.current && !Number.isNaN(videoRef.current.duration)) ? Math.floor(videoRef.current.duration) : currentDur;
+                            return current ? `${previewElapsed}s / ${videoDur}s` : '';
+                          })()}
+                        </Typography>
+                      </Box>
+                      {(() => {
+                        const effectiveDur = (currentType === 'video' && videoRef.current && !Number.isNaN(videoRef.current.duration)) ? Math.floor(videoRef.current.duration) : currentDur;
+                        const effItemPct = effectiveDur ? Math.min(100, Math.round((previewElapsed / effectiveDur) * 100)) : 0;
+                        const elapsedBefore = selected.slice(0, previewIndex).reduce((s, c) => s + getContentDuration(c), 0);
+                        const totalDur = selected.reduce((s, c) => s + getContentDuration(c), 0) || 0;
+                        const effTotalPct = totalDur ? Math.min(100, Math.round(((elapsedBefore + Math.min(previewElapsed, effectiveDur)) / totalDur) * 100)) : 0;
+                        return (
+                          <>
+                            <LinearProgress variant="determinate" value={effItemPct} sx={{ height: 8, borderRadius: 1, mb: 1 }} />
+                            <LinearProgress variant="determinate" value={effTotalPct} sx={{ height: 6, borderRadius: 1, mb: 1, bgcolor: 'action.hover' }} />
+                          </>
+                        );
+                      })()}
+                      <Box display="flex" gap={1}>
+                        {!previewPlaying ? (
+                          <Button size="small" startIcon={<PlayIcon />} onClick={() => setPreviewPlaying(true)} disabled={selected.length === 0}>
+                            Reproduzir
+                          </Button>
+                        ) : (
+                          <Button size="small" startIcon={<PauseIcon />} onClick={() => setPreviewPlaying(false)}>
+                            Pausar
+                          </Button>
+                        )}
+                        <Button size="small" startIcon={<StopIcon />} onClick={() => { setPreviewPlaying(false); setPreviewIndex(0); setPreviewElapsed(0); }}>
+                          Parar
+                        </Button>
+                      </Box>
+                    </Box>
+                  );
+                })()}
               </Box>
             )}
-          </DialogContent>
-          <DialogActions sx={{ 
-            p: 4, 
-            background: (theme) => theme.palette.mode === 'dark' 
-              ? 'rgba(40, 40, 40, 0.8)' 
-              : 'rgba(250, 250, 250, 0.8)',
-            borderTop: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
-            gap: 2,
-            justifyContent: 'space-between'
-          }}>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-              {selectedContents.length > 0 
-                ? `${selectedContents.length} conteúdo${selectedContents.length > 1 ? 's' : ''} selecionado${selectedContents.length > 1 ? 's' : ''}`
-                : 'Nenhum conteúdo selecionado'
-              }
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              <Button 
-                onClick={() => setContentDialog(false)}
-                variant="outlined"
-                sx={{
-                  borderRadius: '12px',
-                  px: 4,
-                  py: 1.5,
-                  fontWeight: 600,
-                  textTransform: 'none',
-                  borderColor: '#ff7730',
-                  color: '#ff7730',
-                  '&:hover': {
-                    borderColor: '#ff9800',
-                    background: 'rgba(255, 119, 48, 0.05)',
-                    transform: 'translateY(-2px)',
-                  },
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleAddContents}
-                variant="contained"
-                disabled={selectedContents.length === 0}
-                sx={{
-                  borderRadius: '12px',
-                  px: 4,
-                  py: 1.5,
-                  fontWeight: 600,
-                  textTransform: 'none',
-                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                  boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)',
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 20px rgba(255, 119, 48, 0.4)',
-                  },
-                  '&:disabled': {
-                    background: 'rgba(0, 0, 0, 0.12)',
-                    color: 'rgba(0, 0, 0, 0.26)',
-                  },
-                }}
-              >
-                Adicionar {selectedContents.length > 0 && `(${selectedContents.length})`}
-              </Button>
-            </Box>
-          </DialogActions>
-        </Dialog>
+          </Dialog>
 
         {/* Tabs */}
         <Paper sx={{ mt: 3 }}>
@@ -1156,6 +1408,15 @@ const CampaignForm = () => {
                           onChange={(e) => handleInputChange('name', e.target.value)}
                           required
                           disabled={loading}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
+                          }}
                         />
                       </Grid>
                       <Grid item xs={12} md={6}>
@@ -1263,7 +1524,7 @@ const CampaignForm = () => {
                     type="submit"
                     variant="contained"
                     startIcon={<SaveIcon />}
-                    disabled={loading}
+                    disabled={loading || !formData.name || !formData.start_date || !formData.end_date}
                   >
                     {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar Campanha')}
                   </Button>

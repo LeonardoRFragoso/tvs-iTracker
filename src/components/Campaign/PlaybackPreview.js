@@ -31,7 +31,11 @@ import {
   Repeat as RepeatIcon,
   Movie as VideoIcon,
   Image as ImageIcon,
-  AudioFile as AudioIcon
+  AudioFile as AudioIcon,
+  CloudDone as ReadyIcon,
+  Autorenew as ProcessingIcon,
+  WarningAmber as StaleIcon,
+  Error as ErrorIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -339,6 +343,55 @@ const PlaybackPreview = ({ open, onClose, campaignId }) => {
                 </Typography>
               </Box>
             )}
+          </Box>
+        )}
+
+        {/* Compiled Section */}
+        {preview && (
+          <Box mt={3}>
+            <Typography variant="h6" gutterBottom>
+              Vídeo Compilado
+            </Typography>
+            <Card>
+              <CardContent>
+                {preview.compiled ? (
+                  <Box>
+                    <Box display="flex" alignItems="center" gap={1} mb={2}>
+                      {preview.compiled.status === 'ready' ? (
+                        <Chip color="success" icon={<ReadyIcon />} label="Pronto" />
+                      ) : preview.compiled.status === 'processing' ? (
+                        <Chip color="warning" icon={<ProcessingIcon />} label="Processando" />
+                      ) : preview.compiled.status === 'stale' ? (
+                        <Chip color="default" icon={<StaleIcon />} label="Desatualizado" />
+                      ) : preview.compiled.status === 'failed' ? (
+                        <Chip color="error" icon={<ErrorIcon />} label="Falhou" />
+                      ) : (
+                        <Chip variant="outlined" label="Não gerado" />
+                      )}
+                      {typeof preview.compiled.duration === 'number' && (
+                        <Chip label={`Duração: ${formatDuration(preview.compiled.duration)}`} />
+                      )}
+                      {preview.compiled.updated_at && (
+                        <Chip variant="outlined" label={`Atualizado: ${preview.compiled.updated_at}`} />
+                      )}
+                      {preview.compiled.resolution && (
+                        <Chip variant="outlined" label={preview.compiled.resolution} />
+                      )}
+                      {preview.compiled.fps && (
+                        <Chip variant="outlined" label={`${preview.compiled.fps} fps`} />
+                      )}
+                    </Box>
+                    {preview.compiled.status === 'ready' && preview.compiled.url ? (
+                      <video controls style={{ width: '100%', borderRadius: 8 }} src={preview.compiled.url.startsWith('http') ? preview.compiled.url : `${API_BASE_URL.replace(/\/api$/, '')}${preview.compiled.url}`} />
+                    ) : (
+                      <Alert severity="info">Gere o vídeo compilado na aba de conteúdos da campanha.</Alert>
+                    )}
+                  </Box>
+                ) : (
+                  <Alert severity="info">Sem informações de vídeo compilado.</Alert>
+                )}
+              </CardContent>
+            </Card>
           </Box>
         )}
       </DialogContent>

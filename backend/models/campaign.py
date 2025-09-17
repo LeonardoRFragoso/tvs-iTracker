@@ -34,6 +34,16 @@ class Campaign(db.Model):
     loop_enabled = db.Column(db.Boolean, default=False)
     shuffle_enabled = db.Column(db.Boolean, default=False)
     
+    # Compiled video metadata
+    compiled_video_path = db.Column(db.String(500))
+    compiled_video_duration = db.Column(db.Integer)  # segundos
+    compiled_video_status = db.Column(db.String(20), default='none')  # none, processing, ready, failed, stale
+    compiled_video_error = db.Column(db.Text)
+    compiled_video_updated_at = db.Column(db.DateTime)
+    compiled_stale = db.Column(db.Boolean, default=True)
+    compiled_video_resolution = db.Column(db.String(20))  # e.g., 1920x1080
+    compiled_video_fps = db.Column(db.Integer)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -62,7 +72,17 @@ class Campaign(db.Model):
             'updated_at': fmt_br_datetime(self.updated_at),
             'content_count': len([c for c in self.contents if c.is_active]),
             'total_content_count': len(self.contents),
-            'user_id': self.user_id
+            'user_id': self.user_id,
+            # Compiled video fields
+            'compiled_video_path': self.compiled_video_path,
+            'compiled_video_url': (f"/uploads/{self.compiled_video_path}" if self.compiled_video_path else None),
+            'compiled_video_duration': self.compiled_video_duration,
+            'compiled_video_status': self.compiled_video_status,
+            'compiled_video_error': self.compiled_video_error,
+            'compiled_video_updated_at': fmt_br_datetime(self.compiled_video_updated_at),
+            'compiled_stale': self.compiled_stale,
+            'compiled_video_resolution': self.compiled_video_resolution,
+            'compiled_video_fps': self.compiled_video_fps,
         }
     
     def get_active_contents(self, order_by_index=True):

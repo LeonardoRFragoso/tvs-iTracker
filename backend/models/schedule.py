@@ -70,7 +70,8 @@ class Schedule(db.Model):
             'created_at': fmt_br_datetime(self.created_at),
             'updated_at': fmt_br_datetime(self.updated_at),
             'player': self.player.to_dict() if self.player else None,
-            'campaign': self.campaign.to_dict() if self.campaign else None
+            'campaign': self.campaign.to_dict() if self.campaign else None,
+            'is_all_day': (self.start_time == time(0, 0, 0) and self.end_time == time(23, 59, 59)) if (self.start_time and self.end_time) else False
         }
     
     def get_filtered_contents(self):
@@ -140,20 +141,31 @@ class Schedule(db.Model):
         if current_date < self.start_date.date() or current_date > self.end_date.date():
             return False
         
-        # Verificar dias da semana
+        # Normalizar dias da semana do formato frontend (1=Seg..6=Sáb, 0=Dom) para Python (0=Seg..6=Dom)
         if self.days_of_week:
-            allowed_days = [int(d.strip()) for d in self.days_of_week.split(',')]
+            try:
+                allowed_days_raw = [int(d.strip()) for d in self.days_of_week.split(',')]
+                allowed_days = [(6 if d == 0 else d - 1) for d in allowed_days_raw]
+            except Exception:
+                allowed_days = list(range(7))
+        else:
+            allowed_days = list(range(7))
+        
+        # Verificar horário com suporte a overnight e boundary de dia
+        if self.start_time <= self.end_time:
+            # Janela no mesmo dia
             if current_weekday not in allowed_days:
                 return False
-        
-        # Verificar horário
-        if self.start_time <= self.end_time:
-            # Horário normal (ex: 09:00 às 17:00)
             if not (self.start_time <= current_time <= self.end_time):
                 return False
         else:
-            # Horário overnight (ex: 22:00 às 06:00)
-            if not (current_time >= self.start_time or current_time <= self.end_time):
+            # Janela overnight (ex: 22:00 -> 06:00)
+            in_window = (current_time >= self.start_time) or (current_time <= self.end_time)
+            if not in_window:
+                return False
+            # Se estamos na madrugada (antes do end_time), validar contra o dia anterior
+            weekday_to_check = current_weekday if current_time >= self.start_time else (current_weekday - 1) % 7
+            if weekday_to_check not in allowed_days:
                 return False
         
         return True

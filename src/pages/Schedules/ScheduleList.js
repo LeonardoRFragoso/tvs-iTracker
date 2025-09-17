@@ -45,6 +45,7 @@ import {
   Pause as PauseIcon,
   Event as EventIcon,
   Schedule as ScheduleIcon,
+  ContentCopy as DuplicateIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -207,8 +208,11 @@ const ScheduleList = () => {
     return d.toLocaleDateString('pt-BR');
   };
 
-  const formatTime = (timeString) => {
-    return timeString || 'Todo o dia';
+  const formatTimeWindow = (schedule) => {
+    if (isAllDay(schedule)) return '24/7';
+    if (!schedule?.start_time && !schedule?.end_time) return 'Todo o dia';
+    const base = `${schedule?.start_time || '--:--:--'} - ${schedule?.end_time || '--:--:--'}`;
+    return isOvernight(schedule) ? `${base} (overnight)` : base;
   };
 
   const getDaysOfWeekText = (daysString) => {
@@ -239,6 +243,42 @@ const ScheduleList = () => {
     if (now < startDate) return 'Agendado';
     if (now > endDate) return 'Expirado';
     return 'Ativo';
+  };
+
+  const isAllDay = (schedule) => {
+    return schedule?.start_time === '00:00:00' && schedule?.end_time === '23:59:59';
+  };
+
+  const isOvernight = (schedule) => {
+    if (!schedule?.start_time || !schedule?.end_time) return false;
+    // Compare HH:MM:SS lexicographically works since it's zero-padded
+    return schedule.start_time > schedule.end_time;
+  };
+
+  const handleDuplicateAsOverlay = (schedule) => {
+    if (!schedule) return;
+    // Open the form with prefilled state; leave campaign_id empty to encourage switching to logo campaign
+    navigate('/schedules/new', {
+      state: {
+        prefill: {
+          name: `${schedule.name} - Overlay`,
+          campaign_id: '',
+          player_id: schedule.player_id,
+          start_date: schedule.start_date,
+          end_date: schedule.end_date,
+          start_time: schedule.start_time,
+          end_time: schedule.end_time,
+          days_of_week: schedule.days_of_week,
+          repeat_type: schedule.repeat_type,
+          repeat_interval: schedule.repeat_interval,
+          priority: schedule.priority,
+          is_persistent: true,
+          content_type: 'overlay',
+          is_active: schedule.is_active,
+        }
+      }
+    });
+    handleMenuClose();
   };
 
   const ScheduleRowSkeleton = ({ delay = 0 }) => (
@@ -570,7 +610,7 @@ const ScheduleList = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
-                              {formatTime(schedule.start_time)} - {formatTime(schedule.end_time)}
+                              {formatTimeWindow(schedule)}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -592,6 +632,22 @@ const ScheduleList = () => {
                               <Chip 
                                 label="Persistente"
                                 color="info"
+                                size="small"
+                                sx={{ ml: 1 }}
+                              />
+                            )}
+                            {isAllDay(schedule) && (
+                              <Chip 
+                                label="24/7"
+                                color="success"
+                                size="small"
+                                sx={{ ml: 1 }}
+                              />
+                            )}
+                            {isOvernight(schedule) && !isAllDay(schedule) && (
+                              <Chip 
+                                label="Overnight"
+                                color="warning"
                                 size="small"
                                 sx={{ ml: 1 }}
                               />
@@ -782,6 +838,22 @@ const ScheduleList = () => {
               Ativar
             </>
           )}
+        </MenuItem>
+        <MenuItem 
+          onClick={() => handleDuplicateAsOverlay(selectedSchedule)}
+          sx={{
+            borderRadius: '8px',
+            mx: 1,
+            my: 0.5,
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'rgba(76, 175, 80, 0.1)',
+              transform: 'translateX(4px)',
+            }
+          }}
+        >
+          <DuplicateIcon sx={{ mr: 1 }} />
+          Duplicar como Overlay (Persistente)
         </MenuItem>
         <MenuItem 
           onClick={() => handleDeleteClick(selectedSchedule)}

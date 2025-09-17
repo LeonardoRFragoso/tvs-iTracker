@@ -10,6 +10,9 @@ from models.player import Player
 from models.user import User
 import os
 
+# New: video compiler
+from services.video_compiler import video_compiler
+
 campaign_bp = Blueprint('campaign', __name__)
 
 # Brazilian datetime helpers
@@ -387,6 +390,12 @@ def add_content_to_campaign(campaign_id):
         )
         
         db.session.add(campaign_content)
+        # Mark compiled video stale
+        try:
+            campaign.compiled_stale = True
+            campaign.compiled_video_status = 'stale'
+        except Exception:
+            pass
         db.session.commit()
         
         return jsonify({
@@ -422,6 +431,11 @@ def remove_content_from_campaign(campaign_id, content_id):
             return jsonify({'error': 'Conteúdo não encontrado na campanha'}), 404
         
         db.session.delete(campaign_content)
+        try:
+            campaign.compiled_stale = True
+            campaign.compiled_video_status = 'stale'
+        except Exception:
+            pass
         db.session.commit()
         
         return jsonify({'message': 'Conteúdo removido da campanha'}), 200
@@ -458,6 +472,13 @@ def reorder_campaign_contents(campaign_id):
                 campaign_content.order_index = i
         
         db.session.commit()
+        # Mark compiled stale after reorder
+        try:
+            campaign.compiled_stale = True
+            campaign.compiled_video_status = 'stale'
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         
         return jsonify({'message': 'Ordem dos conteúdos atualizada'}), 200
         
@@ -685,5 +706,84 @@ def debug_campaign_analytics(campaign_id):
             }
         }), 200
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@campaign_bp.route('/<campaign_id>/compile', methods=['POST'])
+@jwt_required()
+def compile_campaign(campaign_id):
+    """Dispara compilação assíncrona do vídeo da campanha."""
+    try:
+        campaign = Campaign.query.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campanha não encontrada'}), 404
+
+        data = request.get_json(silent=True) or {}
+        preset = (data.get('preset') or '').lower().strip()
+        resolution = data.get('resolution')
+        fps = data.get('fps')
+
+        # Presets mapping
+        preset_map = {
+            '360p': ('640x360', 30),
+            '720p': ('1280x720', 30),
+            '1080p': ('1920x1080', 30),
+        }
+        if preset in preset_map:
+            resolution, fps = preset_map[preset]
+        # Defaults if not provided
+        resolution = resolution or '1920x1080'
+        try:
+            fps = int(fps) if fps is not None else 30
+        except Exception:
+            fps = 30
+
+        # Cache: if ready and not stale and matches resolution/fps, return ready
+        if (campaign.compiled_video_status == 'ready' and
+            not getattr(campaign, 'compiled_stale', False) and
+            getattr(campaign, 'compiled_video_resolution', None) == resolution and
+            int(getattr(campaign, 'compiled_video_fps', 0) or 0) == int(fps)):
+            return jsonify({
+                'message': 'Compilação já está pronta para os parâmetros solicitados',
+                'status': 'ready',
+                'compiled_video_url': f"/uploads/{campaign.compiled_video_path}" if campaign.compiled_video_path else None,
+                'compiled_video_duration': campaign.compiled_video_duration,
+                'compiled_video_resolution': campaign.compiled_video_resolution,
+                'compiled_video_fps': campaign.compiled_video_fps,
+                'compiled_video_updated_at': fmt_br_datetime(campaign.compiled_video_updated_at),
+            }), 200
+
+        # Se acabou de alterar conteúdos, marcar stale (se não marcado)
+        if campaign.compiled_stale is None:
+            campaign.compiled_stale = True
+
+        ok = video_compiler.start_async_compile(campaign_id, resolution=resolution, fps=fps)
+        if not ok:
+            return jsonify({'error': 'Não foi possível iniciar a compilação. Verifique se já não está em processamento.'}), 400
+
+        return jsonify({'message': 'Compilação iniciada', 'status': 'processing'}), 202
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@campaign_bp.route('/<campaign_id>/compile/status', methods=['GET'])
+@jwt_required()
+def compile_status(campaign_id):
+    """Retorna status e metadados do vídeo compilado."""
+    try:
+        campaign = Campaign.query.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campanha não encontrada'}), 404
+        c = campaign.to_dict()
+        return jsonify({
+            'compiled_video_path': c.get('compiled_video_path'),
+            'compiled_video_url': c.get('compiled_video_url'),
+            'compiled_video_duration': c.get('compiled_video_duration'),
+            'compiled_video_status': c.get('compiled_video_status'),
+            'compiled_video_error': c.get('compiled_video_error'),
+            'compiled_video_updated_at': c.get('compiled_video_updated_at'),
+            'compiled_stale': c.get('compiled_stale'),
+            'compiled_video_resolution': c.get('compiled_video_resolution'),
+            'compiled_video_fps': c.get('compiled_video_fps'),
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -170,9 +170,41 @@ const CampaignDetail = () => {
     setContentDialog(true);
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('pt-BR');
+  // Parse dates coming from backend in BR format (dd/MM/yyyy HH:mm:ss) or ISO
+  const parseFlexibleDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'string') {
+      const s = value.trim();
+      // BR format: dd/MM/yyyy or dd/MM/yyyy HH:mm[:ss]
+      if (s.includes('/')) {
+        const [datePart, timePart] = s.split(' ');
+        const [dayStr, monthStr, yearStr] = (datePart || '').split('/');
+        const day = parseInt(dayStr, 10);
+        const month = parseInt(monthStr, 10);
+        const year = parseInt(yearStr, 10);
+        let hours = 0, minutes = 0, seconds = 0;
+        if (timePart && timePart.includes(':')) {
+          const [h, m, sec] = timePart.split(':');
+          hours = parseInt(h || '0', 10) || 0;
+          minutes = parseInt(m || '0', 10) || 0;
+          seconds = parseInt(sec || '0', 10) || 0;
+        }
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          return new Date(year, month - 1, day, hours, minutes, seconds);
+        }
+      }
+      // Try ISO or other formats understood by Date
+      const d = new Date(s.replace('Z', ''));
+      if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+  };
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'N/A';
+    const d = parseFlexibleDate(dateValue);
+    return d ? d.toLocaleDateString('pt-BR') : 'N/A';
   };
 
   const formatTime = (timeString) => {

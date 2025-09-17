@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, text
 from models.user import User, db
 from models.content import Content
 from models.campaign import Campaign
@@ -16,32 +16,81 @@ dashboard_bp = Blueprint('dashboard', __name__)
 @jwt_required()
 def get_dashboard_stats():
     try:
-        # Estatísticas gerais
-        total_content = Content.query.filter(Content.is_active == True).count()
-        total_campaigns = Campaign.query.filter(Campaign.is_active == True).count()
-        total_players = Player.query.count()
+        # Estatísticas gerais (com fallbacks para evitar 500 em esquemas desatualizados)
+        try:
+            total_content = Content.query.filter(Content.is_active == True).count()
+        except Exception as e:
+            print(f"[DASHBOARD] total_content fallback due to: {e}")
+            try:
+                total_content = db.session.execute(text("SELECT COUNT(*) FROM contents WHERE is_active = 1")).scalar() or 0
+            except Exception as e2:
+                print(f"[DASHBOARD] total_content raw fallback failed: {e2}")
+                total_content = 0
+
+        try:
+            total_campaigns = Campaign.query.filter(Campaign.is_active == True).count()
+        except Exception as e:
+            print(f"[DASHBOARD] total_campaigns fallback due to: {e}")
+            try:
+                total_campaigns = db.session.execute(text("SELECT COUNT(*) FROM campaigns WHERE is_active = 1")).scalar() or 0
+            except Exception as e2:
+                print(f"[DASHBOARD] total_campaigns raw fallback failed: {e2}")
+                total_campaigns = 0
+
+        try:
+            total_players = Player.query.count()
+        except Exception as e:
+            print(f"[DASHBOARD] total_players fallback due to: {e}")
+            try:
+                total_players = db.session.execute(text("SELECT COUNT(*) FROM players")).scalar() or 0
+            except Exception as e2:
+                print(f"[DASHBOARD] total_players raw fallback failed: {e2}")
+                total_players = 0
         
         # Fix: Calculate online players based on last_ping within 5 minutes (same logic as Player.is_online property)
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
-        online_players = Player.query.filter(
-            Player.last_ping.isnot(None),
-            Player.last_ping >= five_minutes_ago
-        ).count()
+        try:
+            online_players = Player.query.filter(
+                Player.last_ping.isnot(None),
+                Player.last_ping >= five_minutes_ago
+            ).count()
+        except Exception as e:
+            print(f"[DASHBOARD] online_players fallback due to: {e}")
+            online_players = 0
         
-        total_schedules = Schedule.query.filter(Schedule.is_active == True).count()
-        total_editorials = Editorial.query.filter(Editorial.is_active == True).count()
+        total_schedules = 0
+        try:
+            total_schedules = Schedule.query.filter(Schedule.is_active == True).count()
+        except Exception as e:
+            print(f"[DASHBOARD] total_schedules fallback due to: {e}")
+            total_schedules = 0
+        
+        total_editorials = 0
+        try:
+            total_editorials = Editorial.query.filter(Editorial.is_active == True).count()
+        except Exception as e:
+            print(f"[DASHBOARD] total_editorials fallback due to: {e}")
+            total_editorials = 0
         
         # Estatísticas de conteúdo por tipo
-        content_by_type = db.session.query(
-            Content.content_type,
-            func.count(Content.id).label('count')
-        ).filter(Content.is_active == True).group_by(Content.content_type).all()
+        try:
+            content_by_type_rows = db.session.query(
+                Content.content_type,
+                func.count(Content.id).label('count')
+            ).filter(Content.is_active == True).group_by(Content.content_type).all()
+        except Exception as e:
+            print(f"[DASHBOARD] content_by_type fallback due to: {e}")
+            content_by_type_rows = []
         
         # Estatísticas de players por localização
-        players_by_location = db.session.query(
-            Location.name,
-            func.count(Player.id).label('count')
-        ).join(Player, Location.id == Player.location_id).group_by(Location.name).all()
+        try:
+            players_by_location_rows = db.session.query(
+                Location.name,
+                func.count(Player.id).label('count')
+            ).join(Player, Location.id == Player.location_id).group_by(Location.name).all()
+        except Exception as e:
+            print(f"[DASHBOARD] players_by_location fallback due to: {e}")
+            players_by_location_rows = []
         
         # Campanhas ativas hoje (robusto a esquemas sem start/end_date)
         try:
@@ -54,20 +103,29 @@ def get_dashboard_stats():
             else:
                 # Fallback: considerar campanhas ativas
                 active_campaigns_today = Campaign.query.filter(Campaign.is_active == True).count()
-        except Exception:
+        except Exception as e:
+            print(f"[DASHBOARD] active_campaigns_today fallback due to: {e}")
             # Fallback final para evitar 500
-            active_campaigns_today = Campaign.query.filter(Campaign.is_active == True).count()
+            active_campaigns_today = total_campaigns
         
         # Uso de armazenamento
-        total_storage_used = db.session.query(
-            func.sum(Player.storage_used_gb)
-        ).scalar() or 0
+        try:
+            total_storage_used = db.session.query(
+                func.sum(Player.storage_used_gb)
+            ).scalar() or 0
+        except Exception as e:
+            print(f"[DASHBOARD] total_storage_used fallback due to: {e}")
+            total_storage_used = 0
         
-        total_storage_capacity = db.session.query(
-            func.sum(Player.storage_capacity_gb)
-        ).scalar() or 1
+        try:
+            total_storage_capacity = db.session.query(
+                func.sum(Player.storage_capacity_gb)
+            ).scalar() or 0
+        except Exception as e:
+            print(f"[DASHBOARD] total_storage_capacity fallback due to: {e}")
+            total_storage_capacity = 0
         
-        storage_percentage = (total_storage_used / total_storage_capacity * 100) if total_storage_capacity > 0 else 0
+        storage_percentage = (total_storage_used / total_storage_capacity * 100) if total_storage_capacity and total_storage_capacity > 0 else 0
         
         return jsonify({
             'overview': {
@@ -75,13 +133,13 @@ def get_dashboard_stats():
                 'total_campaigns': total_campaigns,
                 'total_players': total_players,
                 'online_players': online_players,
-                'offline_players': total_players - online_players,
+                'offline_players': max(0, total_players - online_players),
                 'total_schedules': total_schedules,
                 'total_editorials': total_editorials,
                 'active_campaigns_today': active_campaigns_today
             },
-            'content_by_type': {stat[0]: stat[1] for stat in content_by_type},
-            'players_by_location': {stat[0]: stat[1] for stat in players_by_location},
+            'content_by_type': {stat[0]: stat[1] for stat in content_by_type_rows},
+            'players_by_location': {stat[0]: stat[1] for stat in players_by_location_rows},
             'storage': {
                 'used_gb': round(total_storage_used, 2),
                 'capacity_gb': round(total_storage_capacity, 2),
@@ -90,6 +148,7 @@ def get_dashboard_stats():
         }), 200
         
     except Exception as e:
+        print(f"[DASHBOARD] /stats error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @dashboard_bp.route('/activity', methods=['GET'])

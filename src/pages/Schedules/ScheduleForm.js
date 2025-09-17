@@ -29,7 +29,7 @@ import {
   Schedule as ScheduleIcon,
   Repeat as RepeatIcon,
 } from '@mui/icons-material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -75,6 +75,7 @@ const parseDateStringFlexible = (value) => {
 const ScheduleForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
   const isEdit = Boolean(id);
 
   const [formData, setFormData] = useState({
@@ -92,6 +93,7 @@ const ScheduleForm = () => {
     is_persistent: false,
     content_type: 'main',
     is_active: true,
+    is_all_day: false,
   });
 
   const [campaigns, setCampaigns] = useState([]);
@@ -153,6 +155,8 @@ const ScheduleForm = () => {
         }
       };
       
+      const isAllDayDetected = (schedule.start_time === '00:00:00' && schedule.end_time === '23:59:59');
+      
       setFormData({
         name: schedule.name || '',
         campaign_id: schedule.campaign_id || '',
@@ -168,6 +172,7 @@ const ScheduleForm = () => {
         is_persistent: schedule.is_persistent || false,
         content_type: schedule.content_type || 'main',
         is_active: schedule.is_active !== false,
+        is_all_day: isAllDayDetected,
       });
     } catch (err) {
       setError('Erro ao carregar agendamento');
@@ -205,6 +210,7 @@ const ScheduleForm = () => {
         start_date: toBRDateTime(formData.start_date, { endOfDay: false }),
         end_date: toBRDateTime(formData.end_date, { endOfDay: true }),
         days_of_week: formData.days_of_week.join(','),
+        is_all_day: formData.is_all_day,
       };
 
       if (formData.start_time) {
@@ -279,6 +285,7 @@ const ScheduleForm = () => {
         is_persistent: formData.is_persistent,
         content_type: formData.content_type,
         is_active: formData.is_active,
+        is_all_day: formData.is_all_day,
       };
 
       // Include times only if set, to avoid sending empty strings
@@ -328,6 +335,60 @@ const ScheduleForm = () => {
     const seconds = time.getSeconds().toString().padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
   };
+
+  // Apply prefilled values when navigating from 'Duplicate as Overlay' (creation mode only)
+  useEffect(() => {
+    if (isEdit) return;
+    const prefill = location.state?.prefill;
+    if (!prefill) return;
+
+    const parseTimeString = (timeString) => {
+      if (!timeString) return null;
+      try {
+        if (timeString instanceof Date) return timeString;
+        if (typeof timeString === 'string') {
+          const parts = timeString.split(':');
+          if (parts.length >= 2) {
+            const today = new Date();
+            const hours = parseInt(parts[0], 10) || 0;
+            const minutes = parseInt(parts[1], 10) || 0;
+            const seconds = parts[2] ? parseInt(parts[2], 10) : 0;
+            return new Date(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, seconds);
+          }
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    };
+
+    const daysArray = Array.isArray(prefill.days_of_week)
+      ? prefill.days_of_week
+      : typeof prefill.days_of_week === 'string'
+        ? prefill.days_of_week.split(',').map(d => parseInt(d.trim(), 10)).filter(n => !isNaN(n))
+        : [1,2,3,4,5];
+
+    const isAllDayDetected = prefill.start_time === '00:00:00' && prefill.end_time === '23:59:59';
+
+    setFormData(prev => ({
+      ...prev,
+      name: prefill.name ?? prev.name,
+      campaign_id: prefill.campaign_id ?? prev.campaign_id,
+      player_id: prefill.player_id ?? prev.player_id,
+      start_date: parseDateStringFlexible(prefill.start_date) ?? prev.start_date,
+      end_date: parseDateStringFlexible(prefill.end_date) ?? prev.end_date,
+      start_time: parseTimeString(prefill.start_time) ?? prev.start_time,
+      end_time: parseTimeString(prefill.end_time) ?? prev.end_time,
+      days_of_week: daysArray.length ? daysArray : prev.days_of_week,
+      repeat_type: prefill.repeat_type ?? prev.repeat_type,
+      repeat_interval: prefill.repeat_interval ?? prev.repeat_interval,
+      priority: prefill.priority ?? prev.priority,
+      is_persistent: prefill.is_persistent ?? prev.is_persistent,
+      content_type: prefill.content_type ?? prev.content_type,
+      is_active: typeof prefill.is_active === 'boolean' ? prefill.is_active : prev.is_active,
+      is_all_day: isAllDayDetected || prev.is_all_day,
+    }));
+  }, [isEdit, location.state]);
 
   if (initialLoading) {
     return (
@@ -467,6 +528,7 @@ const ScheduleForm = () => {
                         label="Horário de Início (opcional)"
                         value={formData.start_time}
                         onChange={(time) => handleInputChange('start_time', time)}
+                        disabled={formData.is_all_day}
                         renderInput={(params) => <TextField {...params} fullWidth />}
                       />
                     </Grid>
@@ -476,8 +538,67 @@ const ScheduleForm = () => {
                         label="Horário de Fim (opcional)"
                         value={formData.end_time}
                         onChange={(time) => handleInputChange('end_time', time)}
+                        disabled={formData.is_all_day}
                         renderInput={(params) => <TextField {...params} fullWidth />}
                       />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={formData.is_all_day}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              handleInputChange('is_all_day', checked);
+                              const today = new Date();
+                              if (checked) {
+                                const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+                                const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                                handleInputChange('start_time', start);
+                                handleInputChange('end_time', end);
+                              } else {
+                                handleInputChange('start_time', null);
+                                handleInputChange('end_time', null);
+                              }
+                            }}
+                          />
+                        }
+                        label="Dia inteiro (24/7)"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <Box display="flex" gap={1} mt={1}>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => {
+                            const today = new Date();
+                            const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+                            const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                            handleInputChange('is_all_day', true);
+                            handleInputChange('start_time', start);
+                            handleInputChange('end_time', end);
+                          }}
+                        >
+                          24/7
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => {
+                            const today = new Date();
+                            const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 0, 0);
+                            const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 18, 0, 0);
+                            handleInputChange('is_all_day', false);
+                            handleInputChange('start_time', start);
+                            handleInputChange('end_time', end);
+                          }}
+                        >
+                          Horário Comercial (09–18)
+                        </Button>
+                      </Box>
                     </Grid>
                   </Grid>
                 </CardContent>

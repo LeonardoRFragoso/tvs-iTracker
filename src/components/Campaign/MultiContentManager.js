@@ -24,7 +24,8 @@ import {
   Alert,
   CircularProgress,
   Tooltip,
-  Grid
+  Grid,
+  LinearProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -36,13 +37,20 @@ import {
   Visibility as PreviewIcon,
   Schedule as ScheduleIcon,
   LocationOn as LocationIcon,
-  Timer as TimerIcon
+  Timer as TimerIcon,
+  BuildCircle as CompileIcon,
+  CloudDone as ReadyIcon,
+  WarningAmber as StaleIcon,
+  Autorenew as RecompileIcon,
+  OndemandVideo as VideoCompiledIcon
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import axios from 'axios';
 import PlaybackPreview from './PlaybackPreview';
+import { useSocket } from '../../contexts/SocketContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_HOST = API_BASE_URL.replace(/\/api$/, '');
 
 const MultiContentManager = ({ campaignId, onContentChange }) => {
   const [campaignContents, setCampaignContents] = useState([]);
@@ -51,14 +59,21 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  // Dialogs
+  const [compiledInfo, setCompiledInfo] = useState(null);
+  const [compiling, setCompiling] = useState(false);
+  const [compileError, setCompileError] = useState('');
+  const [compileProgress, setCompileProgress] = useState(0);
+  const [compileMessage, setCompileMessage] = useState('');
+  const [preset, setPreset] = useState('1080p');
+  const [customResolution, setCustomResolution] = useState('1920x1080');
+  const [customFps, setCustomFps] = useState(30);
+
   const [addContentDialog, setAddContentDialog] = useState(false);
   const [editContentDialog, setEditContentDialog] = useState(false);
   const [previewDialog, setPreviewDialog] = useState(false);
+  const [compiledPreviewOpen, setCompiledPreviewOpen] = useState(false);
   const [selectedContent, setSelectedContent] = useState(null);
-  
-  // Form data
+
   const [contentFormData, setContentFormData] = useState({
     content_id: '',
     duration_override: '',
@@ -70,26 +85,49 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     is_active: true
   });
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     if (campaignId) {
       loadCampaignContents();
       loadAvailableContents();
+      fetchCompiledStatus();
     }
   }, [campaignId]);
+
+  useEffect(() => {
+    if (!socket || !campaignId) return;
+    const onProgress = (data) => {
+      if (data?.campaign_id !== campaignId) return;
+      setCompiling(true);
+      setCompileProgress(typeof data.progress === 'number' ? data.progress : 0);
+      setCompileMessage(data.message || '');
+    };
+    const onComplete = (data) => {
+      if (data?.campaign_id !== campaignId) return;
+      setCompiling(false);
+      setCompileProgress(100);
+      setCompileMessage(data.message || '');
+      fetchCompiledStatus();
+    };
+    socket.on('campaign_compile_progress', onProgress);
+    socket.on('campaign_compile_complete', onComplete);
+    return () => {
+      socket.off('campaign_compile_progress', onProgress);
+      socket.off('campaign_compile_complete', onComplete);
+    };
+  }, [socket, campaignId]);
 
   const loadCampaignContents = async () => {
     try {
       setLoading(true);
-      // Fetch contents and campaign details in parallel
       const [contentsResp, campaignResp] = await Promise.all([
         axios.get(`${API_BASE_URL}/campaigns/${campaignId}/contents`),
         axios.get(`${API_BASE_URL}/campaigns/${campaignId}`)
       ]);
-      // Support both response shapes
       const data = contentsResp.data || {};
       const items = data.contents || data.campaign_contents || [];
       setCampaignContents(items);
-      // Campaign can come from either response
       setCampaign((campaignResp.data && campaignResp.data.campaign) || data.campaign || null);
       setError('');
     } catch (err) {
@@ -109,6 +147,51 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     }
   };
 
+  const fetchCompiledStatus = async () => {
+    if (!campaignId) return null;
+    try {
+      const resp = await axios.get(`${API_BASE_URL}/campaigns/${campaignId}/compile/status`);
+      const data = resp.data || null;
+      setCompiledInfo(data);
+      setCompileError('');
+      return data;
+    } catch (err) {
+      setCompileError('Não foi possível obter status do vídeo compilado');
+      return null;
+    }
+  };
+
+  const startCompilation = async () => {
+    try {
+      setCompiling(true);
+      setCompileError('');
+      setSuccess('Compilação iniciada, isso pode levar alguns minutos...');
+      setCompileProgress(1);
+      const body = preset === 'custom'
+        ? { resolution: customResolution, fps: Number(customFps) || 30 }
+        : { preset };
+      await axios.post(`${API_BASE_URL}/campaigns/${campaignId}/compile`, body);
+      const poll = async (retries = 120) => {
+        const statusData = await fetchCompiledStatus();
+        const s = statusData?.compiled_video_status || null;
+        if (s === 'ready' || s === 'failed') {
+          setCompiling(false);
+          return;
+        }
+        if (retries <= 0) {
+          setCompiling(false);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+        return poll(retries - 1);
+      };
+      poll();
+    } catch (err) {
+      setCompiling(false);
+      setCompileError(err.response?.data?.error || 'Falha ao iniciar compilação');
+    }
+  };
+
   const handleAddContent = async () => {
     try {
       setLoading(true);
@@ -118,6 +201,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       resetForm();
       loadCampaignContents();
       if (onContentChange) onContentChange();
+      fetchCompiledStatus();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao adicionar conteúdo');
     } finally {
@@ -137,6 +221,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       resetForm();
       loadCampaignContents();
       if (onContentChange) onContentChange();
+      fetchCompiledStatus();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao atualizar conteúdo');
     } finally {
@@ -155,6 +240,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       setSuccess('Conteúdo removido com sucesso!');
       loadCampaignContents();
       if (onContentChange) onContentChange();
+      fetchCompiledStatus();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao remover conteúdo');
     } finally {
@@ -181,10 +267,8 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
-    // Atualizar ordem local imediatamente
     setCampaignContents(items);
 
-    // Preparar dados para API compatível com ambas rotas
     const content_orders = items.map((item, index) => ({
       content_id: item.content_id,
       order_index: index + 1
@@ -197,9 +281,9 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
         content_order
       });
       if (onContentChange) onContentChange();
+      fetchCompiledStatus();
     } catch (err) {
       setError('Erro ao reordenar conteúdos');
-      // Reverter mudança local em caso de erro
       loadCampaignContents();
     }
   };
@@ -268,6 +352,58 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
           Conteúdos da Campanha ({campaignContents.length})
         </Typography>
         <Box display="flex" gap={1}>
+          {/* Preset selection */}
+          <TextField
+            select
+            size="small"
+            label="Preset"
+            value={preset}
+            onChange={(e) => setPreset(e.target.value)}
+            sx={{ minWidth: 120 }}
+          >
+            <MenuItem value="1080p">1080p</MenuItem>
+            <MenuItem value="720p">720p</MenuItem>
+            <MenuItem value="360p">360p</MenuItem>
+            <MenuItem value="custom">Custom</MenuItem>
+          </TextField>
+          {preset === 'custom' && (
+            <>
+              <TextField
+                size="small"
+                label="Resolução"
+                value={customResolution}
+                onChange={(e) => setCustomResolution(e.target.value)}
+                sx={{ width: 140 }}
+                placeholder="1920x1080"
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="FPS"
+                value={customFps}
+                onChange={(e) => setCustomFps(e.target.value)}
+                sx={{ width: 90 }}
+              />
+            </>
+          )}
+          {/* Compiled video quick actions */}
+          <Button
+            variant="outlined"
+            startIcon={<VideoCompiledIcon />}
+            onClick={() => setCompiledPreviewOpen(true)}
+            disabled={!compiledInfo || compiledInfo.compiled_video_status !== 'ready'}
+          >
+            Ver Compilado
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={compiling ? <RecompileIcon /> : <CompileIcon />}
+            onClick={startCompilation}
+            disabled={compiling}
+          >
+            {compiling ? 'Compilando...' : (compiledInfo?.compiled_stale || compiledInfo?.compiled_video_status !== 'ready') ? 'Compilar' : 'Recompilar'}
+          </Button>
           <Button
             variant="outlined"
             startIcon={<PreviewIcon />}
@@ -286,7 +422,14 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
           </Button>
         </Box>
       </Box>
-
+      {compiling && (
+        <Box mb={2}>
+          <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, compileProgress))} />
+          {compileMessage && (
+            <Typography variant="caption" color="text.secondary">{compileMessage}</Typography>
+          )}
+        </Box>
+      )}
       {/* Alerts */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -321,6 +464,43 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
                 <Typography variant="body2">
                   {formatDuration(campaign.content_duration)}
                 </Typography>
+              </Grid>
+              {/* Compiled status */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 1 }} />
+                <Box display="flex" alignItems="center" gap={1}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Vídeo Compilado:
+                  </Typography>
+                  {compiledInfo ? (
+                    <Box display="flex" alignItems="center" gap={1}>
+                      {compiledInfo.compiled_video_status === 'ready' ? (
+                        <Chip size="small" color="success" icon={<ReadyIcon />} label="Pronto" />
+                      ) : compiledInfo.compiled_video_status === 'processing' ? (
+                        <Chip size="small" color="warning" icon={<RecompileIcon />} label="Processando" />
+                      ) : compiledInfo.compiled_video_status === 'stale' ? (
+                        <Chip size="small" color="default" icon={<StaleIcon />} label="Desatualizado" />
+                      ) : compiledInfo.compiled_video_status === 'failed' ? (
+                        <Chip size="small" color="error" icon={<StaleIcon />} label="Falhou" />
+                      ) : (
+                        <Chip size="small" color="default" icon={<CompileIcon />} label="Não Gerado" />
+                      )}
+                      {compiledInfo.compiled_video_duration ? (
+                        <Chip size="small" label={`Duração: ${formatDuration(compiledInfo.compiled_video_duration)}`} />
+                      ) : null}
+                      {compiledInfo.compiled_video_updated_at ? (
+                        <Chip size="small" variant="outlined" label={`Atualizado: ${compiledInfo.compiled_video_updated_at}`} />
+                      ) : null}
+                    </Box>
+                  ) : (
+                    <Chip size="small" variant="outlined" label="Status indisponível" />
+                  )}
+                </Box>
+                {compileError && (
+                  <Alert severity="error" sx={{ mt: 1 }} onClose={() => setCompileError('')}>
+                    {compileError}
+                  </Alert>
+                )}
               </Grid>
             </Grid>
           </CardContent>
@@ -559,6 +739,30 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
         onClose={() => setPreviewDialog(false)}
         campaignId={campaignId}
       />
+
+      {/* Compiled Video Preview */}
+      <Dialog open={compiledPreviewOpen} onClose={() => setCompiledPreviewOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Preview do Vídeo Compilado</DialogTitle>
+        <DialogContent>
+          {compiledInfo?.compiled_video_status === 'ready' && compiledInfo?.compiled_video_url ? (
+            <Box>
+              <video
+                controls
+                style={{ width: '100%', borderRadius: 8 }}
+                src={`${API_HOST}${compiledInfo.compiled_video_url}`}
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Duração: {formatDuration(compiledInfo.compiled_video_duration)}
+              </Typography>
+            </Box>
+          ) : (
+            <Alert severity="info">O vídeo compilado não está pronto.</Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompiledPreviewOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime, time, date
 from typing import List
 from database import db
@@ -10,6 +11,9 @@ from services.chromecast_service import chromecast_service
 from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
+
+# Base URL to serve media files to Chromecast
+MEDIA_BASE_URL = os.getenv('MEDIA_BASE_URL', 'http://localhost:5000')
 
 class ScheduleExecutor:
     """Serviço para executar agendamentos automaticamente"""
@@ -31,7 +35,7 @@ class ScheduleExecutor:
             now = datetime.now()
             current_time = now.time()
             current_date = now.date()
-            current_weekday = now.weekday() + 1  # 1=segunda, 7=domingo
+            current_weekday = now.weekday()  # 0=segunda, 6=domingo
             
             print(f"[DEBUG] Data atual: {current_date}, Hora: {current_time}, Dia da semana: {current_weekday}")
             
@@ -144,6 +148,80 @@ class ScheduleExecutor:
     def _execute_chromecast_schedule(self, schedule: Schedule, player: Player, campaign: Campaign, content_type: str):
         """Executa agendamento em um Chromecast"""
         try:
+            # Prefer compiled video for main content if available and not stale
+            if content_type == 'main':
+                if getattr(campaign, 'compiled_video_status', None) == 'ready' and not getattr(campaign, 'compiled_stale', False) and getattr(campaign, 'compiled_video_path', None):
+                    compiled_url = f"{MEDIA_BASE_URL}/uploads/{campaign.compiled_video_path}"
+                    print(f"[DEBUG] Usando vídeo compilado da campanha: {compiled_url}")
+
+                    player_chromecast_id = str(player.chromecast_id) if player.chromecast_id else None
+                    if not player_chromecast_id:
+                        logger.error(f"Player {player.name} não tem chromecast_id configurado")
+                        return
+
+                    device_name_for_discovery = getattr(player, 'chromecast_name', None) or player.name
+                    connection_success, actual_device_id = chromecast_service.connect_to_device(
+                        device_id=player_chromecast_id,
+                        device_name=device_name_for_discovery
+                    )
+                    if not connection_success:
+                        logger.error(f"Falha ao conectar ao Chromecast {player.name} para vídeo compilado")
+                        return
+
+                    # Load compiled media
+                    success = chromecast_service.load_media(
+                        device_id=player_chromecast_id,
+                        media_url=compiled_url,
+                        content_type='video/mp4',
+                        title=f"Campanha: {campaign.name} (Compilado)"
+                    )
+
+                    # Register event
+                    try:
+                        event = PlaybackEvent(
+                            campaign_id=str(campaign.id),
+                            schedule_id=str(schedule.id),
+                            player_id=str(player.id),
+                            content_id=None,
+                            started_at=datetime.now(),
+                            duration_seconds=int(getattr(campaign, 'compiled_video_duration', 0) or 0),
+                            success=bool(success),
+                            error_message=None if success else 'Chromecast load_media failed (compiled)'
+                        )
+                        db.session.add(event)
+                        db.session.commit()
+                    except Exception as e:
+                        logger.error(f"Erro ao registrar PlaybackEvent (compilado): {e}")
+                        db.session.rollback()
+
+                    if success:
+                        print(f"[SUCCESS] Vídeo compilado enviado para {player.name}")
+                        # Track as a synthetic content id for rotation control
+                        self._update_current_content_for_player(player.id, schedule.id, 'compiled')
+                        self._set_content_started_at(player.id, schedule.id, datetime.now())
+                        # Update player status
+                        try:
+                            player.status = 'online'
+                            player.last_ping = datetime.now()
+                            player.last_seen = datetime.now()
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                        # Notify via socket
+                        if self.socketio:
+                            self.socketio.emit('schedule_executed', {
+                                'schedule_id': str(schedule.id),
+                                'player_id': str(player.id),
+                                'content_id': None,
+                                'content_title': f"Compilado - {campaign.name}",
+                                'campaign_id': str(campaign.id),
+                                'campaign_name': campaign.name,
+                                'playback_mode': schedule.get_effective_playback_mode(),
+                                'duration': getattr(campaign, 'compiled_video_duration', None),
+                                'status': 'playing'
+                            }, room=f'player_{player.id}')
+                    return
+
             # Obter conteúdos filtrados da campanha
             filtered_contents = schedule.get_filtered_contents()
             
@@ -169,7 +247,8 @@ class ScheduleExecutor:
             
             # Construir URL do conteúdo
             if content.file_path:
-                content_url = f"http://192.168.0.4:5000/uploads/{content.file_path.split('/')[-1]}"
+                filename = content.file_path.split('/')[-1]
+                content_url = f"{MEDIA_BASE_URL}/uploads/{filename}"
                 print(f"[DEBUG] Enviando para Chromecast: {content_url}")
             else:
                 print(f"[ERROR] Conteúdo {content.title} não tem arquivo associado")
@@ -498,15 +577,18 @@ class ScheduleExecutor:
                 return
 
             # Encontrar CampaignContent correspondente para obter duração efetiva
-            contents = schedule.get_filtered_contents()
-            current_cc = None
-            for cc in contents:
-                if cc.content_id == current_content_id:
-                    current_cc = cc
-                    break
             duration = None
-            if current_cc:
-                duration = current_cc.get_effective_duration()
+            if current_content_id == 'compiled' and schedule.campaign:
+                duration = getattr(schedule.campaign, 'compiled_video_duration', None)
+            else:
+                contents = schedule.get_filtered_contents()
+                current_cc = None
+                for cc in contents:
+                    if cc.content_id == current_content_id:
+                        current_cc = cc
+                        break
+                if current_cc:
+                    duration = current_cc.get_effective_duration()
             if not duration:
                 duration = schedule.campaign.content_duration if schedule.campaign else 10
 
@@ -531,52 +613,75 @@ class ScheduleExecutor:
             print(f"[DEBUG] - Dias da semana: {schedule.days_of_week}")
             print(f"[DEBUG] - Tipo de repetição: {schedule.repeat_type}")
             
-            # Verificar dia da semana
-            days_of_week = [int(d) for d in schedule.days_of_week.split(',') if d.strip()]
-            if current_weekday not in days_of_week:
-                print(f"[DEBUG] Dia da semana {current_weekday} não está nos dias configurados {days_of_week}")
-                return False
-            
-            # Verificar horário de início
-            if schedule.start_time > current_time:
-                print(f"[DEBUG] Ainda não chegou o horário: {schedule.start_time} > {current_time}")
-                return False
-            
-            # Verificar horário de fim - com suporte a overnight schedules
-            if schedule.end_time:
-                from datetime import time as time_obj
-                midnight = time_obj(0, 0, 0)
-                
-                # Caso especial: agendamento persistente até meia-noite
+            # Preparar lista de dias (0=segunda ... 6=domingo)
+            raw_days = [int(d) for d in schedule.days_of_week.split(',') if d.strip()]
+            days_of_week = [(6 if d == 0 else d - 1) for d in raw_days]
+
+            from datetime import time as time_obj
+            midnight = time_obj(0, 0, 0)
+
+            # Garantir que ambos horários existem (modelo exige, mas por segurança)
+            if schedule.start_time and schedule.end_time:
+                # Caso especial: persistente até meia-noite -> ativo após start_time somente no mesmo dia
                 if schedule.is_persistent and schedule.end_time == midnight:
-                    print(f"[DEBUG] Agendamento persistente até meia-noite - sempre ativo após start_time")
-                    return True
-                
-                # Detectar se é um agendamento overnight (end_time < start_time)
+                    if current_time >= schedule.start_time:
+                        if current_weekday in days_of_week:
+                            print(f"[DEBUG] Persistente até 00:00 ativo após {schedule.start_time} no dia {current_weekday}")
+                            return True
+                        else:
+                            print(f"[DEBUG] Dia {current_weekday} não permitido para persistente até 00:00 {days_of_week}")
+                            return False
+                    else:
+                        print(f"[DEBUG] Ainda não chegou o horário (persistente até 00:00): {schedule.start_time} > {current_time}")
+                        return False
+
+                # Agendamento overnight (cruza a meia-noite)
                 if schedule.end_time < schedule.start_time:
                     print(f"[DEBUG] Agendamento overnight detectado: {schedule.start_time} até {schedule.end_time} (próximo dia)")
-                    # Para overnight: deve estar APÓS start_time OU ANTES end_time
+                    # Dentro da janela se: >= start OU <= end
                     if current_time >= schedule.start_time or current_time <= schedule.end_time:
-                        print(f"[DEBUG] Agendamento overnight ativo: {current_time} está no período válido")
-                        return True
+                        # Se estamos após start_time, usar o próprio dia; se estamos antes (madrugada), usar o dia anterior
+                        weekday_to_check = current_weekday if current_time >= schedule.start_time else (current_weekday - 1) % 7
+                        if weekday_to_check in days_of_week:
+                            print(f"[DEBUG] Agendamento overnight ativo: {current_time} está no período válido (weekday={weekday_to_check})")
+                            return True
+                        else:
+                            print(f"[DEBUG] Overnight: dia {weekday_to_check} não está nos dias configurados {days_of_week}")
+                            return False
                     else:
-                        print(f"[DEBUG] Agendamento overnight inativo: {current_time} não está no período válido")
+                        print(f"[DEBUG] Agendamento overnight inativo: {current_time} fora da janela")
                         return False
                 else:
-                    # Agendamento normal (mesmo dia): deve estar ENTRE start_time e end_time
-                    # Adicionar pequena tolerância para o fim da janela
+                    # Agendamento normal (mesmo dia): ativo entre start e end (com tolerância no fim)
+                    if current_time < schedule.start_time:
+                        print(f"[DEBUG] Ainda não chegou o horário: {schedule.start_time} > {current_time}")
+                        return False
                     GRACE_SECONDS = 30
                     def _time_to_seconds(t):
                         return t.hour * 3600 + t.minute * 60 + t.second
                     now_s = _time_to_seconds(current_time)
+                    start_s = _time_to_seconds(schedule.start_time)
                     end_s = _time_to_seconds(schedule.end_time) + GRACE_SECONDS
-                    if now_s <= end_s:
-                        print(f"[DEBUG] Agendamento normal ativo com tolerância: {current_time} <= {schedule.end_time} (+{GRACE_SECONDS}s)")
-                        return True
+                    if start_s <= now_s <= end_s:
+                        if current_weekday in days_of_week:
+                            print(f"[DEBUG] Agendamento normal ativo com tolerância: {current_time} entre {schedule.start_time} e {schedule.end_time} (+{GRACE_SECONDS}s)")
+                            return True
+                        else:
+                            print(f"[DEBUG] Dia da semana {current_weekday} não está nos dias configurados {days_of_week}")
+                            return False
                     else:
                         print(f"[DEBUG] Agendamento normal já passou: {schedule.end_time} < {current_time}")
                         return False
-            
+
+            # Fallback: se não há end_time definido, considerar após start_time e dia permitido
+            if schedule.start_time:
+                if current_time >= schedule.start_time and current_weekday in days_of_week:
+                    print(f"[DEBUG] Fallback ativo: após start_time e dia permitido")
+                    return True
+                else:
+                    print(f"[DEBUG] Fallback inativo: antes de start_time ou dia não permitido")
+                    return False
+
             print(f"[DEBUG] Agendamento {schedule.name} deve ser executado agora!")
             return True
             
