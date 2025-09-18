@@ -29,6 +29,10 @@ except ImportError as e:
     print("💡 Certifique-se de estar no diretório correto e ter as dependências instaladas")
     sys.exit(1)
 
+COMPANY_ITRACKER = 'iTracker'
+COMPANY_RBT = 'Rio Brasil Terminal - RBT'
+COMPANY_CLIA = 'CLIA'
+
 def init_database():
     """Inicializa banco de dados com estrutura e dados de exemplo"""
     
@@ -51,6 +55,7 @@ def init_database():
                 email='admin@tvs.com',
                 password_hash=generate_password_hash('admin123'),
                 role='admin',
+                company=COMPANY_ITRACKER,
                 is_active=True
             )
             db.session.add(admin_user)
@@ -61,6 +66,7 @@ def init_database():
                 email='manager@tvs.com', 
                 password_hash=generate_password_hash('manager123'),
                 role='manager',
+                company=COMPANY_RBT,
                 is_active=True
             )
             db.session.add(manager_user)
@@ -77,7 +83,8 @@ def init_database():
                 network_bandwidth_mbps=200,
                 peak_hours_start=time(8, 0),
                 peak_hours_end=time(18, 0),
-                is_active=True
+                is_active=True,
+                company=COMPANY_ITRACKER
             )
             db.session.add(sede_sp)
             
@@ -90,7 +97,8 @@ def init_database():
                 network_bandwidth_mbps=150,
                 peak_hours_start=time(9, 0),
                 peak_hours_end=time(17, 0),
-                is_active=True
+                is_active=True,
+                company=COMPANY_RBT
             )
             db.session.add(sede_rj)
             
@@ -103,7 +111,8 @@ def init_database():
                 network_bandwidth_mbps=100,
                 peak_hours_start=time(8, 30),
                 peak_hours_end=time(17, 30),
-                is_active=True
+                is_active=True,
+                company=COMPANY_CLIA
             )
             db.session.add(sede_bh)
             

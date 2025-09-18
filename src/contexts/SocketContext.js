@@ -19,63 +19,71 @@ export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      const token = localStorage.getItem('access_token');
-      const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
-      const socketUrl = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
+    const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+    const defaultSocketUrl = `${window.location.protocol}//${window.location.hostname}:5000`;
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || defaultSocketUrl;
 
-      const socketInstance = io(socketUrl, {
-        auth: { token },
-        // In development, force polling to avoid Werkzeug 500 on websocket transport
-        transports: isDev ? ['polling'] : ['websocket', 'polling'],
-        upgrade: !isDev,
-        rememberUpgrade: !isDev,
-        timeout: 20000,
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-      });
+    const isKiosk = window.location.pathname.startsWith('/kiosk/player/');
+    const playerIdMatch = isKiosk ? window.location.pathname.match(/\/kiosk\/player\/(.+)$/) : null;
+    const kioskPlayerId = playerIdMatch ? playerIdMatch[1].split('/')[0] : null;
 
-      socketInstance.on('connect', () => {
-        console.log('Conectado ao servidor WebSocket');
-        setConnected(true);
-      });
+    // Only connect if we are authenticated OR in kiosk mode
+    if (!user && !isKiosk) return;
 
-      socketInstance.on('disconnect', () => {
-        console.log('Desconectado do servidor WebSocket');
-        setConnected(false);
-      });
+    const token = user ? localStorage.getItem('access_token') : null;
 
-      socketInstance.on('connected', (data) => {
-        console.log('WebSocket conectado:', data);
-      });
+    const socketInstance = io(socketUrl, {
+      auth: user ? { token } : { public: true, player_id: kioskPlayerId },
+      transports: isDev ? ['polling'] : ['websocket', 'polling'],
+      upgrade: !isDev,
+      rememberUpgrade: !isDev,
+      timeout: 20000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
 
-      socketInstance.on('player_command', (data) => {
-        console.log('Comando recebido:', data);
-        // Processar comandos para players
-      });
+    socketInstance.on('connect', () => {
+      console.log('Conectado ao servidor WebSocket');
+      setConnected(true);
+      // Auto-join player room in kiosk mode
+      if (isKiosk && kioskPlayerId) {
+        socketInstance.emit('join_player', { player_id: kioskPlayerId });
+      }
+    });
 
-      socketInstance.on('notification', (notification) => {
-        setNotifications(prev => [notification, ...prev.slice(0, 49)]); // Manter apenas 50 notificações
-      });
+    socketInstance.on('disconnect', () => {
+      console.log('Desconectado do servidor WebSocket');
+      setConnected(false);
+    });
 
-      socketInstance.on('player_status_update', (data) => {
-        // Atualizar status do player em tempo real
-        console.log('Status do player atualizado:', data);
-      });
+    socketInstance.on('connected', (data) => {
+      console.log('WebSocket conectado:', data);
+    });
 
-      socketInstance.on('content_sync', (data) => {
-        // Sincronização de conteúdo
-        console.log('Sincronização de conteúdo:', data);
-      });
+    socketInstance.on('player_command', (data) => {
+      console.log('Comando recebido:', data);
+      // Processar comandos para players
+    });
 
-      setSocket(socketInstance);
+    socketInstance.on('notification', (notification) => {
+      setNotifications(prev => [notification, ...prev.slice(0, 49)]);
+    });
 
-      return () => {
-        socketInstance.disconnect();
-      };
-    }
+    socketInstance.on('player_status_update', (data) => {
+      console.log('Status do player atualizado:', data);
+    });
+
+    socketInstance.on('content_sync', (data) => {
+      console.log('Sincronização de conteúdo:', data);
+    });
+
+    setSocket(socketInstance);
+
+    return () => {
+      socketInstance.disconnect();
+    };
   }, [user]);
 
   const joinPlayerRoom = (playerId) => {

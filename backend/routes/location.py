@@ -15,6 +15,9 @@ def list_locations():
         is_active = request.args.get('is_active')
         search = request.args.get('search')
         
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         query = Location.query
         
         if is_active is not None:
@@ -26,6 +29,10 @@ def list_locations():
                 Location.city.contains(search) |
                 Location.state.contains(search)
             )
+        
+        # HR can only see their company's locations
+        if current_user and current_user.role == 'hr':
+            query = query.filter(Location.company == current_user.company)
         
         query = query.order_by(Location.created_at.desc())
         
@@ -91,7 +98,8 @@ def create_location():
             timezone=data.get('timezone', 'America/Sao_Paulo'),
             network_bandwidth_mbps=data.get('network_bandwidth_mbps', 100),
             peak_hours_start=peak_start,
-            peak_hours_end=peak_end
+            peak_hours_end=peak_end,
+            company=data.get('company', 'iTracker')
         )
         
         db.session.add(location)
@@ -110,10 +118,16 @@ def create_location():
 @jwt_required()
 def get_location(location_id):
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         location = Location.query.get(location_id)
         
         if not location:
             return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
         
         return jsonify({'location': location.to_dict()}), 200
         
@@ -150,6 +164,8 @@ def update_location(location_id):
             location.network_bandwidth_mbps = data['network_bandwidth_mbps']
         if 'is_active' in data:
             location.is_active = data['is_active']
+        if 'company' in data:
+            location.company = data['company']
         
         # Atualiza horários de pico
         if 'peak_hours_start' in data:
@@ -211,10 +227,16 @@ def delete_location(location_id):
 @jwt_required()
 def get_location_players(location_id):
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         location = Location.query.get(location_id)
         
         if not location:
             return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
         
         players = [player.to_dict() for player in location.players]
         
@@ -231,10 +253,16 @@ def get_location_players(location_id):
 @jwt_required()
 def get_location_stats(location_id):
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         location = Location.query.get(location_id)
         
         if not location:
             return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
         
         players = location.players
         total_players = len(players)
@@ -310,10 +338,16 @@ def get_timezones():
 def debug_location_players(location_id):
     """Debug endpoint to check location player status and last_ping values"""
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         location = Location.query.get(location_id)
         
         if not location:
             return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
         
         players = location.players
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
@@ -348,10 +382,16 @@ def debug_location_players(location_id):
 def force_location_players_online(location_id):
     """Force all players in a location to be online for testing purposes"""
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         location = Location.query.get(location_id)
         
         if not location:
             return jsonify({'error': 'Sede não encontrada'}), 404
+        
+        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
         
         players = location.players
         updated_players = []

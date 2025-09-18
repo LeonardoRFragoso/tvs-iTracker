@@ -35,19 +35,19 @@ const Sidebar = ({ open, onClose }) => {
       text: 'Dashboard',
       icon: <DashboardIcon />,
       path: '/dashboard',
-      roles: ['admin', 'manager', 'user'],
+      roles: ['admin', 'manager', 'user', 'hr'],
     },
     {
       text: 'Conteúdo',
       icon: <ContentIcon />,
       path: '/content',
-      roles: ['admin', 'manager', 'user'],
+      roles: ['admin', 'manager', 'user', 'hr'],
     },
     {
       text: 'Campanhas',
       icon: <CampaignIcon />,
       path: '/campaigns',
-      roles: ['admin', 'manager', 'user'],
+      roles: ['admin', 'manager', 'user', 'hr'],
     },
     {
       text: 'Players',
@@ -71,6 +71,12 @@ const Sidebar = ({ open, onClose }) => {
       text: 'Usuários',
       icon: <UsersIcon />,
       path: '/users',
+      roles: ['admin'],
+    },
+    {
+      text: 'Solicitações de acesso',
+      icon: <UsersIcon />,
+      path: '/admin/pending-users',
       roles: ['admin'],
     },
   ];
@@ -139,7 +145,7 @@ const Sidebar = ({ open, onClose }) => {
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {user?.role === 'admin' ? 'Administrador' : 
-           user?.role === 'manager' ? 'Gerente' : 'Usuário'}
+           user?.role === 'manager' ? 'Gerente' : user?.role === 'hr' ? 'RH' : 'Usuário'}
         </Typography>
       </Box>
     </Box>

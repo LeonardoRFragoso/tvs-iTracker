@@ -11,10 +11,10 @@ import {
 import { useSocket } from '../../contexts/SocketContext';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 
 const WebPlayer = ({ playerId, fullscreen = false }) => {
-  const { socket } = useSocket();
+  const { socket, joinPlayerRoom } = useSocket();
   const [currentContent, setCurrentContent] = useState(null);
   const [playlist, setPlaylist] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -32,6 +32,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     if (playerId) {
       loadPlayerData();
       connectToPlayer();
+      try { joinPlayerRoom(playerId); } catch (e) { /* noop */ }
     }
 
     return () => {
@@ -42,12 +43,15 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
 
   useEffect(() => {
     if (socket && playerId) {
-      socket.on(`player_${playerId}_command`, handlePlayerCommand);
-      socket.on(`player_${playerId}_content_update`, handleContentUpdate);
-      
+      const onPlayerCommand = (payload) => handlePlayerCommand(payload);
+      const onPlaySchedule = (payload) => handlePlaySchedule(payload);
+
+      socket.on('player_command', onPlayerCommand);
+      socket.on('play_schedule', onPlaySchedule);
+
       return () => {
-        socket.off(`player_${playerId}_command`);
-        socket.off(`player_${playerId}_content_update`);
+        socket.off('player_command', onPlayerCommand);
+        socket.off('play_schedule', onPlaySchedule);
       };
     }
   }, [socket, playerId]);
@@ -55,17 +59,24 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const loadPlayerData = async () => {
     try {
       setLoading(true);
-      const [playerRes, playlistRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/players/${playerId}`),
-        axios.get(`${API_BASE_URL}/players/${playerId}/playlist`)
-      ]);
-
-      setPlayerInfo(playerRes.data);
+      // 1) Always load playlist (public endpoint)
+      const playlistRes = await axios.get(`${API_BASE_URL}/players/${playerId}/playlist`);
       setPlaylist(playlistRes.data.contents || []);
-      
+
       if (playlistRes.data.contents && playlistRes.data.contents.length > 0) {
         setCurrentContent(playlistRes.data.contents[0]);
         setCurrentIndex(0);
+      } else {
+        setCurrentContent(null);
+        setCurrentIndex(0);
+      }
+
+      // 2) Try to load player info (may require auth) — ignore errors in kiosk mode
+      try {
+        const playerRes = await axios.get(`${API_BASE_URL}/players/${playerId}`);
+        setPlayerInfo(playerRes.data);
+      } catch (e) {
+        // Silent in kiosk
       }
     } catch (err) {
       setError('Erro ao carregar dados do player');
@@ -83,12 +94,15 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     }
   };
 
-  const handlePlayerCommand = (command) => {
-    switch (command.type) {
+  const handlePlayerCommand = (payload) => {
+    const cmd = (payload && (payload.type || payload.command)) || '';
+    switch (cmd) {
       case 'play':
+      case 'start':
         playContent();
         break;
       case 'pause':
+      case 'stop':
         pauseContent();
         break;
       case 'next':
@@ -101,21 +115,19 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         restartPlayer();
         break;
       case 'sync':
-        loadPlayerData();
-        break;
       case 'update_playlist':
         loadPlayerData();
         break;
       default:
-        console.log('Unknown command:', command);
+        console.log('Unknown command:', payload);
     }
   };
 
-  const handleContentUpdate = (data) => {
-    setPlaylist(data.contents || []);
-    if (data.contents && data.contents.length > 0) {
-      setCurrentContent(data.contents[0]);
-      setCurrentIndex(0);
+  const handlePlaySchedule = async (data) => {
+    try {
+      await loadPlayerData();
+    } catch (e) {
+      console.warn('Failed to refresh playlist on play_schedule', e);
     }
   };
 
@@ -205,7 +217,6 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       nextContent();
     }, duration);
 
-    // Simulate progress for images
     const progressInterval = setInterval(() => {
       setProgress(prev => {
         const newProgress = prev + (100 / (duration / 1000));
@@ -233,7 +244,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         return (
           <video
             ref={mediaRef}
-            src={currentContent.file_url}
+            src={currentContent.file_url || currentContent.url}
             style={commonStyle}
             onLoadedData={handleMediaLoad}
             onEnded={handleMediaEnd}
@@ -245,7 +256,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       case 'image':
         return (
           <img
-            src={currentContent.file_url}
+            src={currentContent.file_url || currentContent.url}
             alt={currentContent.title}
             style={commonStyle}
             onLoad={handleImageDisplay}
@@ -266,7 +277,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
           >
             <audio
               ref={mediaRef}
-              src={currentContent.file_url}
+              src={currentContent.file_url || currentContent.url}
               onLoadedData={handleMediaLoad}
               onEnded={handleMediaEnd}
               style={{ display: 'none' }}

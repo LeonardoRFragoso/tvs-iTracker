@@ -17,8 +17,12 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='user')  # admin, manager, user
+    role = db.Column(db.String(20), default='user')  # admin, manager, user, hr
+    company = db.Column(db.String(100), default='iTracker')  # iTracker, Rio Brasil Terminal - RBT, CLIA
     is_active = db.Column(db.Boolean, default=True)
+    # Novo: fluxo de aprovação e troca de senha
+    status = db.Column(db.String(20), default='active')  # active, pending, rejected
+    must_change_password = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = db.Column(db.DateTime)
@@ -33,6 +37,9 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'role': self.role,
+            'company': self.company,
+            'status': self.status,
+            'must_change_password': self.must_change_password,
             'is_active': self.is_active,
             'created_at': fmt_br_datetime(self.created_at),
             'last_login': fmt_br_datetime(self.last_login)

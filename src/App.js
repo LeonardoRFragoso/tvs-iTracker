@@ -21,6 +21,10 @@ import LocationForm from './pages/Locations/LocationForm';
 import ScheduleList from './pages/Schedules/ScheduleList';
 import ScheduleForm from './pages/Schedules/ScheduleForm';
 import Settings from './pages/Settings/Settings';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ChangePassword from './pages/ChangePassword';
+import PendingUsers from './pages/Admin/PendingUsers';
 
 function App() {
   return (
@@ -28,6 +32,9 @@ function App() {
       <SocketProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
           <Route path="/player/:id" element={<PrivateRoute><PlayerView /></PrivateRoute>} />
           <Route path="/" element={
             <PrivateRoute>
@@ -63,6 +70,9 @@ function App() {
             <Route path="schedules/:id/edit" element={<ScheduleForm />} />
             
             <Route path="settings" element={<Settings />} />
+            
+            {/* Admin routes */}
+            <Route path="admin/pending-users" element={<PendingUsers />} />
           </Route>
         </Routes>
       </SocketProvider>

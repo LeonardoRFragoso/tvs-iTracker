@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
+from sqlalchemy import text
 
 # Importar instância do banco
 from database import db
@@ -38,16 +39,16 @@ migrate = Migrate(app, db)
 # Configurar CORS de forma mais específica
 cors = CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "origins": "*",
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         "supports_credentials": True,
         "expose_headers": ["Content-Range", "X-Content-Range"]
     },
     r"/socket.io/*": {
-        "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        "origins": "*",
         "methods": ["GET", "POST"],
-        "allow_headers": ["Content-Type"],
+        "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": True
     }
 })
@@ -63,7 +64,7 @@ def handle_preflight():
         return response
 
 jwt = JWTManager(app)
-socketio = SocketIO(app, cors_allowed_origins=["http://localhost:3000", "http://127.0.0.1:3000"], 
+socketio = SocketIO(app, cors_allowed_origins="*", 
                   async_mode='threading', logger=False, engineio_logger=False, 
                   ping_timeout=60, ping_interval=25)
 app.socketio = socketio
@@ -131,17 +132,24 @@ def handle_connect(auth):
     # Configurar socketio no executor quando houver conexão
     schedule_executor.socketio = socketio
     print(f"WebSocket connection attempt with auth: {auth}")
-    
-    if auth and 'token' in auth:
-        try:
-            # Verificar token JWT
+
+    try:
+        # Kiosk/public mode: allow connection without JWT
+        if auth and auth.get('public'):
+            print("WebSocket public kiosk connection accepted")
+            return True
+
+        # Authenticated users: require valid JWT
+        if auth and 'token' in auth:
             from flask_jwt_extended import decode_token
             decode_token(auth['token'])
-            print("WebSocket connection successful")
+            print("WebSocket connection successful (JWT)")
             return True
-        except Exception as e:
-            print(f"WebSocket authentication failed: {e}")
-            return False
+    except Exception as e:
+        print(f"WebSocket authentication failed: {e}")
+        return False
+
+    # Default deny if neither public nor token was provided
     return False
 
 # WebSocket events
@@ -362,10 +370,40 @@ def handle_content_download_request(data):
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+# Utilitário: garantir colunas 'company' nos bancos existentes (SQLite)
+def ensure_company_columns():
+    try:
+        engine = db.engine
+        with engine.connect() as conn:
+            for table in ['users', 'locations', 'location']:
+                try:
+                    result = conn.execute(text(f"PRAGMA table_info({table})"))
+                    rows = result.fetchall()
+                    if rows:
+                        colnames = [r[1] for r in rows]
+                        if 'company' not in colnames:
+                            print(f"[DB] Adicionando coluna 'company' à tabela {table}...")
+                            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN company VARCHAR(100) DEFAULT 'iTracker'"))
+                            print(f"[DB] Coluna 'company' adicionada à tabela {table}")
+                        # Extras apenas para tabela users
+                        if table == 'users':
+                            if 'status' not in colnames:
+                                print("[DB] Adicionando coluna 'status' à tabela users...")
+                                conn.execute(text("ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT 'active'"))
+                            if 'must_change_password' not in colnames:
+                                print("[DB] Adicionando coluna 'must_change_password' à tabela users...")
+                                conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0"))
+                except Exception as inner_e:
+                    print(f"[DB] Não foi possível verificar/adicionar coluna em {table}: {inner_e}")
+    except Exception as e:
+        print(f"[DB] Erro ao garantir colunas 'company': {e}")
+
 # Inicializar banco de dados
 def create_tables():
     with app.app_context():
         db.create_all()
+        # Garantir colunas 'company' em DBs já existentes
+        ensure_company_columns()
         
         # Criar usuário admin padrão
         admin = User.query.filter_by(email='admin@tvs.com').first()
@@ -374,7 +412,8 @@ def create_tables():
                 username='admin',
                 email='admin@tvs.com',
                 password_hash=generate_password_hash('admin123'),
-                role='admin'
+                role='admin',
+                company='iTracker'
             )
             db.session.add(admin)
             db.session.commit()

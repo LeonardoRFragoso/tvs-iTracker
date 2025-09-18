@@ -86,6 +86,13 @@ class Player(db.Model):
         location = Location.query.get(self.location_id)
         return location.name if location else 'N/A'
     
+    @property
+    def company(self):
+        """Retorna a empresa associada via Location"""
+        from models.location import Location
+        location = Location.query.get(self.location_id)
+        return getattr(location, 'company', None) if location else None
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -93,6 +100,7 @@ class Player(db.Model):
             'description': self.description,
             'location_id': self.location_id,
             'location_name': self.location_name,
+            'company': self.company,
             'room_name': self.room_name,
             'mac_address': self.mac_address,
             'ip_address': self.ip_address,

@@ -233,41 +233,64 @@ const PlayerForm = () => {
             </Card>
           </Grid>
 
-          {/* Configurações de Chromecast */}
-          <Grid item xs={12}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Configurações de Chromecast
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Associe este player a um dispositivo Chromecast para reprodução remota.
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Chromecast ID"
-                      value={formData.chromecast_id}
-                      onChange={(e) => handleChange('chromecast_id', e.target.value)}
-                      placeholder="cc_living_room_001"
-                      helperText="ID único do dispositivo Chromecast"
-                    />
+          {formData.platform === 'chromecast' && (
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Configurações de Chromecast
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Associe este player a um dispositivo Chromecast para reprodução remota.
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Chromecast ID"
+                        value={formData.chromecast_id}
+                        onChange={(e) => handleChange('chromecast_id', e.target.value)}
+                        placeholder="cc_living_room_001"
+                        helperText="ID único do dispositivo Chromecast"
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Nome do Chromecast"
+                        value={formData.chromecast_name}
+                        onChange={(e) => handleChange('chromecast_name', e.target.value)}
+                        placeholder="TV Recepção"
+                        helperText="Nome amigável do dispositivo"
+                      />
+                    </Grid>
                   </Grid>
-                  <Grid item xs={12} md={6}>
-                    <TextField
-                      fullWidth
-                      label="Nome do Chromecast"
-                      value={formData.chromecast_name}
-                      onChange={(e) => handleChange('chromecast_name', e.target.value)}
-                      placeholder="TV Recepção"
-                      helperText="Nome amigável do dispositivo"
-                    />
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          </Grid>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+
+          {formData.platform === 'android' && (
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Configurações para Android TV
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Após salvar o player, abra na TV Android (ou Smart TV com navegador) o endereço:
+                    <br />
+                    <strong>Menu Players → selecionar o player → botão "Abrir Player"</strong>
+                    <br />
+                    A página do player conecta-se ao servidor e recebe automaticamente as campanhas agendadas.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Opcional: informe MAC e IP da TV em "Configurações de Rede" para facilitar identificação.
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
 
           {/* Configurações de Exibição */}
           <Grid item xs={12}>

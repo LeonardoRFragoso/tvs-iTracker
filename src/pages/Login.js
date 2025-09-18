@@ -10,6 +10,7 @@ import {
   Avatar,
   InputAdornment,
   IconButton,
+  Stack,
 } from '@mui/material';
 import {
   LockOutlined as LockIcon,
@@ -21,7 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -181,11 +182,28 @@ const Login = () => {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={{ mt: 3, mb: 1 }}
               disabled={loading}
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </Button>
+
+            <Stack direction="row" spacing={2} justifyContent="space-between" sx={{ mt: 1 }}>
+              <Button
+                component={RouterLink}
+                to="/register"
+                size="small"
+              >
+                Criar conta
+              </Button>
+              <Button
+                component={RouterLink}
+                to="/forgot-password"
+                size="small"
+              >
+                Esqueci minha senha
+              </Button>
+            </Stack>
           </Box>
 
           <Box sx={{ mt: 2, textAlign: 'center' }}>

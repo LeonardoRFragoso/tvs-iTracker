@@ -41,6 +41,7 @@ import {
   Settings as SettingsIcon,
   PlayArrow as PlayIcon,
   Stop as StopIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useSocket } from '../../contexts/SocketContext';
@@ -154,6 +155,14 @@ const PlayerDetail = () => {
             color={getStatusColor(player.status)}
             size="small"
           />
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<OpenInNewIcon />}
+            onClick={() => window.open(`/kiosk/player/${id}?fullscreen=true`, '_blank')}
+          >
+            Abrir Player
+          </Button>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}

@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_socketio import emit
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from models.player import Player, db
 from models.user import User
 from models.location import Location
+from models.schedule import Schedule
 from services.auto_sync_service import auto_sync_service
 
 player_bp = Blueprint('player', __name__)
@@ -21,16 +22,31 @@ def list_players():
         region = request.args.get('region')
         search = request.args.get('search')
         
+        # Company scoping for HR users
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         query = Player.query
         
+        if current_user and current_user.role == 'hr':
+            query = query.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
+        
         if is_online is not None:
-            query = query.filter(Player.is_online == (is_online.lower() == 'true'))
+            threshold = datetime.utcnow() - timedelta(minutes=5)
+            if is_online.lower() == 'true':
+                query = query.filter(Player.last_ping != None, Player.last_ping >= threshold)
+            else:
+                query = query.filter((Player.last_ping == None) | (Player.last_ping < threshold))
         
         if is_active is not None:
             query = query.filter(Player.is_active == (is_active.lower() == 'true'))
         
         if region:
-            query = query.filter(Player.region == region)
+            # Note: region not present on Player model; keeping for backward compat if added later
+            try:
+                query = query.filter(Player.region == region)  # type: ignore[attr-defined]
+            except Exception:
+                pass
         
         if search:
             query = query.filter(Player.name.contains(search))
@@ -67,10 +83,19 @@ def create_player():
         if not data.get('name'):
             return jsonify({'error': 'Nome é obrigatório'}), 400
         
+        # Validate location ownership if provided
+        loc_id = data.get('location_id')
+        if not loc_id:
+            return jsonify({'error': 'location_id é obrigatório'}), 400
+        location = Location.query.get(loc_id)
+        if not location:
+            return jsonify({'error': 'Sede (location) não encontrada'}), 404
+        
+        # Even admins/managers can create across companies; HR is not allowed to create
         player = Player(
             name=data['name'],
             description=data.get('description', ''),
-            location_id=data.get('location_id'),
+            location_id=loc_id,
             room_name=data.get('room_name', ''),
             mac_address=data.get('mac_address', ''),
             ip_address=data.get('ip_address', ''),
@@ -102,10 +127,19 @@ def create_player():
 @jwt_required()
 def get_player(player_id):
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         player = Player.query.get(player_id)
         
         if not player:
             return jsonify({'error': 'Player não encontrado'}), 404
+        
+        # HR can only access players from their company
+        if current_user and current_user.role == 'hr':
+            location = Location.query.get(player.location_id)
+            if not location or location.company != current_user.company:
+                return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
         
         return jsonify(player.to_dict()), 200
         
@@ -127,6 +161,12 @@ def update_player(player_id):
             return jsonify({'error': 'Sem permissão para editar players'}), 403
         
         data = request.get_json()
+        
+        # If changing location, ensure it's valid
+        if 'location_id' in data and data['location_id']:
+            new_loc = Location.query.get(data['location_id'])
+            if not new_loc:
+                return jsonify({'error': 'Sede (location) não encontrada'}), 404
         
         # Atualizar campos do player
         if 'name' in data:
@@ -212,7 +252,8 @@ def player_ping(player_id):
         
         data = request.get_json() or {}
         
-        player.is_online = True
+        # Atualiza status com base no ping
+        player.status = 'online'
         player.last_ping = datetime.utcnow()
         
         if 'storage_used' in data:
@@ -275,10 +316,19 @@ def sync_player(player_id):
     try:
         print(f"[SYNC] Iniciando sincronização para player: {player_id}")
         
+        # Company scoping for HR
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         player = Player.query.get(player_id)
         if not player:
             print(f"[SYNC] Player {player_id} não encontrado")
             return jsonify({'error': 'Player não encontrado'}), 404
+        
+        if current_user and current_user.role == 'hr':
+            location = Location.query.get(player.location_id)
+            if not location or location.company != current_user.company:
+                return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
         
         print(f"[SYNC] Player encontrado: {player.name}, Chromecast ID: {player.chromecast_id}")
         
@@ -422,9 +472,17 @@ def sync_all_players():
 def force_player_online(player_id):
     """Force a player to be online for testing purposes"""
     try:
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
         player = Player.query.get(player_id)
         if not player:
             return jsonify({'error': 'Player não encontrado'}), 404
+        
+        if current_user and current_user.role == 'hr':
+            location = Location.query.get(player.location_id)
+            if not location or location.company != current_user.company:
+                return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
         
         # Force update last_ping to make player appear online
         player.last_ping = datetime.utcnow()
@@ -446,7 +504,13 @@ def force_player_online(player_id):
 @jwt_required()
 def get_player_locations():
     try:
-        locations = Location.query.filter(Location.is_active == True).all()
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
+        
+        if current_user and current_user.role == 'hr':
+            locations = Location.query.filter(Location.is_active == True, Location.company == current_user.company).all()
+        else:
+            locations = Location.query.filter(Location.is_active == True).all()
         return jsonify({
             'locations': [location.to_dict() for location in locations]
         }), 200
@@ -469,19 +533,37 @@ def get_regions():
 @jwt_required()
 def get_player_stats():
     try:
-        total_players = Player.query.count()
-        online_players = Player.query.filter(Player.is_online == True).count()
-        active_players = Player.query.filter(Player.is_active == True).count()
+        user_id = get_jwt_identity()
+        current_user = User.query.get(user_id)
         
-        stats_by_platform = db.session.query(
+        # Base queries
+        q_all = Player.query
+        if current_user and current_user.role == 'hr':
+            q_all = q_all.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
+        
+        threshold = datetime.utcnow() - timedelta(minutes=5)
+        q_online = q_all.filter(Player.last_ping != None, Player.last_ping >= threshold)
+        q_active = q_all.filter(Player.is_active == True)
+        
+        total_players = q_all.count()
+        online_players = q_online.count()
+        active_players = q_active.count()
+        
+        stats_by_platform_q = db.session.query(
             Player.platform,
             db.func.count(Player.id).label('count')
-        ).group_by(Player.platform).all()
+        )
+        if current_user and current_user.role == 'hr':
+            stats_by_platform_q = stats_by_platform_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
+        stats_by_platform = stats_by_platform_q.group_by(Player.platform).all()
         
-        stats_by_region = db.session.query(
+        stats_by_region_q = db.session.query(
             Player.region,
             db.func.count(Player.id).label('count')
-        ).filter(Player.region != '').group_by(Player.region).all()
+        ).filter(Player.region != '')
+        if current_user and current_user.role == 'hr':
+            stats_by_region_q = stats_by_region_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
+        stats_by_region = stats_by_region_q.group_by(Player.region).all()
         
         return jsonify({
             'total_players': total_players,
@@ -492,5 +574,122 @@ def get_player_stats():
             'by_region': {stat[0]: stat[1] for stat in stats_by_region}
         }), 200
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/<player_id>/connect', methods=['POST'])
+def connect_player(player_id):
+    """Public endpoint for Web/Android players to announce presence and mark online.
+    Updates last_ping, status and optionally records IP address.
+    """
+    try:
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        # Update status
+        player.status = 'online'
+        player.last_ping = datetime.utcnow()
+        # Best-effort capture of IP
+        try:
+            remote_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+            if remote_ip:
+                player.ip_address = remote_ip
+        except Exception:
+            pass
+
+        db.session.commit()
+
+        # Notify admins of status update (optional)
+        try:
+            from app import socketio
+            socketio.emit('player_status_update', {
+                'player_id': player_id,
+                'is_online': True,
+                'last_seen': datetime.utcnow().isoformat()
+            }, room='admin')
+        except Exception:
+            pass
+
+        return jsonify({'message': 'Player conectado', 'player_id': player_id}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@player_bp.route('/<player_id>/playlist', methods=['GET'])
+def get_player_playlist(player_id):
+    """Public endpoint to provide the current playlist for a Web/Android player.
+    Chooses the active MAIN schedule for the player (if any) and returns a list of items
+    normalized for the WebPlayer (type, file_url, title, description, duration).
+    """
+    try:
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        now = datetime.now()
+        # Find schedules in date window and active flag
+        schedules = Schedule.query.filter(
+            Schedule.player_id == player_id,
+            Schedule.is_active == True,
+            Schedule.start_date <= now,
+            Schedule.end_date >= now
+        ).all()
+
+        # Filter those active in time window (hours/days) and separate by content type
+        active_main = []
+        active_overlay = []
+        for s in schedules:
+            try:
+                if s.is_active_now():
+                    if (s.content_type or 'main') == 'overlay':
+                        active_overlay.append(s)
+                    else:
+                        active_main.append(s)
+            except Exception:
+                continue
+
+        chosen = (active_main[0] if active_main else (active_overlay[0] if active_overlay else None))
+        if not chosen:
+            return jsonify({'player_id': player_id, 'contents': []}), 200
+
+        # Build playlist items from schedule filtered contents
+        media_base = request.host_url.rstrip('/')
+        items = []
+        try:
+            filtered = chosen.get_filtered_contents() or []
+            for cc in filtered:
+                content = getattr(cc, 'content', None)
+                if not content or not getattr(content, 'file_path', None):
+                    continue
+                filename = str(content.file_path).split('/')[-1]
+                file_url = f"{media_base}/uploads/{filename}"
+                ctype = (content.content_type or '').lower()
+                if ctype.startswith('img') or ctype == 'image':
+                    item_type = 'image'
+                elif ctype.startswith('aud') or ctype == 'audio':
+                    item_type = 'audio'
+                else:
+                    item_type = 'video'
+
+                duration = None
+                try:
+                    duration = cc.get_effective_duration()
+                except Exception:
+                    duration = getattr(content, 'duration', None)
+
+                items.append({
+                    'id': content.id,
+                    'title': content.title,
+                    'description': getattr(content, 'description', ''),
+                    'type': item_type,
+                    'file_url': file_url,
+                    'duration': duration or 10
+                })
+        except Exception:
+            items = []
+
+        return jsonify({'player_id': player_id, 'schedule_id': chosen.id, 'contents': items}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -17,6 +17,7 @@ class Location(db.Model):
     city = db.Column(db.String(50), nullable=False)
     state = db.Column(db.String(2), nullable=False)
     address = db.Column(db.Text)
+    company = db.Column(db.String(100), default='iTracker')  # iTracker, Rio Brasil Terminal - RBT, CLIA
     
     # Configurações de rede
     timezone = db.Column(db.String(50), default='America/Sao_Paulo')
@@ -41,6 +42,7 @@ class Location(db.Model):
             'city': self.city,
             'state': self.state,
             'address': self.address,
+            'company': self.company,
             'timezone': self.timezone,
             'network_bandwidth_mbps': self.network_bandwidth_mbps,
             'peak_hours_start': self.peak_hours_start.strftime('%H:%M') if self.peak_hours_start else None,

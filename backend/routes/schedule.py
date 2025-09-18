@@ -5,6 +5,7 @@ from models.schedule import Schedule, db
 from models.campaign import Campaign
 from models.player import Player
 from models.user import User
+from models.location import Location
 
 schedule_bp = Blueprint('schedule', __name__)
 
@@ -90,6 +91,8 @@ def list_schedules():
         player_id = request.args.get('player_id')
         is_active = request.args.get('is_active')
         
+        current_user = User.query.get(get_jwt_identity())
+        
         query = Schedule.query
         
         if campaign_id:
@@ -100,6 +103,12 @@ def list_schedules():
         
         if is_active is not None:
             query = query.filter(Schedule.is_active == (is_active.lower() == 'true'))
+        
+        # HR: restrict to schedules of players in their company
+        if current_user and current_user.role == 'hr':
+            query = query.join(Player, Schedule.player_id == Player.id) \
+                         .join(Location, Player.location_id == Location.id) \
+                         .filter(Location.company == current_user.company)
         
         query = query.order_by(Schedule.created_at.desc())
         
@@ -127,8 +136,8 @@ def create_schedule():
         user = User.query.get(user_id)
         print(f"[DEBUG] User: {user.username if user else 'None'}, Role: {user.role if user else 'None'}")
         
-        if user.role not in ['admin', 'manager']:
-            return jsonify({'error': 'Apenas administradores e gerentes podem criar agendamentos'}), 403
+        if user.role not in ['admin', 'manager', 'hr']:
+            return jsonify({'error': 'Apenas administradores, gerentes e RH podem criar agendamentos'}), 403
         
         data = request.get_json()
         print(f"[DEBUG] Received data: {data}")
@@ -149,6 +158,12 @@ def create_schedule():
         if not player:
             print(f"[DEBUG] Player not found: {data['player_id']}")
             return jsonify({'error': 'Player não encontrado'}), 404
+        
+        # HR scoping: player must belong to user's company
+        if user.role == 'hr':
+            loc = Location.query.get(player.location_id)
+            if not loc or loc.company != user.company:
+                return jsonify({'error': 'RH só pode agendar para players da sua empresa'}), 403
         
         print(f"[DEBUG] Campaign: {campaign.name}, Player: {player.name}")
         
@@ -231,10 +246,17 @@ def create_schedule():
 @jwt_required()
 def get_schedule(schedule_id):
     try:
+        current_user = User.query.get(get_jwt_identity())
         schedule = Schedule.query.get(schedule_id)
         
         if not schedule:
             return jsonify({'error': 'Agendamento não encontrado'}), 404
+        
+        if current_user and current_user.role == 'hr':
+            player = Player.query.get(schedule.player_id)
+            loc = Location.query.get(player.location_id) if player else None
+            if not loc or loc.company != current_user.company:
+                return jsonify({'error': 'Acesso negado a agendamento de outra empresa'}), 403
         
         return jsonify({'schedule': schedule.to_dict()}), 200
         
@@ -252,8 +274,15 @@ def update_schedule(schedule_id):
         if not schedule:
             return jsonify({'error': 'Agendamento não encontrado'}), 404
         
-        if user.role not in ['admin', 'manager']:
+        if user.role not in ['admin', 'manager', 'hr']:
             return jsonify({'error': 'Sem permissão para editar agendamentos'}), 403
+        
+        # HR scoping: schedule's player must be in same company
+        if user.role == 'hr':
+            player = Player.query.get(schedule.player_id)
+            loc = Location.query.get(player.location_id) if player else None
+            if not loc or loc.company != user.company:
+                return jsonify({'error': 'Acesso negado a agendamento de outra empresa'}), 403
         
         data = request.get_json()
         
@@ -334,8 +363,15 @@ def delete_schedule(schedule_id):
         if not schedule:
             return jsonify({'error': 'Agendamento não encontrado'}), 404
         
-        if user.role not in ['admin', 'manager']:
+        if user.role not in ['admin', 'manager', 'hr']:
             return jsonify({'error': 'Sem permissão para deletar agendamentos'}), 403
+        
+        # HR scoping
+        if user.role == 'hr':
+            player = Player.query.get(schedule.player_id)
+            loc = Location.query.get(player.location_id) if player else None
+            if not loc or loc.company != user.company:
+                return jsonify({'error': 'Acesso negado a agendamento de outra empresa'}), 403
         
         db.session.delete(schedule)
         db.session.commit()
@@ -380,10 +416,17 @@ def get_schedules_by_campaign(campaign_id):
         per_page = request.args.get('per_page', 20, type=int)
         is_active = request.args.get('is_active')
         
+        current_user = User.query.get(get_jwt_identity())
+        
         query = Schedule.query.filter(Schedule.campaign_id == campaign_id)
         
         if is_active is not None:
             query = query.filter(Schedule.is_active == (is_active.lower() == 'true'))
+        
+        if current_user and current_user.role == 'hr':
+            query = query.join(Player, Schedule.player_id == Player.id) \
+                         .join(Location, Player.location_id == Location.id) \
+                         .filter(Location.company == current_user.company)
         
         query = query.order_by(Schedule.created_at.desc())
         
@@ -412,10 +455,19 @@ def check_schedule_conflicts():
         data = request.get_json()
         print(f"[DEBUG] Received data: {data}")
         
+        current_user = User.query.get(get_jwt_identity())
+        
         player_id = data.get('player_id')
         campaign_id = data.get('campaign_id')
         start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
         end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
+        
+        # HR scoping: ensure player belongs to user's company
+        if current_user and current_user.role == 'hr':
+            player = Player.query.get(player_id)
+            loc = Location.query.get(player.location_id) if player else None
+            if not loc or loc.company != current_user.company:
+                return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
         
         start_time = None
         end_time = None
@@ -539,12 +591,19 @@ def force_execute_schedule(schedule_id):
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         
-        if user.role not in ['admin', 'manager']:
+        if user.role not in ['admin', 'manager', 'hr']:
             return jsonify({'error': 'Sem permissão para executar agendamentos'}), 403
         
         schedule = Schedule.query.get(schedule_id)
         if not schedule:
             return jsonify({'error': 'Agendamento não encontrado'}), 404
+        
+        # HR scoping
+        if user.role == 'hr':
+            player = Player.query.get(schedule.player_id)
+            loc = Location.query.get(player.location_id) if player else None
+            if not loc or loc.company != user.company:
+                return jsonify({'error': 'Acesso negado a agendamento de outra empresa'}), 403
         
         # Importar executor
         from services.schedule_executor import schedule_executor
