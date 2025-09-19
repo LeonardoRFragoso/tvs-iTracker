@@ -28,9 +28,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { useTheme } from '../../contexts/ThemeContext';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+import axios from '../../config/axios';
 
 const ContentForm = () => {
   const navigate = useNavigate();
@@ -68,7 +66,7 @@ const ContentForm = () => {
   const loadContent = async () => {
     try {
       console.log('Loading content for ID:', id);
-      const response = await axios.get(`${API_BASE_URL}/content/${id}`);
+      const response = await axios.get(`/content/${id}`);
       console.log('API Response:', response.data);
       
       const content = response.data.content || response.data; // Handle both formats
@@ -87,9 +85,9 @@ const ContentForm = () => {
       
       // Set preview using the correct backend endpoints
       if (content.thumbnail_path) {
-        setPreview(`${API_BASE_URL}/content/thumbnails/${content.thumbnail_path}`);
+        setPreview(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/thumbnails/${content.thumbnail_path}`);
       } else if (content.filename && content.content_type?.startsWith('image/')) {
-        setPreview(`${API_BASE_URL}/content/media/${content.filename}`);
+        setPreview(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.filename}`);
       }
     } catch (err) {
       console.error('Load content error:', err);
@@ -226,9 +224,9 @@ const ContentForm = () => {
 
       let response;
       if (isEdit) {
-        response = await axios.put(`${API_BASE_URL}/content/${id}`, submitData, config);
+        response = await axios.put(`/content/${id}`, submitData, config);
       } else {
-        response = await axios.post(`${API_BASE_URL}/content`, submitData, config);
+        response = await axios.post(`/content`, submitData, config);
       }
 
       setSuccess(isEdit ? 'Conteúdo atualizado com sucesso!' : 'Conteúdo criado com sucesso!');

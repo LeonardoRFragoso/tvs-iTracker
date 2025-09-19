@@ -43,11 +43,9 @@ import {
   Stop as StopIcon,
   OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
-import axios from 'axios';
+import axios from '../../config/axios';
 import { useSocket } from '../../contexts/SocketContext';
 import CastManager from '../../components/Cast/CastManager';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 
 const PlayerDetail = () => {
   const { id } = useParams();
@@ -61,7 +59,7 @@ const PlayerDetail = () => {
 
   const regenerateCode = async () => {
     try {
-      await axios.post(`${API_BASE_URL}/players/${id}/regenerate-code`);
+      await axios.post(`/players/${id}/regenerate-code`);
       await loadPlayer();
     } catch (err) {
       setError('Erro ao regenerar código');
@@ -75,7 +73,7 @@ const PlayerDetail = () => {
   const loadPlayer = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/players/${id}`);
+      const response = await axios.get(`/players/${id}`);
       setPlayer(response.data);
     } catch (err) {
       setError('Erro ao carregar player');
@@ -89,7 +87,7 @@ const PlayerDetail = () => {
     try {
       if (command === 'sync') {
         // Para sync, usar endpoint HTTP específico
-        const response = await axios.post(`${API_BASE_URL}/players/${id}/sync`);
+        const response = await axios.post(`/players/${id}/sync`);
         if (response.data.chromecast_status === 'found') {
           setError(''); // Limpar erros anteriores
         }
@@ -106,7 +104,7 @@ const PlayerDetail = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/players/${id}`);
+      await axios.delete(`/players/${id}`);
       navigate('/players');
     } catch (err) {
       setError('Erro ao deletar player');

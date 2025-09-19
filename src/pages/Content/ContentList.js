@@ -47,10 +47,8 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../config/axios';
 import { useTheme } from '../../contexts/ThemeContext';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // BR datetime helpers for display
 const parseDateTimeFlexible = (value) => {
@@ -138,7 +136,7 @@ const ContentList = () => {
         category: filterCategory !== 'all' ? filterCategory : undefined,
       };
 
-      const response = await axios.get(`${API_BASE_URL}/content`, { params });
+      const response = await axios.get(`/content`, { params });
       setContents(response.data.contents);
       setTotalPages(response.data.pages);
     } catch (err) {
@@ -151,7 +149,7 @@ const ContentList = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/content/${deleteDialog.content.id}`);
+      await axios.delete(`/content/${deleteDialog.content.id}`);
       setDeleteDialog({ open: false, content: null });
       loadContents();
     } catch (err) {
@@ -491,7 +489,7 @@ const ContentList = () => {
                   >
                     {content.thumbnail_path ? (
                       <img
-                        src={`${API_BASE_URL}/content/thumbnails/${content.thumbnail_path}`}
+                        src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/thumbnails/${content.thumbnail_path}`}
                         alt={content.title}
                         style={{
                           width: '100%',
@@ -808,7 +806,7 @@ const ContentList = () => {
           Editar
         </MenuItem>
         <MenuItem onClick={() => {
-          window.open(`${API_BASE_URL}/content/media/${selectedContent?.file_path}`, '_blank');
+          window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${selectedContent?.file_path}`, '_blank');
           handleMenuClose();
         }}>
           <DownloadIcon sx={{ mr: 1 }} />
@@ -870,7 +868,7 @@ const ContentList = () => {
         <DialogContent>
           {previewDialog.content?.content_type === 'video' && (
             <video
-              src={`${API_BASE_URL}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
               controls
               style={{
                 width: '100%',
@@ -880,7 +878,7 @@ const ContentList = () => {
           )}
           {previewDialog.content?.content_type === 'image' && (
             <img
-              src={`${API_BASE_URL}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
               alt={previewDialog.content?.title}
               style={{
                 width: '100%',
@@ -891,14 +889,14 @@ const ContentList = () => {
           )}
           {previewDialog.content?.content_type === 'audio' && (
             <audio
-              src={`${API_BASE_URL}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
               controls
               style={{ width: '100%' }}
             />
           )}
           {previewDialog.content?.content_type === 'html' && (
             <iframe
-              src={`${API_BASE_URL}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
               title={previewDialog.content?.title}
               style={{
                 width: '100%',
@@ -926,7 +924,7 @@ const ContentList = () => {
         </DialogContent>
         <DialogActions>
           <Button 
-            onClick={() => window.open(`${API_BASE_URL}/content/media/${previewDialog.content?.file_path}`, '_blank')}
+            onClick={() => window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`, '_blank')}
             startIcon={<DownloadIcon />}
           >
             Download

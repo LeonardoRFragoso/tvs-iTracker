@@ -45,12 +45,11 @@ import {
   OndemandVideo as VideoCompiledIcon
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import axios from 'axios';
+import axios from '../../config/axios';
 import PlaybackPreview from './PlaybackPreview';
 import { useSocket } from '../../contexts/SocketContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
-const API_HOST = API_BASE_URL.replace(/\/api$/, '');
+const API_HOST = axios.defaults.baseURL.replace(/\/api$/, '');
 
 const MultiContentManager = ({ campaignId, onContentChange }) => {
   const [campaignContents, setCampaignContents] = useState([]);
@@ -122,8 +121,8 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     try {
       setLoading(true);
       const [contentsResp, campaignResp] = await Promise.all([
-        axios.get(`${API_BASE_URL}/campaigns/${campaignId}/contents`),
-        axios.get(`${API_BASE_URL}/campaigns/${campaignId}`)
+        axios.get(`/campaigns/${campaignId}/contents`),
+        axios.get(`/campaigns/${campaignId}`)
       ]);
       const data = contentsResp.data || {};
       const items = data.contents || data.campaign_contents || [];
@@ -140,7 +139,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
 
   const loadAvailableContents = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/content?per_page=1000`);
+      const response = await axios.get(`/content?per_page=1000`);
       setAvailableContents(response.data.contents || []);
     } catch (err) {
       console.error('Load available contents error:', err);
@@ -150,7 +149,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
   const fetchCompiledStatus = async () => {
     if (!campaignId) return null;
     try {
-      const resp = await axios.get(`${API_BASE_URL}/campaigns/${campaignId}/compile/status`);
+      const resp = await axios.get(`/campaigns/${campaignId}/compile/status`);
       const data = resp.data || null;
       setCompiledInfo(data);
       setCompileError('');
@@ -170,7 +169,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       const body = preset === 'custom'
         ? { resolution: customResolution, fps: Number(customFps) || 30 }
         : { preset };
-      await axios.post(`${API_BASE_URL}/campaigns/${campaignId}/compile`, body);
+      await axios.post(`/campaigns/${campaignId}/compile`, body);
       const poll = async (retries = 120) => {
         const statusData = await fetchCompiledStatus();
         const s = statusData?.compiled_video_status || null;
@@ -195,7 +194,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
   const handleAddContent = async () => {
     try {
       setLoading(true);
-      await axios.post(`${API_BASE_URL}/campaigns/${campaignId}/contents`, contentFormData);
+      await axios.post(`/campaigns/${campaignId}/contents`, contentFormData);
       setSuccess('Conteúdo adicionado com sucesso!');
       setAddContentDialog(false);
       resetForm();
@@ -213,7 +212,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     try {
       setLoading(true);
       await axios.put(
-        `${API_BASE_URL}/campaigns/${campaignId}/contents/${selectedContent.content_id}`,
+        `/campaigns/${campaignId}/contents/${selectedContent.content_id}`,
         contentFormData
       );
       setSuccess('Conteúdo atualizado com sucesso!');
@@ -236,7 +235,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
 
     try {
       setLoading(true);
-      await axios.delete(`${API_BASE_URL}/campaigns/${campaignId}/contents/${contentId}`);
+      await axios.delete(`/campaigns/${campaignId}/contents/${contentId}`);
       setSuccess('Conteúdo removido com sucesso!');
       loadCampaignContents();
       if (onContentChange) onContentChange();
@@ -250,7 +249,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
 
   const handleToggleActive = async (contentId, isActive) => {
     try {
-      await axios.put(`${API_BASE_URL}/campaigns/${campaignId}/contents/${contentId}`, {
+      await axios.put(`/campaigns/${campaignId}/contents/${contentId}`, {
         is_active: !isActive
       });
       loadCampaignContents();
@@ -276,7 +275,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     const content_order = items.map((item) => item.content_id);
 
     try {
-      await axios.put(`${API_BASE_URL}/campaigns/${campaignId}/contents/reorder`, {
+      await axios.put(`/campaigns/${campaignId}/contents/reorder`, {
         content_orders,
         content_order
       });

@@ -70,7 +70,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import axios from 'axios';
+import axios from '../config/axios';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -84,8 +84,6 @@ ChartJS.register(
   Legend,
   Filler
 );
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 // Skeleton loading component for stat cards
 const StatCardSkeleton = ({ delay = 0 }) => (
@@ -403,10 +401,10 @@ const Dashboard = () => {
     try {
       if (!silent) setLoading(true);
       const [statsRes, alertsRes, performanceRes, healthRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/dashboard/stats`),
-        axios.get(`${API_BASE_URL}/dashboard/alerts`),
-        axios.get(`${API_BASE_URL}/dashboard/performance`),
-        axios.get(`${API_BASE_URL}/dashboard/health`),
+        axios.get('/dashboard/stats'),
+        axios.get('/dashboard/alerts'),
+        axios.get('/dashboard/performance'),
+        axios.get('/dashboard/health'),
       ]);
 
       setStats(statsRes.data);

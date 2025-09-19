@@ -234,7 +234,7 @@ def update_content(content_id):
                     content.thumbnail_path = os.path.basename(thumbnail_path)
                 
                 # Atualizar duração em update de arquivo (multipart)
-                if content_type == 'video':
+                if content.content_type == 'video':
                     try:
                         real_dur_new = get_video_duration_seconds(file_path)
                         if real_dur_new and real_dur_new > 0:

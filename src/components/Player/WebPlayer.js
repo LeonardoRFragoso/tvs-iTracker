@@ -27,7 +27,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [circuitBreakerOpen, setCircuitBreakerOpen] = useState(false);
   const [muted, setMuted] = useState(true); // start muted to allow autoplay
+  const [segments, setSegments] = useState([]); // [{campaign_id, campaign_name, startIndex, endIndex, length}]
+  const [currentSegmentIdx, setCurrentSegmentIdx] = useState(-1);
+  const [showCampaignBanner, setShowCampaignBanner] = useState(false);
   const userInteractedRef = useRef(false);
+  const mediaErrorCountRef = useRef(0); // retry guard for media errors
 
   const mediaRef = useRef(null);
   const intervalRef = useRef(null);
@@ -58,6 +62,14 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     return () => {
       console.log('[WebPlayer] Cleanup');
       clearAllTimeouts();
+      const el = mediaRef.current;
+      if (el) {
+        try {
+          if (el.pause) el.pause();
+          if (el.removeAttribute) el.removeAttribute('src');
+          if (el.load) el.load();
+        } catch (_) {}
+      }
     };
   }, [playerId, circuitBreakerOpen]);
 
@@ -109,6 +121,10 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       document.removeEventListener('touchstart', onUserInteract);
     };
   }, []);
+
+  useEffect(() => {
+    mediaErrorCountRef.current = 0;
+  }, [currentIndex, currentContent?.id]);
 
   const clearAllTimeouts = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -184,6 +200,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         setCurrentIndex(0);
         setLoadAttempts(0); // Reset counter on success
         setError(''); // Clear any previous errors
+        
+        // Compute campaign segments
+        const segs = buildSegments(playlistRes.data.contents);
+        setSegments(segs);
+        setCurrentSegmentIdx(segs.length ? 0 : -1);
       } else {
         console.log('[WebPlayer] Nenhum conteúdo encontrado, aguardando...');
         setCurrentContent(null);
@@ -319,6 +340,41 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       setCurrentIndex(nextIndex);
       setCurrentContent(playlist[nextIndex]);
       setProgress(0);
+
+      // Update current segment and show banner when campaign changes
+      if (segments.length > 0) {
+        const segIdx = segments.findIndex(seg => nextIndex >= seg.startIndex && nextIndex <= seg.endIndex);
+        if (segIdx !== -1 && segIdx !== currentSegmentIdx) {
+          setCurrentSegmentIdx(segIdx);
+          setShowCampaignBanner(true);
+          setTimeout(() => setShowCampaignBanner(false), 2000);
+        }
+      }
+
+      // Single-item playlist handling without remounting
+      if (playlist.length === 1) {
+        const onlyItem = playlist[0];
+        if (mediaRef.current && onlyItem?.type === 'video') {
+          try {
+            mediaRef.current.pause();
+            mediaRef.current.currentTime = 0;
+            mediaRef.current.play().catch(() => {});
+          } catch (_) {}
+        } else if (onlyItem?.type === 'image') {
+          // Re-arm image timers explicitly since onLoad won't fire again
+          if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          handleImageDisplay();
+        }
+      }
+
+      // If we wrapped to the first item, refresh playlist to capture any new schedules
+      if (nextIndex === 0) {
+        try {
+          debouncedLoadPlayerData();
+          // Recompute segments after refresh will be handled within loadPlayerData
+        } catch (_) {}
+      }
     }
   };
 
@@ -375,29 +431,84 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   };
 
   const handleMediaEnd = () => {
-    nextContent();
+    if (playlist.length === 1) {
+      // Single item: loop seamlessly
+      if (mediaRef.current) {
+        try {
+          mediaRef.current.currentTime = 0;
+          mediaRef.current.play().catch(() => {});
+        } catch (_) {}
+      }
+    } else {
+      nextContent();
+    }
+  };
+
+  const handleMediaError = (e) => {
+    console.error('[WebPlayer] Erro ao carregar mídia:', e);
+    // Try a single in-place reload without remounting
+    mediaErrorCountRef.current = (mediaErrorCountRef.current || 0) + 1;
+    const el = mediaRef.current;
+    if (el && mediaErrorCountRef.current <= 1) {
+      try {
+        el.pause?.();
+        el.load?.();
+        el.play?.().catch(() => {});
+        return;
+      } catch (_) {}
+    }
+    // Fallback to next content after short delay to avoid stall
+    mediaErrorCountRef.current = 0;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      nextContent();
+    }, 2000);
   };
 
   const handleImageDisplay = () => {
     const duration = (currentContent.duration || 10) * 1000;
     
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
     
     timeoutRef.current = setTimeout(() => {
       nextContent();
     }, duration);
 
-    const progressInterval = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       setProgress(prev => {
-        const newProgress = prev + (100 / (duration / 1000));
+        const step = 100 / (duration / 1000);
+        const newProgress = prev + step;
         if (newProgress >= 100) {
-          clearInterval(progressInterval);
+          clearInterval(intervalRef.current);
           return 100;
         }
         return newProgress;
       });
     }, 1000);
   };
+
+  const buildSegments = useCallback((items) => {
+    if (!Array.isArray(items) || items.length === 0) return [];
+    const segs = [];
+    let i = 0;
+    while (i < items.length) {
+      const first = items[i] || {};
+      const cid = first.campaign_id || `unknown-${i}`;
+      const cname = first.campaign_name || 'Campanha';
+      let start = i;
+      let end = i;
+      while (end + 1 < items.length) {
+        const next = items[end + 1] || {};
+        const nextCid = next.campaign_id || `unknown-${end + 1}`;
+        if (nextCid !== cid) break;
+        end += 1;
+      }
+      segs.push({ campaign_id: cid, campaign_name: cname, startIndex: start, endIndex: end, length: end - start + 1 });
+      i = end + 1;
+    }
+    return segs;
+  }, []);
 
   const renderContent = () => {
     if (!currentContent) return null;
@@ -414,24 +525,29 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         return (
           <video
             ref={mediaRef}
+            key="video-player"
             src={currentContent.file_url || currentContent.url}
             style={commonStyle}
             onLoadedData={handleMediaLoad}
             onEnded={handleMediaEnd}
+            onError={handleMediaError}
             muted={muted}
             playsInline
             autoPlay
             preload="auto"
+            loop={playlist.length === 1}
           />
         );
       
       case 'image':
         return (
           <img
+            key="image-player"
             src={currentContent.file_url || currentContent.url}
             alt={currentContent.title}
             style={commonStyle}
             onLoad={handleImageDisplay}
+            onError={handleMediaError}
           />
         );
       
@@ -444,14 +560,16 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'linear-gradient(45deg, #1976d2, #42a5f5)',
+              background: 'linear-gradient(45deg, #1976d2, #42a5f5)'
             }}
           >
             <audio
               ref={mediaRef}
+              key="audio-player"
               src={currentContent.file_url || currentContent.url}
               onLoadedData={handleMediaLoad}
               onEnded={handleMediaEnd}
+              onError={handleMediaError}
               style={{ display: 'none' }}
             />
             <Typography variant="h3" color="white" textAlign="center" mb={2}>
@@ -571,6 +689,47 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     >
       {renderContent()}
       
+      {/* Campaign change banner */}
+      {showCampaignBanner && currentSegmentIdx >= 0 && segments[currentSegmentIdx] && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            color: 'white',
+            px: 3,
+            py: 1.5,
+            borderRadius: 1,
+            zIndex: 10000,
+          }}
+        >
+          <Typography variant="h5" fontWeight={600}>
+            Campanha: {segments[currentSegmentIdx].campaign_name}
+          </Typography>
+        </Box>
+      )}
+      
+      {/* Campaign mini progress bar (item-based) */}
+      {currentSegmentIdx >= 0 && segments[currentSegmentIdx] && (
+        <LinearProgress
+          variant="determinate"
+          value={((currentIndex - segments[currentSegmentIdx].startIndex + 1) / segments[currentSegmentIdx].length) * 100}
+          sx={{
+            position: 'absolute',
+            bottom: 6,
+            left: 0,
+            right: 0,
+            height: 3,
+            backgroundColor: 'rgba(255,255,255,0.2)',
+            '& .MuiLinearProgress-bar': {
+              backgroundColor: '#66bb6a',
+            },
+          }}
+        />
+      )}
+      
       {/* Progress Bar */}
       <LinearProgress
         variant="determinate"
@@ -634,6 +793,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
           <Typography variant="body2" noWrap>
             {currentIndex + 1} de {playlist.length}
           </Typography>
+          {currentSegmentIdx >= 0 && segments[currentSegmentIdx] && (
+            <Typography variant="body2" noWrap>
+              Campanha: {segments[currentSegmentIdx].campaign_name} — {currentIndex - segments[currentSegmentIdx].startIndex + 1} de {segments[currentSegmentIdx].length}
+            </Typography>
+          )}
         </Box>
       )}
     </Box>

@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import axios from 'axios';
+import axios from '../../config/axios';
 
 const LocationForm = () => {
   const navigate = useNavigate();

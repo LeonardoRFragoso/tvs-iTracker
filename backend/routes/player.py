@@ -330,6 +330,50 @@ def send_command_to_player(player_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@player_bp.route('/<player_id>/refresh-playlist', methods=['POST'])
+@jwt_required()
+def refresh_player_playlist(player_id):
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão para atualizar playlist'}), 403
+
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        from app import socketio
+        socketio.emit('player_command', {
+            'command': 'update_playlist',
+            'data': {},
+            'timestamp': datetime.utcnow().isoformat()
+        }, room=f'player_{player_id}')
+
+        return jsonify({'message': 'Atualização de playlist enviada', 'player_id': player_id}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/refresh-all-playlists', methods=['POST'])
+@jwt_required()
+def refresh_all_playlists():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão para atualizar playlists'}), 403
+
+        from app import socketio
+        socketio.emit('player_command', {
+            'command': 'update_playlist',
+            'data': {'scope': 'all'},
+            'timestamp': datetime.utcnow().isoformat()
+        })  # broadcast
+
+        return jsonify({'message': 'Atualização de playlist enviada para todos os players'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @player_bp.route('/<player_id>/sync', methods=['POST'])
 @jwt_required()
 def sync_player(player_id):
@@ -712,47 +756,95 @@ def get_player_playlist(player_id):
             except Exception:
                 continue
 
-        chosen = (active_main[0] if active_main else (active_overlay[0] if active_overlay else None))
-        if not chosen:
+        # Decide which schedules to use: all MAIN active; if none, first OVERLAY
+        schedules_to_use = []
+        if active_main:
+            # Order MAIN schedules by priority desc, then created_at asc to have stable rotation
+            try:
+                active_main.sort(key=lambda s: (-(s.priority or 0), getattr(s, 'created_at', datetime.min)))
+            except Exception:
+                pass
+            schedules_to_use = active_main
+        elif active_overlay:
+            schedules_to_use = [active_overlay[0]]
+
+        if not schedules_to_use:
             return jsonify({'player_id': player_id, 'contents': []}), 200
 
-        # Build playlist items from schedule filtered contents
         media_base = request.host_url.rstrip('/')
         items = []
-        try:
-            filtered = chosen.get_filtered_contents() or []
-            for cc in filtered:
-                content = getattr(cc, 'content', None)
-                if not content or not getattr(content, 'file_path', None):
-                    continue
-                filename = str(content.file_path).split('/')[-1]
-                file_url = f"{media_base}/uploads/{filename}"
-                ctype = (content.content_type or '').lower()
-                if ctype.startswith('img') or ctype == 'image':
-                    item_type = 'image'
-                elif ctype.startswith('aud') or ctype == 'audio':
-                    item_type = 'audio'
-                else:
-                    item_type = 'video'
 
-                duration = None
+        def append_schedule_items(sch):
+            # 1) Include compiled campaign video once per schedule if applicable
+            camp = getattr(sch, 'campaign', None)
+            if camp and (sch.content_type or 'main') != 'overlay':
                 try:
-                    duration = cc.get_effective_duration()
+                    if (
+                        getattr(camp, 'compiled_video_status', None) == 'ready' and
+                        getattr(camp, 'compiled_video_path', None) and
+                        not getattr(camp, 'compiled_stale', False)
+                    ):
+                        compiled_rel_path = str(camp.compiled_video_path).lstrip('/').replace('\\', '/')
+                        compiled_url = f"{media_base}/uploads/{compiled_rel_path}"
+                        items.append({
+                            'id': f"compiled-{camp.id}",
+                            'title': f"Campanha: {camp.name} (Compilado)",
+                            'description': 'Vídeo compilado a partir de imagens',
+                            'type': 'video',
+                            'file_url': compiled_url,
+                            'duration': getattr(camp, 'compiled_video_duration', None) or (camp.content_duration if getattr(camp, 'content_duration', None) else 10),
+                            'campaign_id': camp.id,
+                            'campaign_name': camp.name,
+                            'schedule_id': sch.id,
+                        })
                 except Exception:
-                    duration = getattr(content, 'duration', None)
+                    pass
 
-                items.append({
-                    'id': content.id,
-                    'title': content.title,
-                    'description': getattr(content, 'description', ''),
-                    'type': item_type,
-                    'file_url': file_url,
-                    'duration': duration or 10
-                })
-        except Exception:
-            items = []
+            # 2) Add campaign contents according to schedule filters
+            try:
+                filtered = sch.get_filtered_contents() or []
+                for cc in filtered:
+                    content = getattr(cc, 'content', None)
+                    if not content or not getattr(content, 'file_path', None):
+                        continue
+                    filename = str(content.file_path).split('/')[-1]
+                    file_url = f"{media_base}/uploads/{filename}"
+                    ctype = (content.content_type or '').lower()
+                    if ctype.startswith('img') or ctype == 'image':
+                        item_type = 'image'
+                    elif ctype.startswith('aud') or ctype == 'audio':
+                        item_type = 'audio'
+                    else:
+                        item_type = 'video'
 
-        return jsonify({'player_id': player_id, 'schedule_id': chosen.id, 'contents': items}), 200
+                    duration = None
+                    try:
+                        duration = cc.get_effective_duration()
+                    except Exception:
+                        duration = getattr(content, 'duration', None)
+
+                    items.append({
+                        'id': content.id,
+                        'title': content.title,
+                        'description': getattr(content, 'description', ''),
+                        'type': item_type,
+                        'file_url': file_url,
+                        'duration': duration or 10,
+                        'campaign_id': camp.id if camp else None,
+                        'campaign_name': camp.name if camp else None,
+                        'schedule_id': sch.id,
+                    })
+            except Exception:
+                pass
+
+        for sch in schedules_to_use:
+            append_schedule_items(sch)
+
+        return jsonify({
+            'player_id': player_id,
+            'schedule_ids': [s.id for s in schedules_to_use],
+            'contents': items
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

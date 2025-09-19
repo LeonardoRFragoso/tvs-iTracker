@@ -224,14 +224,26 @@ class VideoCompiler:
     def _build_image_segment(self, src: str, out: str, width: int, height: int, fps: int, duration: int):
         # Scale with aspect ratio preserved and pad to target
         vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
+        dur = str(max(1, duration))
         cmd = [
             'ffmpeg', '-y',
+            # Video (image) input
             '-loop', '1', '-i', src,
-            '-t', str(max(1, duration)),
+            # Audio: generate silent stereo at 44.1kHz with same duration
+            '-f', 'lavfi', '-t', dur, '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
+            # Output timing / filters
+            '-t', dur,
             '-r', str(int(fps)),
             '-vf', vf,
+            # Explicit stream mapping to combine video+audio
+            '-map', '0:v:0', '-map', '1:a:0',
+            # Codecs and formats
             '-c:v', 'libx264',
             '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-ar', '44100', '-ac', '2',
+            # Ensure we stop at the shortest stream just in case
+            '-shortest',
             out
         ]
         self._run(cmd, 'image-segment')
@@ -245,7 +257,9 @@ class VideoCompiler:
             '-vf', vf,
             '-c:v', 'libx264',
             '-pix_fmt', 'yuv420p',
+            # Normalize audio params to match image segments
             '-c:a', 'aac', '-b:a', '128k',
+            '-ar', '44100', '-ac', '2',
             out
         ]
         self._run(cmd, 'video-segment')

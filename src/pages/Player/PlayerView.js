@@ -25,6 +25,7 @@ const PlayerView = () => {
   const navigate = useNavigate();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [resolving, setResolving] = useState(false);
 
   const fullscreenParam = searchParams.get('fullscreen');
@@ -131,6 +132,32 @@ const PlayerView = () => {
     }
   };
 
+  const refreshThisPlayer = async () => {
+    try {
+      setInfo('');
+      setError('');
+      await axios.post(`/players/${playerId}/refresh-playlist`);
+      setInfo('Atualização de playlist enviada para o player');
+      setTimeout(() => setInfo(''), 3000);
+    } catch (e) {
+      setError('Falha ao atualizar playlist do player');
+      setTimeout(() => setError(''), 4000);
+    }
+  };
+
+  const refreshAllPlayers = async () => {
+    try {
+      setInfo('');
+      setError('');
+      await axios.post(`/players/refresh-all-playlists`);
+      setInfo('Atualização de playlist enviada para todos os players');
+      setTimeout(() => setInfo(''), 3000);
+    } catch (e) {
+      setError('Falha ao atualizar playlists');
+      setTimeout(() => setError(''), 4000);
+    }
+  };
+
   if (resolving) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#000' }}>
@@ -230,12 +257,27 @@ const PlayerView = () => {
               Tela Cheia
             </Button>
           </Tooltip>
+          <Tooltip title="Forçar atualização da playlist deste player">
+            <Button variant="contained" onClick={refreshThisPlayer}>
+              Atualizar Playlist
+            </Button>
+          </Tooltip>
+          <Tooltip title="Forçar atualização de todos os players">
+            <Button variant="outlined" onClick={refreshAllPlayers}>
+              Atualizar Todos
+            </Button>
+          </Tooltip>
         </Box>
       </Box>
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+        </Alert>
+      )}
+      {info && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {info}
         </Alert>
       )}
 

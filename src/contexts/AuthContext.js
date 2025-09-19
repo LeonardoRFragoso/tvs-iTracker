@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from '../config/axios';
 
 const AuthContext = createContext();
 
@@ -10,8 +10,6 @@ export const useAuth = () => {
   }
   return context;
 };
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 
 // Configurar interceptor do axios para incluir token
 axios.interceptors.request.use(
@@ -27,18 +25,7 @@ axios.interceptors.request.use(
   }
 );
 
-// Interceptor para lidar com respostas de erro
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
+// 401 handling centralized in src/config/axios.js to avoid double redirects
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -64,7 +51,7 @@ export const AuthProvider = ({ children }) => {
 
   const validateToken = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/auth/profile`);
+      const response = await axios.get('/auth/profile');
       setUser(response.data.user);
     } catch (error) {
       console.error('Token inválido:', error);
@@ -74,7 +61,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      const response = await axios.post('/auth/login', {
         email,
         password,
       });
@@ -100,7 +87,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateProfile = async (profileData) => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/auth/profile`, profileData);
+      const response = await axios.put('/auth/profile', profileData);
       const updatedUser = response.data.user;
       
       localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -116,7 +103,7 @@ export const AuthProvider = ({ children }) => {
   // Novo: criar usuário (admin)
   const registerUser = async ({ username, email, password, role = 'hr', company = 'iTracker' }) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+      const response = await axios.post('/auth/register', {
         username,
         email,
         password,
@@ -133,7 +120,7 @@ export const AuthProvider = ({ children }) => {
   // Novo: cadastro público (sem senha, fica pendente)
   const publicRegister = async ({ username, email, role = 'hr', company = 'iTracker' }) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/public-register`, {
+      const response = await axios.post('/auth/public-register', {
         username,
         email,
         role,
@@ -149,7 +136,7 @@ export const AuthProvider = ({ children }) => {
   // Novo: solicitar recuperação de senha
   const forgotPassword = async (email) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/forgot-password`, { email });
+      const response = await axios.post('/auth/forgot-password', { email });
       return { success: true, message: response.data?.message };
     } catch (error) {
       const message = error.response?.data?.error || 'Erro ao solicitar recuperação de senha';
@@ -160,7 +147,7 @@ export const AuthProvider = ({ children }) => {
   // Novo: trocar senha (primeiro acesso)
   const changePassword = async ({ old_password, new_password }) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/change-password`, { old_password, new_password });
+      const response = await axios.post('/auth/change-password', { old_password, new_password });
       const updatedUser = response.data.user;
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
@@ -174,7 +161,7 @@ export const AuthProvider = ({ children }) => {
   // Admin: listar usuários pendentes
   const listPendingUsers = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/auth/pending-users`);
+      const response = await axios.get('/auth/pending-users');
       return { success: true, users: response.data.users };
     } catch (error) {
       const message = error.response?.data?.error || 'Erro ao listar pendentes';
@@ -185,7 +172,7 @@ export const AuthProvider = ({ children }) => {
   // Admin: aprovar usuário (opcionalmente definindo senha temporária)
   const approveUser = async (userId, temp_password) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/users/${userId}/approve`, temp_password ? { temp_password } : {});
+      const response = await axios.post(`/auth/users/${userId}/approve`, temp_password ? { temp_password } : {});
       return { success: true, user: response.data.user, temp_password: response.data?.temp_password };
     } catch (error) {
       const message = error.response?.data?.error || 'Erro ao aprovar usuário';
@@ -196,7 +183,7 @@ export const AuthProvider = ({ children }) => {
   // Admin: rejeitar usuário
   const rejectUser = async (userId) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/users/${userId}/reject`);
+      const response = await axios.post(`/auth/users/${userId}/reject`);
       return { success: true, user: response.data.user };
     } catch (error) {
       const message = error.response?.data?.error || 'Erro ao rejeitar usuário';

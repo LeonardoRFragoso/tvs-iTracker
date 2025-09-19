@@ -13,6 +13,8 @@ feedparser==6.0.10
 python-dotenv==1.0.0
 bcrypt==4.1.2
 APScheduler==3.10.4
-eventlet==0.33.3
+# Eventlet is optional; Flask-SocketIO is configured with async_mode='threading' in backend/app.py
+# Install eventlet only on non-Windows and Python < 3.13 to avoid slow/failed builds on Windows/Py3.13
+eventlet==0.33.3; platform_system != "Windows" and python_version < "3.13"
 pychromecast>=13.0.0
 zeroconf>=0.130.0

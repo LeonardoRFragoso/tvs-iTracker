@@ -19,9 +19,14 @@ const AppWithTheme = () => {
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+
+// Detect base path: production is served under /app, dev usually at /
+const baseName = window.location.pathname.startsWith('/app') ? '/app' : '/';
+
 root.render(
   <React.StrictMode>
     <BrowserRouter
+      basename={baseName}
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true,

@@ -20,38 +20,35 @@ export const SocketProvider = ({ children }) => {
   const switchedToSameOriginRef = useRef(false);
 
   useEffect(() => {
-    const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
-
-    // Determine target URL for socket connection
-    const envUrl = process.env.REACT_APP_SOCKET_URL; // if 'same-origin', force same-origin
     const proto = window.location.protocol;
     const host = window.location.hostname;
-    const port = window.location.port; // '' when 80
+    const port = window.location.port; // '' when 80/443
     const sameOrigin = `${proto}//${window.location.host}`; // includes port if present
+    const path = window.location.pathname || '';
 
+    const envUrl = process.env.REACT_APP_SOCKET_URL; // 'same-origin' to force
     const isLocalhost = host === 'localhost' || host === '127.0.0.1';
-    const isTVMode = !port || port === '80'; // production served on 80
-    const isKiosk = window.location.pathname.startsWith('/kiosk/player/');
-    const playerIdMatch = isKiosk ? window.location.pathname.match(/\/kiosk\/player\/(.+)$/) : null;
-    const kioskPlayerId = playerIdMatch ? playerIdMatch[1].split('/')[0] : null;
+    const isDevPort = ['3000', '5173', '5174'].includes(port);
+    const isKiosk = path.startsWith('/kiosk/player/');
 
-    // Resolve target URL with sensible defaults:
-    // 1) explicit env override wins
-    // 2) kiosk/TV mode => same-origin (backend serves the SPA)
-    // 3) localhost dev => :5000
-    // 4) otherwise (LAN dev with CRA on 3000) => :5000
-    let targetUrl = sameOrigin;
-    if (envUrl) {
+    // Preferências de URL (priorizar dev antes do env)
+    let targetUrl;
+    if (isDevPort || isLocalhost) {
+      // Dev: falar com backend em :5000 mesmo se acessar via IP
+      targetUrl = `${proto}//${host}:5000`;
+    } else if (envUrl) {
       targetUrl = envUrl === 'same-origin' ? sameOrigin : envUrl;
-    } else if (isKiosk || isTVMode) {
+    } else if (isKiosk || port === '' || port === '80' || port === '443' || path.startsWith('/app')) {
+      // Produção/LAN: same-origin
       targetUrl = sameOrigin;
-    } else if (isLocalhost) {
-      targetUrl = 'http://localhost:5000';
     } else {
+      // Fallback: tentar :5000
       targetUrl = `${proto}//${host}:5000`;
     }
 
-    // Only connect if we are authenticated OR in kiosk mode
+    console.log('[Socket] targetUrl:', targetUrl, 'pathname:', path);
+
+    // Só conectar se autenticado OU em modo kiosk
     if (!user && !isKiosk) return;
 
     const token = user ? localStorage.getItem('access_token') : null;
@@ -59,7 +56,7 @@ export const SocketProvider = ({ children }) => {
     const createSocket = (baseUrl) => {
       const socketInstance = io(baseUrl || undefined, {
         path: '/socket.io',
-        auth: user ? { token } : { public: true, player_id: kioskPlayerId },
+        auth: user ? { token } : { public: true, player_id: (isKiosk ? (path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null) : null) },
         transports: ['polling'],
         upgrade: false,
         rememberUpgrade: false,
@@ -71,11 +68,12 @@ export const SocketProvider = ({ children }) => {
       });
 
       socketInstance.on('connect', () => {
-        console.log('Conectado ao servidor WebSocket', baseUrl);
+        console.log('Conectado ao servidor WebSocket', baseUrl || '(same-origin)');
         setConnected(true);
-        // Auto-join player room in kiosk mode
-        if (isKiosk && kioskPlayerId) {
-          socketInstance.emit('join_player', { player_id: kioskPlayerId });
+        // Auto-join player room em modo kiosk
+        if (isKiosk) {
+          const kioskPlayerId = path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null;
+          if (kioskPlayerId) socketInstance.emit('join_player', { player_id: kioskPlayerId });
         }
       });
 
@@ -88,12 +86,12 @@ export const SocketProvider = ({ children }) => {
         const msg = String(err?.message || err || '');
         const isConnRefused = /ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(msg);
         const using5000 = (baseUrl || '').includes(':5000');
-        if (using5000 && isConnRefused && !switchedToSameOriginRef.current) {
+        if (isConnRefused && (!baseUrl || using5000) && !switchedToSameOriginRef.current) {
           switchedToSameOriginRef.current = true;
           try { socketInstance.removeAllListeners(); } catch (_) {}
           try { socketInstance.disconnect(); } catch (_) {}
           const fallbackUrl = sameOrigin;
-          console.warn('[Socket] Connection refused to :5000, switching to same-origin:', fallbackUrl);
+          console.warn('[Socket] Problema de conexão, alternando para same-origin:', fallbackUrl);
           const newSock = createSocket(fallbackUrl);
           setSocket(newSock);
         }
@@ -105,7 +103,6 @@ export const SocketProvider = ({ children }) => {
 
       socketInstance.on('player_command', (data) => {
         console.log('Comando recebido:', data);
-        // Processar comandos para players
       });
 
       socketInstance.on('notification', (notification) => {

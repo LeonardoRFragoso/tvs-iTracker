@@ -19,9 +19,7 @@ import {
   ArrowBack as BackIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+import axios from '../../config/axios';
 
 const PlayerForm = () => {
   const { id } = useParams();
@@ -60,7 +58,7 @@ const PlayerForm = () => {
 
   const loadLocations = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/players/locations`);
+      const response = await axios.get(`/players/locations`);
       setLocations(response.data.locations || []);
     } catch (err) {
       console.error('Load locations error:', err);
@@ -70,7 +68,7 @@ const PlayerForm = () => {
   const loadPlayer = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/players/${id}`);
+      const response = await axios.get(`/players/${id}`);
       setFormData(response.data);
     } catch (err) {
       setError('Erro ao carregar player');
@@ -87,9 +85,9 @@ const PlayerForm = () => {
       setError('');
 
       if (isEdit) {
-        await axios.put(`${API_BASE_URL}/players/${id}`, formData);
+        await axios.put(`/players/${id}`, formData);
       } else {
-        await axios.post(`${API_BASE_URL}/players`, formData);
+        await axios.post(`/players`, formData);
       }
       
       navigate('/players');

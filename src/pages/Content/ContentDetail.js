@@ -30,10 +30,8 @@ import {
   Description as DocumentIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../../config/axios';
 import { useTheme } from '../../contexts/ThemeContext';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 
 const ContentDetail = () => {
   const { id } = useParams();
@@ -52,7 +50,7 @@ const ContentDetail = () => {
   const loadContent = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/content/${id}`);
+      const response = await axios.get(`/content/${id}`);
       setContent(response.data.content);
     } catch (err) {
       setError('Erro ao carregar conteúdo');
@@ -64,7 +62,7 @@ const ContentDetail = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/content/${id}`);
+      await axios.delete(`/content/${id}`);
       navigate('/content');
     } catch (err) {
       setError('Erro ao deletar conteúdo');
@@ -224,7 +222,7 @@ const ContentDetail = () => {
               {content.thumbnail_path ? (
                 <>
                   <img
-                    src={`${API_BASE_URL}/content/thumbnails/${content.thumbnail_path}`}
+                    src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/thumbnails/${content.thumbnail_path}`}
                     alt={content.title}
                     style={{
                       width: '100%',
@@ -285,7 +283,7 @@ const ContentDetail = () => {
                 <Button
                   variant="outlined"
                   startIcon={<DownloadIcon />}
-                  onClick={() => window.open(`${API_BASE_URL}/content/media/${content.file_path}`, '_blank')}
+                  onClick={() => window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`, '_blank')}
                   fullWidth
                   sx={{
                     borderRadius: 2,
@@ -447,7 +445,7 @@ const ContentDetail = () => {
         <DialogContent sx={{ p: 3 }}>
           {content.content_type === 'video' && (
             <video
-              src={`${API_BASE_URL}/content/media/${content.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`}
               controls
               style={{ 
                 width: '100%', 
@@ -458,7 +456,7 @@ const ContentDetail = () => {
           )}
           {content.content_type === 'image' && (
             <img
-              src={`${API_BASE_URL}/content/media/${content.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`}
               alt={content.title}
               style={{ 
                 width: '100%', 
@@ -470,7 +468,7 @@ const ContentDetail = () => {
           )}
           {content.content_type === 'audio' && (
             <audio
-              src={`${API_BASE_URL}/content/media/${content.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`}
               controls
               style={{ 
                 width: '100%',

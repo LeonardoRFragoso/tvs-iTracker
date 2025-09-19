@@ -97,6 +97,7 @@ from routes.campaign_content import campaign_content_bp
 from routes.player import player_bp
 from routes.schedule import schedule_bp
 from routes.dashboard import dashboard_bp
+from routes.cast import cast_bp
 
 # Registrar blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -107,6 +108,7 @@ app.register_blueprint(campaign_content_bp)
 app.register_blueprint(player_bp, url_prefix='/api/players')
 app.register_blueprint(schedule_bp, url_prefix='/api/schedules')
 app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+app.register_blueprint(cast_bp, url_prefix='/api/cast')
 
 # Configurar scheduler para tarefas automáticas
 scheduler = BackgroundScheduler()
@@ -521,6 +523,48 @@ def serve_admin_app(path=''):
 @app.route('/tv')
 def tv_landing():
     return _kiosk_landing_html()
+
+# Public redirects for direct admin paths without /app base
+@app.route('/login')
+@app.route('/register')
+@app.route('/forgot-password')
+@app.route('/change-password')
+def redirect_admin_public_routes():
+    # Redirect /login -> /app/login, etc., without changing player routes
+    try:
+        target = f"/app{request.path}"
+        return redirect(target)
+    except Exception:
+        return redirect('/app/login')
+
+# Support serving admin static assets also under /app to avoid 404s
+@app.route('/app/static/<path:filename>')
+def serve_build_static_under_app(filename):
+    try:
+        return send_from_directory(os.path.join(_react_build_dir(), 'static'), filename)
+    except Exception:
+        return jsonify({'error': 'Arquivo estático não encontrado'}), 404
+
+@app.route('/app/manifest.json')
+def serve_manifest_under_app():
+    try:
+        return send_from_directory(_react_build_dir(), 'manifest.json')
+    except Exception:
+        return jsonify({'error': 'Manifest não encontrado'}), 404
+
+@app.route('/app/asset-manifest.json')
+def serve_asset_manifest_under_app():
+    try:
+        return send_from_directory(_react_build_dir(), 'asset-manifest.json')
+    except Exception:
+        return jsonify({'error': 'Asset manifest não encontrado'}), 404
+
+@app.route('/app/favicon.ico')
+def serve_favicon_under_app():
+    try:
+        return send_from_directory(_react_build_dir(), 'favicon.ico')
+    except Exception:
+        return jsonify({'error': 'Favicon não encontrado'}), 404
 
 # Rotas estáticas do build (quando disponível)
 @app.route('/static/<path:filename>')

@@ -38,7 +38,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import axios from 'axios';
+import axios from '../../config/axios';
 
 const drawerWidth = 240;
 
@@ -66,8 +66,8 @@ const Layout = () => {
         ]);
 
         setBadges({
-          content: contentRes.data.total || contentRes.data.content?.length || 0,
-          locations: locationsRes.data.length || 0,
+          content: contentRes.data.total || contentRes.data.contents?.length || 0,
+          locations: locationsRes.data.total || locationsRes.data.locations?.length || 0,
           players: dashboardRes.data.overview?.online_players || 0 // Usar players online em vez do total
         });
       } catch (error) {

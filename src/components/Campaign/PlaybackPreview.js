@@ -37,9 +37,7 @@ import {
   WarningAmber as StaleIcon,
   Error as ErrorIcon
 } from '@mui/icons-material';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+import axios from '../../config/axios';
 
 const PlaybackPreview = ({ open, onClose, campaignId }) => {
   const [preview, setPreview] = useState(null);
@@ -66,7 +64,7 @@ const PlaybackPreview = ({ open, onClose, campaignId }) => {
       if (filters.location_filter) params.append('location_filter', filters.location_filter);
       
       const response = await axios.get(
-        `${API_BASE_URL}/campaigns/${campaignId}/contents/preview?${params.toString()}`
+        `/campaigns/${campaignId}/contents/preview?${params.toString()}`
       );
       setPreview(response.data);
     } catch (err) {
@@ -382,7 +380,7 @@ const PlaybackPreview = ({ open, onClose, campaignId }) => {
                       )}
                     </Box>
                     {preview.compiled.status === 'ready' && preview.compiled.url ? (
-                      <video controls style={{ width: '100%', borderRadius: 8 }} src={preview.compiled.url.startsWith('http') ? preview.compiled.url : `${API_BASE_URL.replace(/\/api$/, '')}${preview.compiled.url}`} />
+                      <video controls style={{ width: '100%', borderRadius: 8 }} src={preview.compiled.url.startsWith('http') ? preview.compiled.url : `${axios.defaults.baseURL.replace(/\/api$/, '')}${preview.compiled.url}`} />
                     ) : (
                       <Alert severity="info">Gere o vídeo compilado na aba de conteúdos da campanha.</Alert>
                     )}

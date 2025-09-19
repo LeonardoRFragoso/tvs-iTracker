@@ -49,9 +49,7 @@ import {
   Area,
   AreaChart
 } from 'recharts';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+import axios from '../../config/axios';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -72,7 +70,7 @@ const CampaignAnalytics = ({ campaignId }) => {
       setLoading(true);
       setError('');
 
-      const response = await axios.get(`${API_BASE_URL}/campaigns/${campaignId}/analytics`, {
+      const response = await axios.get(`/campaigns/${campaignId}/analytics`, {
         params: { range: timeRange }
       });
 

@@ -18,6 +18,7 @@ import {
   CastConnected as CastConnectedIcon,
   Refresh as RefreshIcon
 } from '@mui/icons-material';
+import axios from '../../config/axios';
 
 const CastManager = ({ playerId, onCastStateChange }) => {
   const [castSession, setCastSession] = useState(null);
@@ -94,28 +95,9 @@ const CastManager = ({ playerId, onCastStateChange }) => {
     if (!window.cast || !window.cast.framework) return;
 
     try {
-      // Fazer requisição real para descobrir dispositivos
-      const response = await fetch(`${process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`}/cast/devices/scan`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setAvailableDevices(data.discovered_devices || []);
-      } else {
-        console.error('Erro ao escanear dispositivos:', response.statusText);
-        // Fallback para dispositivos mock se a API falhar
-        const mockDevices = [
-          { id: 'chromecast-1', name: 'TV Recepção', type: 'Chromecast' },
-          { id: 'chromecast-2', name: 'TV Sala Reunião', type: 'Chromecast' },
-          { id: 'chromecast-3', name: 'TV Cafeteria', type: 'Chromecast' }
-        ];
-        setAvailableDevices(mockDevices);
-      }
+      // Usar axios central com JWT (localStorage 'access_token') e baseURL correto
+      const { data } = await axios.post('/cast/devices/scan');
+      setAvailableDevices(data.discovered_devices || []);
     } catch (error) {
       console.error('Erro na descoberta de dispositivos:', error);
       // Fallback para dispositivos mock em caso de erro
