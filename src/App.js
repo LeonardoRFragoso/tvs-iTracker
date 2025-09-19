@@ -25,6 +25,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ChangePassword from './pages/ChangePassword';
 import PendingUsers from './pages/Admin/PendingUsers';
+import TrafficMonitor from './pages/Admin/TrafficMonitor';
 
 function App() {
   return (
@@ -77,6 +78,7 @@ function App() {
             
             {/* Admin routes */}
             <Route path="admin/pending-users" element={<PendingUsers />} />
+            <Route path="admin/traffic-monitor" element={<TrafficMonitor />} />
           </Route>
         </Routes>
       </SocketProvider>

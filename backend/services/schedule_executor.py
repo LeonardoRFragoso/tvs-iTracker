@@ -151,7 +151,7 @@ class ScheduleExecutor:
             # Prefer compiled video for main content if available and not stale
             if content_type == 'main':
                 if getattr(campaign, 'compiled_video_status', None) == 'ready' and not getattr(campaign, 'compiled_stale', False) and getattr(campaign, 'compiled_video_path', None):
-                    compiled_url = f"{MEDIA_BASE_URL}/uploads/{campaign.compiled_video_path}"
+                    compiled_url = f"{MEDIA_BASE_URL}/uploads/{campaign.compiled_video_path}?pid={player.id}"
                     print(f"[DEBUG] Usando vídeo compilado da campanha: {compiled_url}")
 
                     player_chromecast_id = str(player.chromecast_id) if player.chromecast_id else None
@@ -248,7 +248,7 @@ class ScheduleExecutor:
             # Construir URL do conteúdo
             if content.file_path:
                 filename = content.file_path.split('/')[-1]
-                content_url = f"{MEDIA_BASE_URL}/uploads/{filename}"
+                content_url = f"{MEDIA_BASE_URL}/uploads/{filename}?pid={player.id}"
                 print(f"[DEBUG] Enviando para Chromecast: {content_url}")
             else:
                 print(f"[ERROR] Conteúdo {content.title} não tem arquivo associado")

@@ -134,6 +134,13 @@ const Layout = () => {
       badge: null,
       description: 'Configurações do sistema'
     },
+    { 
+      text: 'Monitor de Tráfego', 
+      icon: <TrendingUp />, 
+      path: '/admin/traffic-monitor',
+      badge: null,
+      description: 'Estatísticas de rede por player'
+    },
   ];
 
   const handleDrawerToggle = () => {

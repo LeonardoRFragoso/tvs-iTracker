@@ -4,6 +4,7 @@ from flask_socketio import emit
 from datetime import datetime, timedelta
 import secrets
 import json
+import hashlib
 from models.player import Player, db
 from models.user import User
 from models.location import Location
@@ -785,7 +786,7 @@ def get_player_playlist(player_id):
                         not getattr(camp, 'compiled_stale', False)
                     ):
                         compiled_rel_path = str(camp.compiled_video_path).lstrip('/').replace('\\', '/')
-                        compiled_url = f"{media_base}/uploads/{compiled_rel_path}"
+                        compiled_url = f"{media_base}/uploads/{compiled_rel_path}?pid={player_id}"
                         items.append({
                             'id': f"compiled-{camp.id}",
                             'title': f"Campanha: {camp.name} (Compilado)",
@@ -808,7 +809,7 @@ def get_player_playlist(player_id):
                     if not content or not getattr(content, 'file_path', None):
                         continue
                     filename = str(content.file_path).split('/')[-1]
-                    file_url = f"{media_base}/uploads/{filename}"
+                    file_url = f"{media_base}/uploads/{filename}?pid={player_id}"
                     ctype = (content.content_type or '').lower()
                     if ctype.startswith('img') or ctype == 'image':
                         item_type = 'image'
@@ -840,11 +841,26 @@ def get_player_playlist(player_id):
         for sch in schedules_to_use:
             append_schedule_items(sch)
 
-        return jsonify({
+        # ETag/If-None-Match cache support
+        etag_src = json.dumps({
+            'player_id': str(player_id),
+            'schedule_ids': [str(s.id) for s in schedules_to_use],
+            'contents': items
+        }, sort_keys=True, ensure_ascii=False, default=str)
+        etag_val = hashlib.md5(etag_src.encode('utf-8')).hexdigest()
+        etag_header = f'"{etag_val}"'
+
+        inm = request.headers.get('If-None-Match')
+        if inm and (inm.strip() == etag_header or inm.strip().strip('"') == etag_val):
+            return '', 304, {'ETag': etag_header}
+
+        resp = jsonify({
             'player_id': player_id,
             'schedule_ids': [s.id for s in schedules_to_use],
             'contents': items
-        }), 200
+        })
+        resp.headers['ETag'] = etag_header
+        return resp, 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

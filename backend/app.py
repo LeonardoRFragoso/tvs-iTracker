@@ -9,10 +9,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.base import SchedulerNotRunningError, SchedulerAlreadyRunningError
 import atexit
 from sqlalchemy import text
+from threading import Lock
 
 # Importar instância do banco
 from database import db
@@ -46,7 +48,7 @@ cors = CORS(app, resources={
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         "supports_credentials": True,
-        "expose_headers": ["Content-Range", "X-Content-Range"]
+        "expose_headers": ["Content-Range", "X-Content-Range", "ETag"]
     },
     r"/socket.io/*": {
         "origins": "*",
@@ -76,7 +78,7 @@ def handle_preflight():
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*", 
                   async_mode='threading', logger=False, engineio_logger=False, 
-                  ping_timeout=60, ping_interval=25)
+                  ping_timeout=60, ping_interval=30)
 app.socketio = socketio
 
 # Importar modelos
@@ -116,7 +118,7 @@ scheduler = BackgroundScheduler()
 # Adicionar job para verificar agendamentos a cada minuto
 def check_schedules_with_context():
     """Wrapper para executar verificação de agendamentos com contexto da aplicação"""
-    print(f"[{datetime.now()}] Executando verificação de agendamentos...")
+    print(f"[{datetime.now(timezone.utc)}] Executando verificação de agendamentos...")
     with app.app_context():
         from services.schedule_executor import schedule_executor
         schedule_executor.check_and_execute_schedules()
@@ -129,45 +131,166 @@ scheduler.add_job(
     name='Verificar e executar agendamentos'
 )
 
-# Iniciar o scheduler
-if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
-    print("Iniciando scheduler...")
-    scheduler.start()
-    print("Scheduler iniciado com sucesso!")
-
-# Importar e configurar executor de agendamentos
-from services.schedule_executor import schedule_executor
-
-# Configurar WebSocket no executor
-@socketio.on('connect')
-def handle_connect(auth):
-    # Configurar socketio no executor quando houver conexão
-    schedule_executor.socketio = socketio
-    print(f"WebSocket connection attempt with auth: {auth}")
-
+# Emitir estatísticas de tráfego para admins periodicamente
+def emit_traffic_stats_job():
     try:
-        # Kiosk/public mode: allow connection without JWT
-        if auth and auth.get('public'):
-            print("WebSocket public kiosk connection accepted")
-            return True
-
-        # Authenticated users: require valid JWT
-        if auth and 'token' in auth:
-            from flask_jwt_extended import decode_token
-            decode_token(auth['token'])
-            print("WebSocket connection successful (JWT)")
-            return True
+        socketio.emit('traffic_stats', _traffic_snapshot(), room='admin')
     except Exception as e:
-        print(f"WebSocket authentication failed: {e}")
-        return False
+        print(f"[Traffic] Falha ao emitir estatísticas: {e}")
 
-    # Default deny if neither public nor token was provided
-    return False
+scheduler.add_job(
+    func=emit_traffic_stats_job,
+    trigger="interval",
+    seconds=30,
+    id='traffic_stats_emitter',
+    name='Emitir estatísticas de tráfego para admins'
+)
+
+# Opcional: sincronizar status dos players (Chromecast discovery) periodicamente
+def sync_player_statuses_job():
+    try:
+        with app.app_context():
+            from services.auto_sync_service import auto_sync_service
+            auto_sync_service.sync_all_players()
+    except Exception as e:
+        print(f"[AutoSync] Falha ao sincronizar players: {e}")
+
+scheduler.add_job(
+    func=sync_player_statuses_job,
+    trigger="interval",
+    minutes=1,
+    id='player_status_sync',
+    name='Sincronizar status dos players (descoberta)'
+)
+
+# =========================
+# Traffic monitoring memory
+# =========================
+TRAFFIC_STATS = {
+    'since': datetime.now(timezone.utc).isoformat(),
+    'total_bytes': 0,
+    'players': {}  # player_id -> {bytes, requests, by_type, last_seen}
+}
+TRAFFIC_LOCK = Lock()
+TRAFFIC_MINUTE = {}  # player_id -> {minute_key_iso -> {bytes, requests, by_type}}
+
+# Mapas globais para rastrear conexões Socket.IO
+# - CONNECTED_PLAYERS: player_id -> {sid, last_seen}
+# - SOCKET_SID_TO_PLAYER: sid -> player_id (para limpeza em disconnect)
+# - SOCKET_SID_TO_USER: sid -> {user_id, role, company}
+CONNECTED_PLAYERS = {}
+SOCKET_SID_TO_PLAYER = {}
+SOCKET_SID_TO_USER = {}
+
+def _categorize_content_type(path: str, mimetype: str) -> str:
+    try:
+        import os
+        ext = os.path.splitext(path)[1].lower()
+        if ('video' in (mimetype or '')) or ext in ['.mp4', '.mkv', '.mov', '.avi', '.wmv']:
+            return 'video'
+        if ('image' in (mimetype or '')) or ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+            return 'image'
+        if ('audio' in (mimetype or '')) or ext in ['.mp3', '.aac', '.wav', '.ogg']:
+            return 'audio'
+        return 'other'
+    except Exception:
+        return 'other'
+
+@app.after_request
+def _track_upload_traffic(response):
+    try:
+        # Contabiliza bytes enviados para downloads de mídia com atribuição por player pid
+        if request.path.startswith('/uploads/'):
+            pid = request.args.get('pid') or 'unknown'
+            content_length = response.headers.get('Content-Length')
+            try:
+                bytes_sent = int(content_length) if content_length and str(content_length).isdigit() else 0
+            except Exception:
+                bytes_sent = 0
+            category = _categorize_content_type(request.path, getattr(response, 'mimetype', '') or '')
+            ts = datetime.now(timezone.utc).isoformat()
+            with TRAFFIC_LOCK:
+                pstats = TRAFFIC_STATS['players'].setdefault(pid, {
+                    'bytes': 0,
+                    'requests': 0,
+                    'by_type': {'video': 0, 'image': 0, 'audio': 0, 'other': 0},
+                    'last_seen': None
+                })
+                pstats['bytes'] += bytes_sent
+                pstats['requests'] += 1
+                pstats['by_type'][category] = pstats['by_type'].get(category, 0) + bytes_sent
+                pstats['last_seen'] = ts
+                TRAFFIC_STATS['total_bytes'] += bytes_sent
+
+                # Atualizar bucket por minuto (para taxa recente)
+                minute_key = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
+                pminute = TRAFFIC_MINUTE.setdefault(pid, {})
+                bucket = pminute.setdefault(minute_key, {'bytes': 0, 'requests': 0, 'by_type': {'video': 0, 'image': 0, 'audio': 0, 'other': 0}})
+                bucket['bytes'] += bytes_sent
+                bucket['requests'] += 1
+                bucket['by_type'][category] = bucket['by_type'].get(category, 0) + bytes_sent
+    except Exception as e:
+        print(f"[Traffic] Falha ao registrar tráfego: {e}")
+    return response
+
+def _traffic_snapshot():
+    with TRAFFIC_LOCK:
+        return {
+            'since': TRAFFIC_STATS.get('since'),
+            'total_bytes': TRAFFIC_STATS.get('total_bytes', 0),
+            'players': TRAFFIC_STATS.get('players', {})
+        }
 
 # WebSocket events
+@socketio.on('connect', namespace='/')
+def handle_connect(auth=None):
+    """Rastreia conexão e tenta associar usuário autenticado ao SID (se token for enviado)."""
+    try:
+        info = {}
+        # Token pode vir via auth handshake, query (?token=...) ou Authorization: Bearer ...
+        token = None
+        if isinstance(auth, dict):
+            token = auth.get('token') or auth.get('access_token')
+        token = token or request.args.get('token')
+        token = token or (request.headers.get('Authorization') or '').replace('Bearer ', '').strip()
+        if token:
+            try:
+                from flask_jwt_extended import decode_token
+                decoded = decode_token(token)
+                uid = decoded.get('sub')
+                u = db.session.get(User, uid) if uid else None
+                if u:
+                    info = {
+                        'user_id': str(uid),
+                        'role': getattr(u, 'role', None),
+                        'company': getattr(u, 'company', None)
+                    }
+            except Exception:
+                # Token inválido não deve derrubar a conexão
+                pass
+        SOCKET_SID_TO_USER[request.sid] = info
+    except Exception:
+        # Garante chave presente mesmo em caso de erro
+        SOCKET_SID_TO_USER[request.sid] = {}
+
 @socketio.on('disconnect')
 def handle_disconnect():
-    print("Client disconnected")
+    """Limpa mapeamentos quando um socket é desconectado."""
+    try:
+        sid = request.sid
+        # Remover vínculo SID->Player e, se for o mesmo SID do player, removê-lo dos conectados
+        pid = SOCKET_SID_TO_PLAYER.pop(sid, None)
+        if pid:
+            try:
+                if CONNECTED_PLAYERS.get(pid, {}).get('sid') == sid:
+                    CONNECTED_PLAYERS.pop(pid, None)
+            except Exception:
+                # fallback robusto
+                CONNECTED_PLAYERS.pop(pid, None)
+        # Remover vínculo SID->User
+        SOCKET_SID_TO_USER.pop(sid, None)
+    except Exception:
+        pass
 
 @socketio.on('join_player')
 def handle_join_player(data):
@@ -175,6 +298,26 @@ def handle_join_player(data):
     if player_id:
         join_room(f'player_{player_id}')
         emit('joined_player', {'player_id': player_id})
+        # Mapear conexão -> player
+        try:
+            CONNECTED_PLAYERS[player_id] = {'sid': request.sid, 'last_seen': datetime.now(timezone.utc).isoformat()}
+            SOCKET_SID_TO_PLAYER[request.sid] = player_id
+        except Exception:
+            pass
+
+@socketio.on('join_admin')
+def handle_join_admin():
+    try:
+        # Usar o mapeamento criado no connect (SOCKET_SID_TO_USER) para checar permissão
+        info = SOCKET_SID_TO_USER.get(request.sid)
+        role = info.get('role') if info else None
+        if role in ['admin', 'manager']:
+            join_room('admin')
+            emit('joined_admin', {'ok': True})
+        else:
+            emit('joined_admin', {'ok': False, 'error': 'not_authorized'})
+    except Exception as e:
+        emit('joined_admin', {'ok': False, 'error': str(e)})
 
 @socketio.on('player_sync_request')
 def handle_player_sync_request(data):
@@ -193,7 +336,7 @@ def handle_player_sync_request(data):
         emit('sync_response', {
             'player_id': player_id,
             'content_list': content_list,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -221,12 +364,12 @@ def handle_distribution_status_update(data):
         # Atualizar status da distribuição
         distribution.status = status
         distribution.progress_percentage = progress
-        distribution.updated_at = datetime.utcnow()
+        distribution.updated_at = datetime.now(timezone.utc)
         
         if status == 'downloading' and not distribution.started_at:
-            distribution.started_at = datetime.utcnow()
+            distribution.started_at = datetime.now(timezone.utc)
         elif status == 'completed':
-            distribution.completed_at = datetime.utcnow()
+            distribution.completed_at = datetime.now(timezone.utc)
             distribution.progress_percentage = 100
         elif status == 'failed':
             distribution.error_message = error_message
@@ -265,9 +408,10 @@ def handle_join_admin_room():
             try:
                 decoded = decode_token(token)
                 user_id = decoded['sub']
-                user = User.query.get(user_id)
+                u = db.session.get(User, user_id)
+                role = getattr(u, 'role', None)
                 
-                if user and user.role in ['admin', 'manager']:
+                if u and role in ['admin', 'manager']:
                     join_room('admin')
                     emit('joined_admin_room', {'message': 'Conectado à sala de administração'})
                 else:
@@ -306,7 +450,7 @@ def handle_player_heartbeat(data):
             return
         
         # Atualizar informações do player
-        player.last_seen = datetime.utcnow()
+        player.last_seen = datetime.now(timezone.utc)
         player.is_online = True
         
         if storage_info:
@@ -329,7 +473,7 @@ def handle_player_heartbeat(data):
         
         emit('heartbeat_confirmed', {
             'player_id': player_id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -595,6 +739,105 @@ def kiosk_player_page(player_id):
         return _serve_react_index()
     return _kiosk_landing_html()
 
+# Monitoramento (admin): tráfego e players
+@app.route('/api/monitor/traffic', methods=['GET'])
+@jwt_required()
+def monitor_traffic():
+    try:
+        user_id = get_jwt_identity()
+        user = db.session.get(User, user_id)
+        if not user or user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão'}), 403
+        snapshot = _traffic_snapshot()
+
+        # Calcular taxa recente (últimos N minutos) e detectar sobreuso
+        try:
+            window_min = int(os.getenv('OVERUSE_WINDOW_MIN', '1'))
+        except Exception:
+            window_min = 1
+        try:
+            overuse_bpm_bytes = int(float(os.getenv('OVERUSE_BPM_MB', '100')) * 1024 * 1024)
+        except Exception:
+            overuse_bpm_bytes = 100 * 1024 * 1024
+        try:
+            overuse_rpm = int(os.getenv('OVERUSE_RPM', '300'))
+        except Exception:
+            overuse_rpm = 300
+
+        now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        minute_keys = [(now - timedelta(minutes=i)).isoformat() for i in range(window_min)]
+        overuse_players = []
+        recent_players = {}
+        with TRAFFIC_LOCK:
+            for pid, buckets in TRAFFIC_MINUTE.items():
+                sum_bytes = 0
+                sum_requests = 0
+                for mk in minute_keys:
+                    if mk in buckets:
+                        sum_bytes += buckets[mk].get('bytes', 0)
+                        sum_requests += buckets[mk].get('requests', 0)
+                bpm = sum_bytes / max(1, window_min)
+                rpm = sum_requests / max(1, window_min)
+                recent_players[pid] = {
+                    'bytes': sum_bytes,
+                    'requests': sum_requests,
+                    'bytes_per_min': bpm,
+                    'rpm': rpm
+                }
+                if bpm > overuse_bpm_bytes or rpm > overuse_rpm:
+                    overuse_players.append({
+                        'player_id': pid,
+                        'bytes_per_min': bpm,
+                        'rpm': rpm,
+                        'bytes': sum_bytes,
+                        'requests': sum_requests
+                    })
+
+        snapshot['recent_window_min'] = window_min
+        snapshot['thresholds'] = {
+            'overuse_bpm_bytes': overuse_bpm_bytes,
+            'overuse_rpm': overuse_rpm
+        }
+        snapshot['recent'] = {'players': recent_players}
+        snapshot['overuse_players'] = overuse_players
+ 
+        if request.args.get('reset') == 'true':
+            with TRAFFIC_LOCK:
+                TRAFFIC_STATS['players'] = {}
+                TRAFFIC_STATS['total_bytes'] = 0
+                TRAFFIC_STATS['since'] = datetime.now(timezone.utc).isoformat()
+                TRAFFIC_MINUTE.clear()
+        return jsonify(snapshot), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/monitor/players', methods=['GET'])
+@jwt_required()
+def monitor_players():
+    try:
+        user_id = get_jwt_identity()
+        user = db.session.get(User, user_id)
+        if not user or user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão'}), 403
+        # Fallback seguro para bancos antigos sem coluna created_at
+        try:
+            players = Player.query.order_by(Player.created_at.desc()).all()
+        except Exception:
+            players = Player.query.all()
+        items = []
+        for p in players:
+            items.append({
+                'id': str(p.id),
+                'name': p.name,
+                'status': getattr(p, 'status', None) or 'offline',
+                'last_ping': (p.last_ping.isoformat() if getattr(p, 'last_ping', None) else None),
+                'socket_connected': str(p.id) in CONNECTED_PLAYERS,
+                'socket_last_seen': CONNECTED_PLAYERS.get(str(p.id), {}).get('last_seen')
+            })
+        return jsonify({'players': items, 'connected_count': len(CONNECTED_PLAYERS)}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Utilitário: garantir colunas 'company' nos bancos existentes (SQLite)
 def ensure_company_columns():
     try:
@@ -707,8 +950,20 @@ def create_tables():
 
 if __name__ == '__main__':
     create_tables()
-    atexit.register(lambda: scheduler.shutdown())
-    
+    # Iniciar scheduler com segurança e registrar shutdown seguro
+    def _safe_scheduler_shutdown():
+        try:
+            scheduler.shutdown(wait=False)
+        except Exception:
+            pass
+    atexit.register(_safe_scheduler_shutdown)
+
+    try:
+        scheduler.start()
+    except Exception:
+        # Evita falhas em modo debug/reloader
+        pass
+     
     # Detectar modo TV pela variável de ambiente
     tv_mode = os.getenv('TV_MODE', 'false').lower() == 'true'
     port = 80 if tv_mode else 5000

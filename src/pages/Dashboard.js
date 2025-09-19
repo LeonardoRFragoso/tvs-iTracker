@@ -253,6 +253,7 @@ const Dashboard = () => {
   const [alerts, setAlerts] = useState([]);
   const [performance, setPerformance] = useState(null);
   const [health, setHealth] = useState(null);
+  const [traffic, setTraffic] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -355,6 +356,7 @@ const Dashboard = () => {
         alerts,
         performance,
         health,
+        traffic,
         timestamp: new Date().toISOString(),
       };
 
@@ -400,17 +402,19 @@ const Dashboard = () => {
   const loadDashboardData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [statsRes, alertsRes, performanceRes, healthRes] = await Promise.all([
+      const [statsRes, alertsRes, performanceRes, healthRes, trafficRes] = await Promise.all([
         axios.get('/dashboard/stats'),
         axios.get('/dashboard/alerts'),
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
+        axios.get('/monitor/traffic'),
       ]);
 
       setStats(statsRes.data);
       setAlerts(alertsRes.data.alerts);
       setPerformance(performanceRes.data);
       setHealth(healthRes.data);
+      setTraffic(trafficRes.data);
       setLastUpdated(new Date());
     } catch (err) {
       setError('Erro ao carregar dados do dashboard');
@@ -839,6 +843,30 @@ const Dashboard = () => {
             trend="Normal"
             delay={3}
           />
+        </Grid>
+
+        {/* KPI: Uso de Rede (detecção de sobreuso) */}
+        <Grid item xs={12} sm={6} md={3}>
+          {(() => {
+            const overuseCount = traffic?.overuse_players?.length || 0;
+            const recentPlayers = traffic?.recent?.players || {};
+            const totalBytesPerMin = Object.values(recentPlayers).reduce((acc, p) => acc + (p?.bytes_per_min || 0), 0);
+            const totalMBPerMin = totalBytesPerMin / (1024 * 1024);
+            const windowMin = traffic?.recent_window_min || 1;
+            const value = overuseCount > 0 ? `${overuseCount} em excesso` : 'Normal';
+            const subtitle = `${totalMBPerMin.toFixed(1)} MB/min (janela ${windowMin}min)`;
+            return (
+              <StatCard
+                icon={<TrendingUpIcon />}
+                title="Rede"
+                value={value}
+                subtitle={subtitle}
+                color={overuseCount > 0 ? 'warning' : 'info'}
+                trend={overuseCount > 0 ? `↑ ${overuseCount}` : 'OK'}
+                delay={4}
+              />
+            );
+          })()}
         </Grid>
       </Grid>
 

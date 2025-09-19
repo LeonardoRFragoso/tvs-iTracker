@@ -79,6 +79,12 @@ const Sidebar = ({ open, onClose }) => {
       path: '/admin/pending-users',
       roles: ['admin'],
     },
+    {
+      text: 'Monitor de Tráfego',
+      icon: <AnalyticsIcon />,
+      path: '/admin/traffic-monitor',
+      roles: ['admin', 'manager'],
+    },
   ];
 
   const handleNavigation = (path) => {

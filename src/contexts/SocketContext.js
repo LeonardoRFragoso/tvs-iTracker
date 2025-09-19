@@ -16,6 +16,7 @@ export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [adminTraffic, setAdminTraffic] = useState(null);
   const { user } = useAuth();
   const switchedToSameOriginRef = useRef(false);
 
@@ -75,6 +76,12 @@ export const SocketProvider = ({ children }) => {
           const kioskPlayerId = path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null;
           if (kioskPlayerId) socketInstance.emit('join_player', { player_id: kioskPlayerId });
         }
+        // Admin/Manager join admin room
+        try {
+          if (user && (user.role === 'admin' || user.role === 'manager')) {
+            socketInstance.emit('join_admin');
+          }
+        } catch (_) {}
       });
 
       socketInstance.on('disconnect', () => {
@@ -115,6 +122,11 @@ export const SocketProvider = ({ children }) => {
 
       socketInstance.on('content_sync', (data) => {
         console.log('Sincronização de conteúdo:', data);
+      });
+
+      // Admin traffic stats (room 'admin')
+      socketInstance.on('traffic_stats', (stats) => {
+        setAdminTraffic(stats);
       });
 
       setSocket(socketInstance);
@@ -167,6 +179,7 @@ export const SocketProvider = ({ children }) => {
     socket,
     connected,
     notifications,
+    adminTraffic,
     joinPlayerRoom,
     sendPlayerCommand,
     addNotification,

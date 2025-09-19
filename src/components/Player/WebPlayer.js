@@ -30,8 +30,10 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const [segments, setSegments] = useState([]); // [{campaign_id, campaign_name, startIndex, endIndex, length}]
   const [currentSegmentIdx, setCurrentSegmentIdx] = useState(-1);
   const [showCampaignBanner, setShowCampaignBanner] = useState(false);
+  const [playlistEtag, setPlaylistEtag] = useState(null);
   const userInteractedRef = useRef(false);
   const mediaErrorCountRef = useRef(0); // retry guard for media errors
+  const preloadCacheRef = useRef({});
 
   const mediaRef = useRef(null);
   const intervalRef = useRef(null);
@@ -44,7 +46,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const MAX_ATTEMPTS = 5;
   const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 segundos
   const DEBOUNCE_DELAY = 2000; // 2 segundos entre carregamentos
-  const RECONNECT_DELAY = 15000; // 15 segundos entre reconexões
+  const RECONNECT_DELAY = 30000; // 30 segundos entre reconexões/heartbeats
 
   useEffect(() => {
     console.log('[WebPlayer] Iniciando para playerId:', playerId);
@@ -189,8 +191,24 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       }
       
       // 1) Always load playlist (public endpoint)
-      const playlistRes = await axios.get(`/players/${playerId}/playlist`);
+      const playlistRes = await axios.get(`/players/${playerId}/playlist`, {
+        headers: playlistEtag ? { 'If-None-Match': playlistEtag } : undefined,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
+      });
       console.log('[WebPlayer] Playlist carregada:', playlistRes.data);
+      
+      // Handle 304 Not Modified
+      if (playlistRes.status === 304) {
+        console.log('[WebPlayer] Playlist não modificada (304), mantendo cache atual');
+        setLoading(false);
+        return;
+      }
+      // Save new ETag if present
+      try {
+        if (playlistRes.headers && (playlistRes.headers.etag || playlistRes.headers.ETag)) {
+          setPlaylistEtag(playlistRes.headers.etag || playlistRes.headers.ETag);
+        }
+      } catch (_) {}
       
       setPlaylist(playlistRes.data.contents || []);
 
@@ -205,6 +223,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         const segs = buildSegments(playlistRes.data.contents);
         setSegments(segs);
         setCurrentSegmentIdx(segs.length ? 0 : -1);
+        
+        // Prefetch next images to smooth playback (first few items)
+        try {
+          prefetchUpcomingImages(playlistRes.data.contents, 0);
+        } catch (_) {}
       } else {
         console.log('[WebPlayer] Nenhum conteúdo encontrado, aguardando...');
         setCurrentContent(null);
@@ -375,6 +398,9 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
           // Recompute segments after refresh will be handled within loadPlayerData
         } catch (_) {}
       }
+      
+      // Prefetch following images ahead of time
+      try { prefetchUpcomingImages(playlist, nextIndex); } catch (_) {}
     }
   };
 
@@ -509,6 +535,27 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     }
     return segs;
   }, []);
+
+  const prefetchImage = (url) => {
+    if (!url) return;
+    if (preloadCacheRef.current[url]) return;
+    const img = new Image();
+    img.src = url;
+    preloadCacheRef.current[url] = img;
+  };
+
+  const prefetchUpcomingImages = (items, startIdx, count = 3) => {
+    if (!Array.isArray(items) || items.length === 0) return;
+    let fetched = 0;
+    for (let i = 0; i < items.length && fetched < count; i++) {
+      const idx = (startIdx + 1 + i) % items.length;
+      const it = items[idx];
+      if (it && it.type === 'image') {
+        prefetchImage(it.file_url || it.url);
+        fetched += 1;
+      }
+    }
+  };
 
   const renderContent = () => {
     if (!currentContent) return null;
