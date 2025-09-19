@@ -63,7 +63,7 @@ const LocationForm = () => {
 
   const fetchTimezones = async () => {
     try {
-      const response = await axios.get('/api/locations/timezones');
+      const response = await axios.get('/locations/timezones');
       setTimezones(response.data.timezones);
     } catch (err) {
       console.error('Erro ao carregar timezones:', err);
@@ -73,7 +73,7 @@ const LocationForm = () => {
   const fetchLocation = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`/api/locations/${id}`);
+      const response = await axios.get(`/locations/${id}`);
       const location = response.data.location;
       
       setFormData({
@@ -130,10 +130,10 @@ const LocationForm = () => {
       };
 
       if (isEdit) {
-        await axios.put(`/api/locations/${id}`, payload);
+        await axios.put(`/locations/${id}`, payload);
         setSuccess('Sede atualizada com sucesso!');
       } else {
-        await axios.post('/api/locations/', payload);
+        await axios.post('/locations/', payload);
         setSuccess('Sede criada com sucesso!');
       }
       

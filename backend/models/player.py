@@ -23,6 +23,8 @@ class Player(db.Model):
     ip_address = db.Column(db.String(45))  # Suporta IPv6
     chromecast_id = db.Column(db.String(100))  # ID do dispositivo Chromecast
     chromecast_name = db.Column(db.String(100))  # Nome amigável do Chromecast
+    # Código curto para acesso amigável ao player no modo kiosk (ex.: ABC123)
+    access_code = db.Column(db.String(12), unique=True, index=True)
     
     # Configurações técnicas
     platform = db.Column(db.String(50), default='web')  # web, android, windows
@@ -96,6 +98,7 @@ class Player(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'access_code': self.access_code,
             'name': self.name,
             'description': self.description,
             'location_id': self.location_id,

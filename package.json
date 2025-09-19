@@ -8,7 +8,13 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "dev": "concurrently \"npm start\" \"cd backend && python app.py\""
+    "dev": "concurrently \"npm start\" \"cd backend && python app.py\"",
+    "start:lan": "set HOST=0.0.0.0&& set PORT=3000&& set HTTPS=false&& set BROWSER=none&& react-scripts start",
+    "start:tv": "set HOST=0.0.0.0&& set PORT=80&& set HTTPS=false&& set BROWSER=none&& react-scripts start",
+    "build:tv": "set REACT_APP_API_URL=http://192.168.0.4/api&& npm run build",
+    "dev:lan": "concurrently \"npm run start:lan\" \"cd backend && python app.py\"",
+    "dev:tv": "concurrently \"npm run start:tv\" \"cd backend && set TV_MODE=true&& python app.py\"",
+    "deploy:tv": "npm run build:tv && xcopy build backend\\build /e /i /y"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

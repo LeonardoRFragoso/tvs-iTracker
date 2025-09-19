@@ -4,6 +4,8 @@ import time
 import threading
 from typing import List, Dict, Optional
 import logging
+from zeroconf import Zeroconf
+import atexit
 
 logger = logging.getLogger(__name__)
 
@@ -13,40 +15,86 @@ class ChromecastService:
         self.active_connections = {}
         self._discovery_thread = None
         self._stop_discovery = False
+        self._zeroconf = None
+        self._browser = None
+        self._connection_lock = threading.Lock()
+        self._cleanup_registered = False
+        self._failed_connections = {}  # Track failed connections to prevent loops
+        self._connection_retry_limit = 3
+        self._connection_cooldown = 300  # 5 minutes cooldown for failed devices
+        
+        # Registrar cleanup automático
+        if not self._cleanup_registered:
+            atexit.register(self.cleanup)
+            self._cleanup_registered = True
+    
+    def _ensure_zeroconf(self):
+        """Garante que temos uma instância Zeroconf válida"""
+        try:
+            if self._zeroconf is None or not hasattr(self._zeroconf, '_loop') or self._zeroconf._loop is None:
+                if self._zeroconf:
+                    try:
+                        self._zeroconf.close()
+                    except:
+                        pass
+                self._zeroconf = Zeroconf()
+                logger.info("Nova instância Zeroconf criada")
+            return self._zeroconf
+        except Exception as e:
+            logger.error(f"Erro ao criar Zeroconf: {e}")
+            return None
     
     def discover_devices(self, timeout: int = 5) -> List[Dict]:
-        """Descobre dispositivos Chromecast na rede local"""
+        """Descobre dispositivos Chromecast na rede local com gerenciamento seguro do Zeroconf"""
         try:
             logger.info("Iniciando descoberta de dispositivos Chromecast...")
             
-            # Descobrir Chromecasts na rede
-            chromecasts, browser = pychromecast.get_chromecasts(timeout=timeout)
+            # Garantir Zeroconf válido
+            zconf = self._ensure_zeroconf()
+            if not zconf:
+                logger.error("Não foi possível inicializar Zeroconf")
+                return []
+            
+            # Descobrir Chromecasts na rede com Zeroconf gerenciado
+            try:
+                chromecasts, browser = pychromecast.get_chromecasts(timeout=timeout, zeroconf_instance=zconf)
+                self._browser = browser
+            except Exception as e:
+                logger.error(f"Erro na descoberta pychromecast: {e}")
+                return []
             
             devices = []
             for cast in chromecasts:
-                # Aguardar a conexão para obter informações do dispositivo
-                cast.wait()
-                
-                device_info = {
-                    'id': str(cast.uuid),
-                    'name': cast.name,
-                    'model': cast.model_name,
-                    'ip': cast.socket_client.host if cast.socket_client else 'unknown',
-                    'port': cast.socket_client.port if cast.socket_client else 8009,
-                    'status': 'available',
-                    'cast_type': cast.cast_type,
-                    'manufacturer': getattr(cast, 'manufacturer', 'Google')
-                }
-                devices.append(device_info)
-                # Indexar por ambos os tipos de chave para compatibilidade
                 try:
+                    # Aguardar a conexão para obter informações do dispositivo com timeout
+                    cast.wait(timeout=3)
+                    
+                    device_info = {
+                        'id': str(cast.uuid),
+                        'name': cast.name,
+                        'model': cast.model_name,
+                        'ip': cast.socket_client.host if cast.socket_client else 'unknown',
+                        'port': cast.socket_client.port if cast.socket_client else 8009,
+                        'status': 'available',
+                        'cast_type': cast.cast_type,
+                        'manufacturer': getattr(cast, 'manufacturer', 'Google')
+                    }
+                    devices.append(device_info)
+                    
+                    # Indexar por ambos os tipos de chave para compatibilidade
                     self.discovered_devices[str(cast.uuid)] = cast
-                except Exception:
-                    pass
-                self.discovered_devices[cast.uuid] = cast
+                    self.discovered_devices[cast.uuid] = cast
+                    
+                except Exception as e:
+                    logger.warning(f"Erro ao processar dispositivo {cast.name}: {e}")
+                    continue
             
-            # Parar o browser de descoberta
-            pychromecast.discovery.stop_discovery(browser)
+            # Parar o browser de descoberta de forma segura
+            try:
+                if browser:
+                    pychromecast.discovery.stop_discovery(browser)
+            except Exception as e:
+                logger.warning(f"Erro ao parar discovery browser: {e}")
             
             logger.info(f"Descobertos {len(devices)} dispositivos Chromecast")
             return devices
@@ -55,9 +103,46 @@ class ChromecastService:
             logger.error(f"Erro na descoberta de dispositivos: {e}")
             return []
     
+    def _is_device_in_cooldown(self, device_id: str) -> bool:
+        """Verifica se o dispositivo está em cooldown após falhas"""
+        if device_id not in self._failed_connections:
+            return False
+        
+        failure_info = self._failed_connections[device_id]
+        if failure_info['count'] >= self._connection_retry_limit:
+            time_since_last_failure = time.time() - failure_info['last_attempt']
+            if time_since_last_failure < self._connection_cooldown:
+                logger.warning(f"Dispositivo {device_id} em cooldown por mais {int(self._connection_cooldown - time_since_last_failure)}s")
+                return True
+            else:
+                # Reset cooldown
+                del self._failed_connections[device_id]
+                return False
+        return False
+    
+    def _record_connection_failure(self, device_id: str):
+        """Registra falha de conexão para circuit breaker"""
+        if device_id not in self._failed_connections:
+            self._failed_connections[device_id] = {'count': 0, 'last_attempt': 0}
+        
+        self._failed_connections[device_id]['count'] += 1
+        self._failed_connections[device_id]['last_attempt'] = time.time()
+        
+        logger.warning(f"Falha de conexão registrada para {device_id}: {self._failed_connections[device_id]['count']}/{self._connection_retry_limit}")
+    
+    def _record_connection_success(self, device_id: str):
+        """Registra sucesso de conexão e limpa falhas"""
+        if device_id in self._failed_connections:
+            del self._failed_connections[device_id]
+            logger.info(f"Histórico de falhas limpo para {device_id}")
+    
     def connect_to_device(self, device_id: str, device_name: str = None) -> tuple[bool, str]:
-        """Conecta a um dispositivo Chromecast específico usando UUID ou nome"""
+        """Conecta a um dispositivo Chromecast específico usando UUID ou nome com circuit breaker"""
         try:
+            # Circuit breaker: verificar se dispositivo está em cooldown
+            if self._is_device_in_cooldown(device_id):
+                return False, ""
+            
             logger.info(f"Tentando conectar ao dispositivo {device_id} (nome: {device_name})")
             
             # Estratégia 1: Tentar UUID exato primeiro
@@ -65,18 +150,19 @@ class ChromecastService:
                 cast = self.discovered_devices[device_id]
                 if self._test_connection(cast, device_id):
                     logger.info(f"Conectado usando UUID exato: {device_id}")
+                    self._record_connection_success(device_id)
                     return True, device_id
             
             # Estratégia 2: Buscar por nome e atualizar UUID automaticamente
             if device_name:
                 logger.info(f"UUID {device_id} não encontrado, buscando por nome: {device_name}")
                 
-                # Fazer múltiplas tentativas de descoberta
-                for attempt in range(3):
-                    logger.info(f"Tentativa {attempt + 1}/3 de descoberta por nome...")
+                # Fazer múltiplas tentativas de descoberta (reduzido para evitar loops)
+                for attempt in range(2):  # Reduzido de 3 para 2
+                    logger.info(f"Tentativa {attempt + 1}/2 de descoberta por nome...")
                     
-                    # Redescobrir dispositivos
-                    self.discover_devices(timeout=8)
+                    # Redescobrir dispositivos com timeout menor
+                    self.discover_devices(timeout=5)  # Reduzido de 8 para 5
                     
                     # Buscar dispositivo pelo nome
                     found_device = self._find_device_by_name(device_name)
@@ -97,31 +183,32 @@ class ChromecastService:
                             if device_id != real_uuid:
                                 self.active_connections[device_id] = cast  # Compatibilidade
                             
+                            self._record_connection_success(device_id)
                             return True, real_uuid
                     
-                    # Esperar antes da próxima tentativa (exceto na última)
-                    if attempt < 2:
-                        time.sleep(2)
+                    # Esperar menos tempo antes da próxima tentativa
+                    if attempt < 1:
+                        time.sleep(1)  # Reduzido de 2 para 1
             
-            # Estratégia 3: Tentar descoberta geral como fallback
+            # Estratégia 3: Tentar descoberta geral como fallback (apenas 1 tentativa)
             logger.warning(f"Não foi possível encontrar dispositivo por nome, tentando descoberta geral...")
-            for attempt in range(2):
-                self.discover_devices(timeout=10)
-                
-                # Verificar se UUID apareceu na descoberta geral
-                if device_id in self.discovered_devices:
-                    cast = self.discovered_devices[device_id]
-                    if self._test_connection(cast, device_id):
-                        logger.info(f"Dispositivo encontrado na descoberta geral: {device_id}")
-                        return True, device_id
-                
-                if attempt < 1:
-                    time.sleep(3)
+            self.discover_devices(timeout=5)  # Timeout reduzido
             
+            # Verificar se UUID apareceu na descoberta geral
+            if device_id in self.discovered_devices:
+                cast = self.discovered_devices[device_id]
+                if self._test_connection(cast, device_id):
+                    logger.info(f"Dispositivo encontrado na descoberta geral: {device_id}")
+                    self._record_connection_success(device_id)
+                    return True, device_id
+            
+            # Registrar falha e aplicar circuit breaker
+            self._record_connection_failure(device_id)
             logger.error(f"Dispositivo {device_id} (nome: {device_name}) não encontrado após todas as tentativas")
             return False, ""
             
         except Exception as e:
+            self._record_connection_failure(device_id)
             logger.error(f"Erro ao conectar ao dispositivo {device_id}: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
@@ -243,20 +330,29 @@ class ChromecastService:
             logger.error(f"Erro ao conectar pelo nome {device_name}: {e}")
             return False, ""
     
-    def disconnect_device(self, device_id: str) -> bool:
-        """Desconecta de um dispositivo Chromecast"""
+    def disconnect_device(self, device_id: str):
+        """Desconecta de um dispositivo Chromecast de forma segura"""
         try:
-            if device_id in self.active_connections:
-                cast = self.active_connections[device_id]
-                cast.quit_app()
-                del self.active_connections[device_id]
-                logger.info(f"Desconectado do Chromecast: {device_id}")
-                return True
-            return False
-            
+            with self._connection_lock:
+                if device_id in self.active_connections:
+                    cast = self.active_connections[device_id]
+                    try:
+                        # Parar qualquer mídia em reprodução
+                        if hasattr(cast, 'media_controller'):
+                            cast.media_controller.stop()
+                        
+                        # Desconectar de forma segura
+                        cast.disconnect(timeout=2)
+                        
+                    except Exception as e:
+                        logger.warning(f"Erro ao desconectar dispositivo {device_id}: {e}")
+                    finally:
+                        # Remover da lista de conexões ativas
+                        del self.active_connections[device_id]
+                        logger.info(f"Dispositivo {device_id} desconectado")
+                        
         except Exception as e:
-            logger.error(f"Erro ao desconectar do dispositivo {device_id}: {e}")
-            return False
+            logger.error(f"Erro ao desconectar dispositivo {device_id}: {e}")
     
     def send_command(self, device_id: str, command: str, params: Dict = None) -> bool:
         """Envia comando para um dispositivo Chromecast"""
@@ -436,15 +532,49 @@ class ChromecastService:
         logger.info("Descoberta contínua de Chromecast parada")
     
     def cleanup(self):
-        """Limpa conexões e para descoberta"""
-        self.stop_continuous_discovery()
-        
-        # Desconectar todos os dispositivos
-        for device_id in list(self.active_connections.keys()):
-            self.disconnect_device(device_id)
-        
-        self.discovered_devices.clear()
-        logger.info("ChromecastService limpo")
+        """Limpa conexões e para descoberta de forma segura"""
+        try:
+            logger.info("Iniciando cleanup do ChromecastService...")
+            
+            # Parar descoberta contínua
+            self.stop_continuous_discovery()
+            
+            # Desconectar todos os dispositivos
+            with self._connection_lock:
+                device_ids = list(self.active_connections.keys())
+                for device_id in device_ids:
+                    try:
+                        cast = self.active_connections[device_id]
+                        if hasattr(cast, 'media_controller'):
+                            cast.media_controller.stop()
+                        cast.disconnect(timeout=1)
+                    except Exception as e:
+                        logger.warning(f"Erro ao desconectar {device_id} durante cleanup: {e}")
+                
+                self.active_connections.clear()
+            
+            # Parar browser de descoberta
+            if self._browser:
+                try:
+                    pychromecast.discovery.stop_discovery(self._browser)
+                    self._browser = None
+                except Exception as e:
+                    logger.warning(f"Erro ao parar browser durante cleanup: {e}")
+            
+            # Fechar Zeroconf de forma segura
+            if self._zeroconf:
+                try:
+                    self._zeroconf.close()
+                    self._zeroconf = None
+                    logger.info("Zeroconf fechado com sucesso")
+                except Exception as e:
+                    logger.warning(f"Erro ao fechar Zeroconf: {e}")
+            
+            self.discovered_devices.clear()
+            logger.info("ChromecastService limpo com sucesso")
+            
+        except Exception as e:
+            logger.error(f"Erro durante cleanup: {e}")
 
 # Instância global do serviço
 chromecast_service = ChromecastService()

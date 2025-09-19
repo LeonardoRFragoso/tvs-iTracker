@@ -95,7 +95,7 @@ const CastManager = ({ playerId, onCastStateChange }) => {
 
     try {
       // Fazer requisição real para descobrir dispositivos
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/cast/devices/scan`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`}/cast/devices/scan`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,

@@ -36,8 +36,6 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { ptBR } from 'date-fns/locale';
 import axios from '../../config/axios';
 
-const API_BASE_URL = `${axios.defaults.baseURL}/api`;
-
 // Helpers for BR datetime handling
 const pad2 = (n) => String(n).padStart(2, '0');
 const toBRDateTime = (date, { endOfDay = false } = {}) => {
@@ -130,7 +128,7 @@ const ScheduleForm = () => {
 
   const loadSchedule = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/schedules/${id}`);
+      const response = await axios.get(`/schedules/${id}`);
       const schedule = response.data.schedule;
       
       // Função para converter string de tempo (HH:MM:SS) em objeto Date
@@ -184,7 +182,7 @@ const ScheduleForm = () => {
 
   const loadCampaigns = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/campaigns`);
+      const response = await axios.get('/campaigns');
       setCampaigns(response.data.campaigns || []);
     } catch (err) {
       console.error('Load campaigns error:', err);
@@ -193,7 +191,7 @@ const ScheduleForm = () => {
 
   const loadPlayers = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/players`);
+      const response = await axios.get('/players');
       setPlayers(response.data.players || []);
     } catch (err) {
       console.error('Load players error:', err);
@@ -223,7 +221,7 @@ const ScheduleForm = () => {
         conflictData.exclude_schedule_id = id;
       }
 
-      const response = await axios.post(`${API_BASE_URL}/schedules/conflicts`, conflictData);
+      const response = await axios.post('/schedules/conflicts', conflictData);
       setConflicts(response.data.conflicts || []);
     } catch (err) {
       console.error('Check conflicts error:', err);
@@ -298,9 +296,9 @@ const ScheduleForm = () => {
 
       let response;
       if (isEdit) {
-        response = await axios.put(`${API_BASE_URL}/schedules/${id}`, submitData);
+        response = await axios.put(`/schedules/${id}`, submitData);
       } else {
-        response = await axios.post(`${API_BASE_URL}/schedules`, submitData);
+        response = await axios.post('/schedules', submitData);
       }
 
       setSuccess(isEdit ? 'Agendamento atualizado com sucesso!' : 'Agendamento criado com sucesso!');
@@ -664,9 +662,6 @@ const ScheduleForm = () => {
                           <MenuItem value="main">Principal (Vídeos)</MenuItem>
                           <MenuItem value="overlay">Overlay (Logos/Imagens)</MenuItem>
                         </Select>
-                        <FormHelperText>
-                          Overlay fica fixo na tela, Principal reproduz por período
-                        </FormHelperText>
                       </FormControl>
                     </Grid>
                     

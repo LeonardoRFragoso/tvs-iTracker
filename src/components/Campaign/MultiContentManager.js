@@ -49,7 +49,7 @@ import axios from 'axios';
 import PlaybackPreview from './PlaybackPreview';
 import { useSocket } from '../../contexts/SocketContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 const API_HOST = API_BASE_URL.replace(/\/api$/, '');
 
 const MultiContentManager = ({ campaignId, onContentChange }) => {

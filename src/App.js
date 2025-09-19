@@ -35,6 +35,10 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/change-password" element={<PrivateRoute><ChangePassword /></PrivateRoute>} />
+          {/* Short friendly code route -> will resolve and redirect to /kiosk/player/:id */}
+          <Route path="/k/:code" element={<PlayerView />} />
+          {/* Public kiosk route for Smart TVs / Android / Windows */}
+          <Route path="/kiosk/player/:id" element={<PlayerView />} />
           <Route path="/player/:id" element={<PrivateRoute><PlayerView /></PrivateRoute>} />
           <Route path="/" element={
             <PrivateRoute>

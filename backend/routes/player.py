@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_socketio import emit
 from datetime import datetime, timedelta
+import secrets
 import json
 from models.player import Player, db
 from models.user import User
@@ -10,6 +11,25 @@ from models.schedule import Schedule
 from services.auto_sync_service import auto_sync_service
 
 player_bp = Blueprint('player', __name__)
+
+# Helper: generate unique, friendly access code for kiosk URLs
+def _generate_access_code(length: int = 6) -> str:
+    # Somente dígitos não ambíguos para facilitar digitação no controle remoto
+    alphabet = '23456789'
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def _generate_unique_access_code(max_attempts: int = 10) -> str:
+    for _ in range(max_attempts):
+        code = _generate_access_code(6)
+        if not Player.query.filter_by(access_code=code).first():
+            return code
+    # fallback com 8 chars caso esteja muito colidido
+    for _ in range(max_attempts):
+        code = _generate_access_code(8)
+        if not Player.query.filter_by(access_code=code).first():
+            return code
+    # em último caso, usa parte do UUID do player (será substituído na primeira atualização)
+    return _generate_access_code(8)
 
 @player_bp.route('/', methods=['GET'])
 @jwt_required()
@@ -108,7 +128,8 @@ def create_player():
             transition_effect=data.get('transition_effect', 'fade'),
             volume_level=data.get('volume_level', 50),
             storage_capacity_gb=data.get('storage_capacity_gb', 32),
-            is_active=data.get('is_active', True)
+            is_active=data.get('is_active', True),
+            access_code=data.get('access_code') or _generate_unique_access_code()
         )
         
         db.session.add(player)
@@ -332,8 +353,8 @@ def sync_player(player_id):
         
         print(f"[SYNC] Player encontrado: {player.name}, Chromecast ID: {player.chromecast_id}")
         
-        # Se o player tem Chromecast associado, verificar status real
-        if player.chromecast_id:
+        # Se (e somente se) for Chromecast, verificar status real via descoberta
+        if (player.platform or '').lower() == 'chromecast' and player.chromecast_id:
             print(f"[SYNC] Importando chromecast_service...")
             from services.chromecast_service import chromecast_service
             
@@ -617,6 +638,47 @@ def connect_player(player_id):
         return jsonify({'error': str(e)}), 500
 
 
+@player_bp.route('/<player_id>/info', methods=['GET'])
+def get_player_info_public(player_id):
+    """Public endpoint for Web/Android players to get basic player information.
+    Returns only essential information needed for kiosk mode without authentication.
+    """
+    try:
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        # Return only basic, safe information
+        player_info = {
+            'id': player.id,
+            'name': player.name or 'Player',
+            'status': player.status or 'offline',
+            'is_active': bool(player.is_active),
+            'access_code': player.access_code or ''
+        }
+
+        # Add optional fields safely
+        if hasattr(player, 'platform') and player.platform:
+            player_info['platform'] = player.platform
+            
+        if hasattr(player, 'last_ping') and player.last_ping:
+            try:
+                player_info['last_ping'] = player.last_ping.isoformat()
+            except:
+                pass
+                
+        if hasattr(player, 'created_at') and player.created_at:
+            try:
+                player_info['created_at'] = player.created_at.isoformat()
+            except:
+                pass
+
+        return jsonify(player_info), 200
+    except Exception as e:
+        print(f"[ERROR] get_player_info_public: {str(e)}")  # Debug log
+        return jsonify({'error': 'Erro interno do servidor'}), 500
+
+
 @player_bp.route('/<player_id>/playlist', methods=['GET'])
 def get_player_playlist(player_id):
     """Public endpoint to provide the current playlist for a Web/Android player.
@@ -692,4 +754,57 @@ def get_player_playlist(player_id):
 
         return jsonify({'player_id': player_id, 'schedule_id': chosen.id, 'contents': items}), 200
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/resolve-code/<code>', methods=['GET'])
+def resolve_code(code):
+    """Public endpoint: resolve a friendly access code to a player id."""
+    try:
+        if not code:
+            return jsonify({'error': 'Código não fornecido'}), 400
+        player = Player.query.filter(Player.access_code == code.upper()).first()
+        if not player:
+            return jsonify({'error': 'Código não encontrado'}), 404
+        return jsonify({'player_id': player.id, 'access_code': player.access_code}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/list-codes', methods=['GET'])
+def list_access_codes():
+    """Endpoint temporário para listar códigos de acesso disponíveis (para debug)"""
+    try:
+        players = Player.query.filter(Player.access_code != None).all()
+        codes = []
+        for player in players:
+            codes.append({
+                'player_id': player.id,
+                'player_name': player.name,
+                'access_code': player.access_code,
+                'is_active': player.is_active
+            })
+        return jsonify({'codes': codes, 'total': len(codes)}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@player_bp.route('/<player_id>/regenerate-code', methods=['POST'])
+@jwt_required()
+def regenerate_access_code(player_id):
+    """Regenerate a new access_code for the player (admin/manager only)."""
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão para regenerar código'}), 403
+
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        player.access_code = _generate_unique_access_code()
+        player.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({'message': 'Código regenerado', 'access_code': player.access_code}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500

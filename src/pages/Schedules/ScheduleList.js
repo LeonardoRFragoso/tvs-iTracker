@@ -49,9 +49,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import axios from '../../config/axios';
 
 // BR datetime helpers for display and comparisons
 const parseDateTimeFlexible = (value) => {
@@ -126,7 +124,7 @@ const ScheduleList = () => {
         ...Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''))
       });
       
-      const response = await axios.get(`${API_BASE_URL}/schedules?${params}`);
+      const response = await axios.get(`/schedules?${params}`);
       setSchedules(response.data.schedules);
       setTotalPages(response.data.pages);
       setTotal(response.data.total);
@@ -140,7 +138,7 @@ const ScheduleList = () => {
 
   const loadCampaigns = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/campaigns`);
+      const response = await axios.get('/campaigns');
       setCampaigns(response.data.campaigns || []);
     } catch (err) {
       console.error('Load campaigns error:', err);
@@ -149,7 +147,7 @@ const ScheduleList = () => {
 
   const loadPlayers = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/players`);
+      const response = await axios.get('/players');
       setPlayers(response.data.players || []);
     } catch (err) {
       console.error('Load players error:', err);
@@ -173,7 +171,7 @@ const ScheduleList = () => {
 
   const handleToggleActive = async (schedule) => {
     try {
-      await axios.put(`${API_BASE_URL}/schedules/${schedule.id}`, {
+      await axios.put(`/schedules/${schedule.id}`, {
         is_active: !schedule.is_active
       });
       setSuccess(`Agendamento ${schedule.is_active ? 'desativado' : 'ativado'} com sucesso`);
@@ -192,7 +190,7 @@ const ScheduleList = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/schedules/${scheduleToDelete.id}`);
+      await axios.delete(`/schedules/${scheduleToDelete.id}`);
       setSuccess('Agendamento deletado com sucesso');
       loadSchedules();
     } catch (err) {

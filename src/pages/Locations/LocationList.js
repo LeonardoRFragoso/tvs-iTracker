@@ -117,13 +117,13 @@ const LocationList = () => {
   const fetchLocations = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/locations/');
+      const response = await axios.get('/locations/');
       setLocations(response.data.locations);
       
       // Buscar estatísticas para cada location
       const statsPromises = response.data.locations.map(async (location) => {
         try {
-          const statsResponse = await axios.get(`/api/locations/${location.id}/stats`);
+          const statsResponse = await axios.get(`/locations/${location.id}/stats`);
           return { [location.id]: statsResponse.data };
         } catch (err) {
           return { [location.id]: null };
@@ -145,7 +145,7 @@ const LocationList = () => {
     if (!deleteDialog.location) return;
     
     try {
-      await axios.delete(`/api/locations/${deleteDialog.location.id}`);
+      await axios.delete(`/locations/${deleteDialog.location.id}`);
       setDeleteDialog({ open: false, location: null });
       fetchLocations();
     } catch (err) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import axios from '../../config/axios'; 
 import {
   Box,
   Typography,
@@ -16,19 +17,24 @@ import {
 import { useNavigate } from 'react-router-dom';
 import WebPlayer from '../../components/Player/WebPlayer';
 
+const API_BASE_URL = axios.defaults.baseURL;
+
 const PlayerView = () => {
-  const { id } = useParams();
+  const { id, code } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState('');
+  const [resolving, setResolving] = useState(false);
 
   const fullscreenParam = searchParams.get('fullscreen');
   const playerId = id || searchParams.get('playerId');
 
   useEffect(() => {
     if (fullscreenParam === 'true') {
+      // Enable fullscreen layout (overlay), but do not request browser fullscreen automatically
       setIsFullscreen(true);
+      // The user can press 'F' or click the button to enter real browser fullscreen
     }
   }, [fullscreenParam]);
 
@@ -55,6 +61,35 @@ const PlayerView = () => {
     };
   }, [isFullscreen]);
 
+  // Auto-detect TV/kiosk mode and enable fullscreen
+  useEffect(() => {
+    const isKioskMode = window.location.pathname.includes('/kiosk/') || window.location.pathname.includes('/k/');
+    const isLargeScreen = window.screen.width >= 1920 || window.screen.height >= 1080;
+    
+    if (isKioskMode && isLargeScreen && !isFullscreen) {
+      console.log('[PlayerView] Kiosk mode detected; awaiting user gesture to enter fullscreen');
+      // Tip: press 'F' or click the "Tela Cheia" button to enter fullscreen.
+    }
+  }, [playerId, isFullscreen]);
+
+  useEffect(() => {
+    const resolveAndRedirect = async () => {
+      if (!id && code) {
+        try {
+          setResolving(true);
+          const res = await axios.get(`/players/resolve-code/${code}`);
+          const pid = res.data.player_id;
+          navigate(`/kiosk/player/${pid}?fullscreen=true`, { replace: true });
+        } catch (e) {
+          setError('Código de acesso inválido');
+        } finally {
+          setResolving(false);
+        }
+      }
+    };
+    resolveAndRedirect();
+  }, [id, code, navigate]);
+
   const toggleFullscreen = () => {
     if (!isFullscreen) {
       enterFullscreen();
@@ -64,20 +99,47 @@ const PlayerView = () => {
   };
 
   const enterFullscreen = () => {
+    console.log('[PlayerView] Entering fullscreen mode');
     setIsFullscreen(true);
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen();
+    
+    // Try multiple fullscreen methods for better compatibility
+    const element = document.documentElement;
+    
+    if (element.requestFullscreen) {
+      element.requestFullscreen().catch(console.warn);
+    } else if (element.webkitRequestFullscreen) {
+      element.webkitRequestFullscreen().catch(console.warn);
+    } else if (element.mozRequestFullScreen) {
+      element.mozRequestFullScreen().catch(console.warn);
+    } else if (element.msRequestFullscreen) {
+      element.msRequestFullscreen().catch(console.warn);
     }
   };
 
   const exitFullscreen = () => {
+    console.log('[PlayerView] Exiting fullscreen mode');
     setIsFullscreen(false);
+    
     if (document.exitFullscreen) {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(console.warn);
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen().catch(console.warn);
+    } else if (document.mozCancelFullScreen) {
+      document.mozCancelFullScreen().catch(console.warn);
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen().catch(console.warn);
     }
   };
 
-  if (!playerId) {
+  if (resolving) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', backgroundColor: '#000' }}>
+        <Typography variant="h6" color="white">Carregando...</Typography>
+      </Box>
+    );
+  }
+
+  if (!playerId && !code) {
     return (
       <Box
         sx={{

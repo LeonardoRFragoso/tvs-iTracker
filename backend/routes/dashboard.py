@@ -196,10 +196,14 @@ def get_system_alerts():
         
         # Players offline há mais de 1 hora
         one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-        offline_players = Player.query.filter(
-            Player.is_active == True,
-            Player.last_ping < one_hour_ago
-        ).all()
+        try:
+            offline_players = Player.query.filter(
+                Player.is_active == True,
+                Player.last_ping < one_hour_ago
+            ).all()
+        except Exception as e:
+            print(f"[DASHBOARD] alerts offline_players fallback due to: {e}")
+            offline_players = []
         
         for player in offline_players:
             alerts.append({
@@ -233,10 +237,14 @@ def get_system_alerts():
             })
         
         # Armazenamento alto (>80%)
-        high_storage_players = Player.query.filter(
-            Player.storage_used_gb > Player.storage_capacity_gb * 0.8,
-            Player.storage_capacity_gb > 0
-        ).all()
+        try:
+            high_storage_players = Player.query.filter(
+                Player.storage_used_gb > Player.storage_capacity_gb * 0.8,
+                Player.storage_capacity_gb > 0
+            ).all()
+        except Exception as e:
+            print(f"[DASHBOARD] high_storage_players fallback due to: {e}")
+            high_storage_players = []
         
         for player in high_storage_players:
             percentage = (player.storage_used_gb / player.storage_capacity_gb * 100)
@@ -319,24 +327,44 @@ def get_performance_metrics():
 def get_system_health():
     try:
         # Status do sistema
-        total_players = Player.query.count()
+        try:
+            total_players = Player.query.count()
+        except Exception as e:
+            print(f"[DASHBOARD] health total_players fallback due to: {e}")
+            try:
+                total_players = db.session.execute(text("SELECT COUNT(*) FROM players")).scalar() or 0
+            except Exception as e2:
+                print(f"[DASHBOARD] health total_players raw fallback failed: {e2}")
+                total_players = 0
         
         # Fix: Calculate online players based on last_ping within 5 minutes (same logic as Player.is_online property)
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
-        online_players = Player.query.filter(
-            Player.last_ping.isnot(None),
-            Player.last_ping >= five_minutes_ago
-        ).count()
+        try:
+            online_players = Player.query.filter(
+                Player.last_ping.isnot(None),
+                Player.last_ping >= five_minutes_ago
+            ).count()
+        except Exception as e:
+            print(f"[DASHBOARD] health online_players fallback due to: {e}")
+            online_players = 0
         
         # Calcular uptime dos players (% de players online)
         uptime_percentage = (online_players / total_players * 100) if total_players > 0 else 0
         
         # Status das editorias
-        total_editorials = Editorial.query.filter(Editorial.is_active == True).count()
-        error_editorials = Editorial.query.filter(
-            Editorial.is_active == True,
-            Editorial.last_error.isnot(None)
-        ).count()
+        try:
+            total_editorials = Editorial.query.filter(Editorial.is_active == True).count()
+        except Exception as e:
+            print(f"[DASHBOARD] health total_editorials fallback due to: {e}")
+            total_editorials = 0
+        try:
+            error_editorials = Editorial.query.filter(
+                Editorial.is_active == True,
+                Editorial.last_error.isnot(None)
+            ).count()
+        except Exception as e:
+            print(f"[DASHBOARD] health error_editorials fallback due to: {e}")
+            error_editorials = 0
         
         editorial_health = ((total_editorials - error_editorials) / total_editorials * 100) if total_editorials > 0 else 100
         

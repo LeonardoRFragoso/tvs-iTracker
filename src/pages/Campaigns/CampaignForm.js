@@ -81,7 +81,6 @@ import axios from '../../config/axios';
 import MultiContentManager from '../../components/Campaign/MultiContentManager';
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
-const API_BASE_URL = `${axios.defaults.baseURL}/api`;
 const API_HOST = axios.defaults.baseURL;
 
 // BR datetime helpers
@@ -443,10 +442,10 @@ const CampaignForm = () => {
       // console.log('Submitting campaign:', submitData);
 
       if (isEdit) {
-        await axios.put(`${API_BASE_URL}/campaigns/${id}`, submitData);
+        await axios.put(`/campaigns/${id}`, submitData);
         setSuccess('Campanha atualizada com sucesso!');
       } else {
-        await axios.post(`${API_BASE_URL}/campaigns`, submitData);
+        await axios.post('/campaigns', submitData);
         setSuccess('Campanha criada com sucesso!');
       }
 
@@ -464,7 +463,7 @@ const CampaignForm = () => {
   // Data loading
   const loadAvailableContents = async () => {
     try {
-      const resp = await axios.get(`${API_BASE_URL}/content?per_page=1000`);
+      const resp = await axios.get('/content?per_page=1000');
       setAvailableContents(resp.data?.contents || []);
     } catch (err) {
       console.error('Erro ao carregar conteúdos disponíveis:', err);
@@ -474,7 +473,7 @@ const CampaignForm = () => {
   const loadCampaignIfEdit = async () => {
     if (!isEdit) return;
     try {
-      const resp = await axios.get(`${API_BASE_URL}/campaigns/${id}`);
+      const resp = await axios.get(`/campaigns/${id}`);
       const c = resp.data?.campaign || null;
       if (c) {
         setFormData((prev) => ({

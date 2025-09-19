@@ -48,9 +48,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSocket } from '../../contexts/SocketContext';
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import axios from '../../config/axios';
 
 const PlayerList = () => {
   const navigate = useNavigate();
@@ -101,7 +99,7 @@ const PlayerList = () => {
         location_id: filters.location_id || undefined,
       };
 
-      const response = await axios.get(`${API_BASE_URL}/players`, { params });
+      const response = await axios.get('/players', { params });
       setPlayers(response.data.players);
       setTotalPages(response.data.pages);
     } catch (err) {
@@ -114,7 +112,7 @@ const PlayerList = () => {
 
   const loadLocations = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/players/locations`);
+      const response = await axios.get('/players/locations');
       setLocations(response.data.locations || []);
     } catch (err) {
       console.error('Load locations error:', err);
@@ -124,7 +122,7 @@ const PlayerList = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/players/${playerToDelete.id}`);
+      await axios.delete(`/players/${playerToDelete.id}`);
       setSuccess(`Player "${playerToDelete.name}" deletado com sucesso`);
       setDeleteDialogOpen(false);
       setPlayerToDelete(null);
@@ -138,7 +136,7 @@ const PlayerList = () => {
   const handlePlayerAction = async (player, action) => {
     try {
       if (action === 'sync') {
-        await axios.post(`${API_BASE_URL}/players/${player.id}/sync`);
+        await axios.post(`/players/${player.id}/sync`);
       } else {
         // For restart/stop/start, use WebSocket command
         sendPlayerCommand(player.id, action);
@@ -269,7 +267,7 @@ const PlayerList = () => {
     if (!playerToDelete) return;
     
     try {
-      await axios.delete(`${API_BASE_URL}/players/${playerToDelete.id}`);
+      await axios.delete(`/players/${playerToDelete.id}`);
       setSuccess(`Player "${playerToDelete.name}" deletado com sucesso`);
       setDeleteDialogOpen(false);
       setPlayerToDelete(null);

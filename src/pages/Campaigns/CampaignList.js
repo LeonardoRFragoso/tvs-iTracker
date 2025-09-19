@@ -45,8 +45,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
 
-const API_BASE_URL = `${axios.defaults.baseURL}/api`;
-
 // BR datetime helpers for display
 const parseDateTimeFlexible = (value) => {
   if (!value) return null;
@@ -105,7 +103,7 @@ const CampaignList = () => {
         ...(filterStatus === 'inactive' ? { is_active: false } : {}),
       };
 
-      const response = await axios.get(`${API_BASE_URL}/campaigns`, { params });
+      const response = await axios.get('/campaigns', { params });
       setCampaigns(response.data.campaigns);
       setTotalPages(response.data.pages);
     } catch (err) {
@@ -118,7 +116,7 @@ const CampaignList = () => {
 
   const handleDelete = async () => {
     try {
-      await axios.delete(`${API_BASE_URL}/campaigns/${deleteDialog.campaign.id}`);
+      await axios.delete(`/campaigns/${deleteDialog.campaign.id}`);
       setDeleteDialog({ open: false, campaign: null });
       loadCampaigns();
     } catch (err) {
@@ -139,7 +137,7 @@ const CampaignList = () => {
       // Close menu immediately for visual feedback
       handleMenuClose();
 
-      await axios.put(`${API_BASE_URL}/campaigns/${campaign.id}`, {
+      await axios.put(`/campaigns/${campaign.id}`, {
         is_active: newIsActive,
       });
 
@@ -436,7 +434,7 @@ const CampaignList = () => {
                     <CardMedia
                       component="img"
                       height="200"
-                      image={campaign.thumbnail ? `${API_BASE_URL}${campaign.thumbnail}` : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDQwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjVmNWY1Ii8+CjxwYXRoIGQ9Ik0xNzUgNzVIMjI1VjEyNUgxNzVWNzVaIiBmaWxsPSIjY2NjY2NjIi8+CjxwYXRoIGQ9Ik0xOTAgMTAwTDIwNSA4NUwyMTAgMTAwTDIwNSAxMTVMMTkwIDEwMFoiIGZpbGw9IiNhYWFhYWEiLz4KPHRleHQgeD0iMjAwIiB5PSIxNTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSI+U2VtIEltYWdlbTwvdGV4dD4KPHN2Zz4='}
+                      image={campaign.thumbnail ? `${axios.defaults.baseURL}${campaign.thumbnail}` : 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDQwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjZjVmNWY1Ii8+CjxwYXRoIGQ9Ik0xNzUgNzVIMjI1VjEyNUgxNzVWNzVaIiBmaWxsPSIjY2NjY2NjIi8+CjxwYXRoIGQ9Ik0xOTAgMTAwTDIwNSA4NUwyMTAgMTAwTDIwNSAxMTVMMTkwIDEwMFoiIGZpbGw9IiNhYWFhYWEiLz4KPHRleHQgeD0iMjAwIiB5PSIxNTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OTk5OSI+U2VtIEltYWdlbTwvdGV4dD4KPHN2Zz4='}
                       alt={campaign.name}
                       sx={{
                         transition: 'all 0.3s ease',

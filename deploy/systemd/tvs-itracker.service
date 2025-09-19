@@ -1,0 +1,25 @@
+# TVs iTracker - systemd unit (example)
+# Adjust User and WorkingDirectory to your environment.
+
+[Unit]
+Description=TVs iTracker Backend (Flask + Socket.IO)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# TODO: Ajuste para o usuário do seu servidor
+User=ubuntu
+# TODO: Ajuste para o caminho do seu projeto
+WorkingDirectory=/opt/tvs-iTracker/backend
+
+Environment=PYTHONUNBUFFERED=1
+Environment=FLASK_ENV=production
+Environment=TV_MODE=false
+ExecStart=/opt/tvs-iTracker/backend/venv/bin/python app.py
+Restart=always
+RestartSec=5
+# Aumentar limite de descritores para muitas conexões
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

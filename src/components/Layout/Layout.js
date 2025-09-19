@@ -60,9 +60,9 @@ const Layout = () => {
     const fetchBadgeData = async () => {
       try {
         const [contentRes, locationsRes, dashboardRes] = await Promise.all([
-          axios.get('/api/content?per_page=1000'), // Buscar todos os conteúdos
-          axios.get('/api/locations'),
-          axios.get('/api/dashboard/stats') // Buscar stats do dashboard para players online
+          axios.get('/content?per_page=1000'), // Buscar todos os conteúdos
+          axios.get('/locations'),
+          axios.get('/dashboard/stats') // Buscar stats do dashboard para players online
         ]);
 
         setBadges({

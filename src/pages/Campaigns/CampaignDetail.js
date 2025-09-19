@@ -41,7 +41,6 @@ import {
   Remove
 } from '@mui/icons-material';
 import axios from '../../config/axios';
-const API_BASE_URL = `${axios.defaults.baseURL}/api`;
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
 const CampaignDetail = () => {
@@ -77,9 +76,9 @@ const CampaignDetail = () => {
       
       // Buscar dados da campanha
       const [campaignRes, contentsRes, schedulesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/campaigns/${id}`),
-        axios.get(`${API_BASE_URL}/campaigns/${id}/contents`),
-        axios.get(`${API_BASE_URL}/schedules/campaign/${id}`)
+        axios.get(`/campaigns/${id}`),
+        axios.get(`/campaigns/${id}/contents`),
+        axios.get(`/schedules/campaign/${id}`)
       ]);
 
       setCampaign(campaignRes.data.campaign || campaignRes.data);
@@ -95,7 +94,7 @@ const CampaignDetail = () => {
 
   const fetchAvailableContents = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/content`, {
+      const response = await axios.get('/content', {
         params: { per_page: 100 }
       });
       setAvailableContents(response.data.contents || []);
@@ -115,7 +114,7 @@ const CampaignDetail = () => {
     setActionLoading(true);
     try {
       const promises = selectedContents.map(contentId =>
-        axios.post(`${API_BASE_URL}/campaigns/${id}/contents`, { content_id: contentId })
+        axios.post(`/campaigns/${id}/contents`, { content_id: contentId })
       );
       
       await Promise.all(promises);
@@ -144,7 +143,7 @@ const CampaignDetail = () => {
   const handleRemoveContent = async (contentId) => {
     setActionLoading(true);
     try {
-      await axios.delete(`${API_BASE_URL}/campaigns/${id}/contents/${contentId}`);
+      await axios.delete(`/campaigns/${id}/contents/${contentId}`);
       
       setSnackbar({
         open: true,
@@ -226,13 +225,13 @@ const CampaignDetail = () => {
       const thumb = item.content?.thumbnail_path || item.thumbnail_path;
       if (thumb) {
         const fname = String(thumb).split('/').pop();
-        return `${API_BASE_URL}/content/thumbnails/${fname}`;
+        return `${axios.defaults.baseURL}/content/thumbnails/${fname}`;
       }
       const filePath = item.content?.file_path || item.file_path;
       const type = item.content?.content_type || item.content_type;
       if (filePath && type === 'image') {
         const fname = String(filePath).split('/').pop();
-        return `${API_BASE_URL}/content/media/${fname}`;
+        return `${axios.defaults.baseURL}/content/media/${fname}`;
       }
     } catch (e) {
       // ignore parsing errors and return null

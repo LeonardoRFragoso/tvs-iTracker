@@ -47,7 +47,7 @@ import axios from 'axios';
 import { useSocket } from '../../contexts/SocketContext';
 import CastManager from '../../components/Cast/CastManager';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 
 const PlayerDetail = () => {
   const { id } = useParams();
@@ -58,6 +58,15 @@ const PlayerDetail = () => {
   const [error, setError] = useState('');
   const [tabValue, setTabValue] = useState(0);
   const [deleteDialog, setDeleteDialog] = useState(false);
+
+  const regenerateCode = async () => {
+    try {
+      await axios.post(`${API_BASE_URL}/players/${id}/regenerate-code`);
+      await loadPlayer();
+    } catch (err) {
+      setError('Erro ao regenerar código');
+    }
+  };
 
   useEffect(() => {
     loadPlayer();
@@ -115,7 +124,21 @@ const PlayerDetail = () => {
 
   const formatLastSeen = (dateString) => {
     if (!dateString) return 'Nunca';
-    const date = new Date(dateString);
+    let date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      // Tenta parsear formato BR: dd/mm/yyyy HH:MM:SS
+      try {
+        const [dpart, tpart = '00:00:00'] = String(dateString).split(' ');
+        const [dd, mm, yyyy] = dpart.split(/[\/]/).map((v) => parseInt(v, 10));
+        const [hh = 0, mi = 0, ss = 0] = tpart.split(':').map((v) => parseInt(v, 10));
+        if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) {
+          date = new Date(yyyy, Math.max(0, (mm || 1) - 1), dd || 1, hh || 0, mi || 0, ss || 0);
+        }
+      } catch (e) {
+        // Mantém date inválido se falhar
+      }
+    }
+    if (isNaN(date.getTime())) return '—';
     const now = new Date();
     const diffMinutes = Math.floor((now - date) / (1000 * 60));
     
@@ -155,14 +178,25 @@ const PlayerDetail = () => {
             color={getStatusColor(player.status)}
             size="small"
           />
+          {player.access_code && (
+            <Chip label={`Código: ${player.access_code}`} size="small" />
+          )}
           <Button
             variant="contained"
             color="primary"
             startIcon={<OpenInNewIcon />}
-            onClick={() => window.open(`/kiosk/player/${id}?fullscreen=true`, '_blank')}
+            onClick={() => window.open(`${window.location.origin}/kiosk/player/${id}?fullscreen=true`, '_blank')}
           >
             Abrir Player
           </Button>
+          {player.access_code && (
+            <Button
+              variant="outlined"
+              onClick={() => window.open(`${window.location.origin}/k/${player.access_code}`, '_blank')}
+            >
+              Abrir Link Curto
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
@@ -184,6 +218,12 @@ const PlayerDetail = () => {
             onClick={() => setDeleteDialog(true)}
           >
             Excluir
+          </Button>
+          <Button
+            variant="text"
+            onClick={regenerateCode}
+          >
+            Regenerar Código
           </Button>
         </Box>
       </Box>
@@ -265,6 +305,9 @@ const PlayerDetail = () => {
                 <List dense>
                   <ListItem>
                     <ListItemText primary="Nome" secondary={player.name} />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText primary="Código de acesso (link curto)" secondary={player.access_code || '—'} />
                   </ListItem>
                   <ListItem>
                     <ListItemText primary="Localização" secondary={player.location_name} />

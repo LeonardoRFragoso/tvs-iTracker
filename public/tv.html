@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV Player - Redirecionando...</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .loading {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .instructions {
+            text-align: center;
+            font-size: 16px;
+            max-width: 600px;
+            line-height: 1.5;
+        }
+        .url {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="spinner"></div>
+    <div class="loading">Carregando Player...</div>
+    <div class="instructions">
+        <p>Se não redirecionou automaticamente, acesse:</p>
+        <div class="url" id="playerUrl">Carregando...</div>
+        <p>Ou digite na TV: <strong>192.168.0.4/tv.html</strong></p>
+    </div>
+
+    <script>
+        // Detectar código da URL ou usar padrão
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code') || '386342';
+        
+        // Construir URL do player
+        const playerUrl = `http://192.168.0.4:3000/k/${code}`;
+        document.getElementById('playerUrl').textContent = playerUrl;
+        
+        // Tentar redirecionamento automático após 3 segundos
+        setTimeout(() => {
+            try {
+                window.location.href = playerUrl;
+            } catch (e) {
+                console.log('Redirecionamento automático falhou:', e);
+                // Mostrar instruções manuais
+                document.querySelector('.instructions').innerHTML += 
+                    '<p style="color: #ff6b6b; margin-top: 20px;"><strong>Redirecionamento automático falhou.</strong><br>Por favor, digite a URL acima manualmente no navegador da TV.</p>';
+            }
+        }, 3000);
+        
+        // Log para debug
+        console.log('TV Player - Código:', code);
+        console.log('URL do Player:', playerUrl);
+    </script>
+</body>
+</html>
