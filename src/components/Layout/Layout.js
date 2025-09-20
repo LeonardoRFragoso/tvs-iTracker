@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -35,6 +35,7 @@ import {
   Brightness4,
   Brightness7,
   TrendingUp,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -142,6 +143,32 @@ const Layout = () => {
       description: 'Estatísticas de rede por player'
     },
   ];
+
+  const computedMenuItems = useMemo(() => {
+    let items = [...menuItems];
+    const isAdmin = user?.role === 'admin';
+
+    // Ocultar Monitor de Tráfego para não-admin
+    if (!isAdmin) {
+      items = items.filter(i => i.path !== '/admin/traffic-monitor');
+    }
+
+    // Inserir item de aprovações para admin, preferencialmente antes do Monitor de Tráfego
+    if (isAdmin) {
+      const adminItem = {
+        text: 'Solicitações de Acesso',
+        icon: <PeopleIcon />,
+        path: '/admin/pending-users',
+        badge: null,
+        description: 'Aprovar/Rejeitar novos usuários',
+      };
+      const monitorIdx = items.findIndex(i => i.path === '/admin/traffic-monitor');
+      const insertIdx = monitorIdx >= 0 ? monitorIdx : items.length;
+      items.splice(insertIdx, 0, adminItem);
+    }
+
+    return items;
+  }, [menuItems, user]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -257,8 +284,8 @@ const Layout = () => {
 
       <Divider sx={{ mx: 2, opacity: 0.3 }} />
 
-      <List sx={{ px: 1, pt: 2 }}>
-        {menuItems.map((item, index) => {
+      <List sx={{ px: 1, pt: 2, pb: 8 }}>
+        {computedMenuItems.map((item, index) => {
           const isActive = location.pathname === item.path || 
                           (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
           
@@ -274,6 +301,7 @@ const Layout = () => {
                     position: 'relative',
                     overflow: 'hidden',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    minHeight: 48,
                     '&::before': {
                       content: '""',
                       position: 'absolute',
@@ -327,6 +355,7 @@ const Layout = () => {
                         : 'inherit',
                       transition: 'all 0.3s ease',
                       transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                      minWidth: 40,
                     }}
                   >
                     {item.icon}
@@ -370,6 +399,7 @@ const Layout = () => {
                           color: 'text.secondary',
                           opacity: isActive ? 1 : 0.7,
                           transition: 'opacity 0.3s ease',
+                          fontSize: '0.75rem',
                         }}
                       >
                         {item.description}
@@ -382,31 +412,6 @@ const Layout = () => {
           );
         })}
       </List>
-
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 16,
-          left: 16,
-          right: 16,
-          p: 2,
-          borderRadius: 2,
-          background: isDarkMode 
-            ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(245, 124, 0, 0.05) 100%)'
-            : 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(21, 101, 192, 0.05) 100%)',
-          border: `1px solid ${isDarkMode ? 'rgba(255, 152, 0, 0.2)' : 'rgba(25, 118, 210, 0.2)'}`,
-        }}
-      >
-        <Box display="flex" alignItems="center" gap={1} mb={1}>
-          <TrendingUp sx={{ fontSize: 16, color: 'success.main' }} />
-          <Typography variant="caption" fontWeight="bold">
-            Sistema Online
-          </Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary">
-          Todos os serviços funcionando normalmente
-        </Typography>
-      </Box>
     </Box>
   );
 

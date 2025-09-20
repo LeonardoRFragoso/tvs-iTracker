@@ -19,27 +19,38 @@ import {
   Fade,
   Grow,
   Avatar,
+  Card,
+  CardContent,
+  Skeleton,
 } from '@mui/material';
 import {
   Save as SaveIcon,
   Cancel as CancelIcon,
   LocationOn as LocationIcon,
   ArrowBack as BackIcon,
+  Business as BusinessIcon,
+  NetworkWifi as NetworkIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
+
+const DEFAULT_COMPANIES = ['iTracker', 'Rio Brasil Terminal - RBT', 'CLIA'];
 
 const LocationForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
 
+  const [companiesOptions, setCompaniesOptions] = useState(DEFAULT_COMPANIES);
+
   const [formData, setFormData] = useState({
     name: '',
     city: '',
     state: '',
     address: '',
+    company: DEFAULT_COMPANIES[0],
     timezone: 'America/Sao_Paulo',
     network_bandwidth_mbps: 100,
     peak_hours_start: '08:00',
@@ -49,16 +60,20 @@ const LocationForm = () => {
 
   const [timezones, setTimezones] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(isEdit);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const { isDarkMode } = useTheme();
-
   useEffect(() => {
-    fetchTimezones();
-    if (isEdit) {
-      fetchLocation();
-    }
+    const init = async () => {
+      await fetchTimezones();
+      await fetchCompanies();
+      if (isEdit) {
+        await fetchLocation();
+      }
+      setInitialLoading(false);
+    };
+    init();
   }, [id, isEdit]);
 
   const fetchTimezones = async () => {
@@ -70,9 +85,27 @@ const LocationForm = () => {
     }
   };
 
+  const fetchCompanies = async () => {
+    try {
+      const res = await axios.get('/auth/companies');
+      const list = Array.isArray(res.data?.companies) && res.data.companies.length
+        ? res.data.companies
+        : DEFAULT_COMPANIES;
+      setCompaniesOptions(list);
+      // Se não for edição, alinhar o default com a primeira opção dinâmica
+      if (!isEdit) {
+        setFormData(prev => ({ ...prev, company: list[0] }));
+      }
+    } catch (e) {
+      setCompaniesOptions(DEFAULT_COMPANIES);
+      if (!isEdit) {
+        setFormData(prev => ({ ...prev, company: DEFAULT_COMPANIES[0] }));
+      }
+    }
+  };
+
   const fetchLocation = async () => {
     try {
-      setLoading(true);
       const response = await axios.get(`/locations/${id}`);
       const location = response.data.location;
       
@@ -81,6 +114,7 @@ const LocationForm = () => {
         city: location.city || '',
         state: location.state || '',
         address: location.address || '',
+        company: location.company || DEFAULT_COMPANIES[0],
         timezone: location.timezone || 'America/Sao_Paulo',
         network_bandwidth_mbps: location.network_bandwidth_mbps || 100,
         peak_hours_start: location.peak_hours_start || '08:00',
@@ -89,8 +123,6 @@ const LocationForm = () => {
       });
     } catch (err) {
       setError('Erro ao carregar sede: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -117,6 +149,11 @@ const LocationForm = () => {
     
     if (!formData.state.trim()) {
       setError('Estado é obrigatório');
+      return;
+    }
+
+    if (!formData.company || !companiesOptions.includes(formData.company)) {
+      setError('Empresa é obrigatória');
       return;
     }
 
@@ -154,256 +191,193 @@ const LocationForm = () => {
     'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
   ];
 
-  if (loading && isEdit) {
-    return (
-      <Fade in={true} timeout={800}>
-        <Box 
-          sx={{ 
-            textAlign: 'center', 
-            mt: 8,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            borderRadius: 3,
-            p: 4,
-            mx: 'auto',
-            maxWidth: 400,
-          }}
-        >
-          <Avatar
-            sx={{
-              width: 60,
-              height: 60,
-              mx: 'auto',
-              mb: 2,
-              background: isDarkMode
-                ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+  return (
+    <Box
+      sx={{
+        background: (theme) => theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
+          : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        minHeight: '100vh',
+        p: 3,
+      }}
+    >
+      {/* Enhanced Header */}
+      <Fade in timeout={800}>
+        <Box display="flex" alignItems="center" mb={4}>
+          <IconButton 
+            onClick={() => navigate('/locations')} 
+            sx={{ 
+              mr: 2,
+              background: (theme) => theme.palette.mode === 'dark'
+                ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+              color: 'white',
+              '&:hover': {
+                transform: 'scale(1.1)',
+                transition: 'transform 0.2s ease-in-out',
+              },
             }}
           >
-            <LocationIcon sx={{ fontSize: 30 }} />
-          </Avatar>
-          <Typography variant="h6" gutterBottom>
-            Carregando sede...
-          </Typography>
-        </Box>
-      </Fade>
-    );
-  }
-
-  return (
-    <Fade in={true} timeout={1000}>
-      <Box
-        sx={{
-          background: isDarkMode 
-            ? 'linear-gradient(135deg, #121212 0%, #1e1e1e 100%)'
-            : 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
-          minHeight: '100vh',
-          py: 4,
-        }}
-      >
-        <Container maxWidth="md">
-          <Grow in={true} timeout={1200}>
-            <Paper 
+            <BackIcon />
+          </IconButton>
+          <Box>
+            <Typography 
+              variant="h3" 
+              component="h1" 
               sx={{ 
-                p: 4,
-                borderRadius: 3,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                  : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-                border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: isDarkMode
-                    ? 'radial-gradient(circle at 30% 20%, rgba(255, 152, 0, 0.1) 0%, transparent 50%)'
-                    : 'radial-gradient(circle at 30% 20%, rgba(25, 118, 210, 0.1) 0%, transparent 50%)',
-                  pointerEvents: 'none',
-                },
+                fontWeight: 'bold',
+                background: (theme) => theme.palette.mode === 'dark'
+                  ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
               }}
             >
-              <Box sx={{ position: 'relative', zIndex: 1 }}>
-                {/* Header */}
-                <Box display="flex" alignItems="center" mb={4}>
-                  <IconButton 
-                    onClick={() => navigate('/locations')} 
-                    sx={{ 
-                      mr: 2,
-                      background: isDarkMode
-                        ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                        : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                      color: 'white',
-                      '&:hover': {
-                        background: isDarkMode
-                          ? 'linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)'
-                          : 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
-                        transform: 'scale(1.1)',
-                      },
-                      transition: 'all 0.3s ease',
-                    }}
-                  >
-                    <BackIcon />
-                  </IconButton>
-                  <Avatar
-                    sx={{
-                      mr: 2,
-                      width: 48,
-                      height: 48,
-                      background: isDarkMode
-                        ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                        : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                    }}
-                  >
-                    <LocationIcon sx={{ fontSize: 24 }} />
-                  </Avatar>
-                  <Typography 
-                    variant="h4" 
-                    component="h1"
-                    sx={{
-                      fontWeight: 'bold',
-                      background: isDarkMode
-                        ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                        : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                      backgroundClip: 'text',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                    }}
-                  >
-                    {isEdit ? 'Editar Sede' : 'Nova Sede'}
-                  </Typography>
-                </Box>
+              {isEdit ? 'Editar Sede' : 'Nova Sede'}
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              {isEdit ? 'Modifique as configurações da sede' : 'Configure uma nova sede para sua empresa'}
+            </Typography>
+          </Box>
+        </Box>
+      </Fade>
 
-                {error && (
-                  <Fade in={true} timeout={800}>
-                    <Alert 
-                      severity="error" 
-                      sx={{ 
-                        mb: 3,
-                        borderRadius: 3,
-                        border: `1px solid ${isDarkMode ? '#d32f2f' : '#f44336'}`,
-                      }} 
-                      onClose={() => setError('')}
-                    >
-                      {error}
-                    </Alert>
-                  </Fade>
-                )}
+      {error && (
+        <Fade in timeout={600}>
+          <Alert severity="error" sx={{ mb: 2, borderRadius: 3 }} onClose={() => setError('')}>
+            {error}
+          </Alert>
+        </Fade>
+      )}
 
-                {success && (
-                  <Fade in={true} timeout={800}>
-                    <Alert 
-                      severity="success" 
-                      sx={{ 
-                        mb: 3,
-                        borderRadius: 3,
-                        border: `1px solid ${isDarkMode ? '#2e7d32' : '#4caf50'}`,
-                      }}
-                    >
-                      {success}
-                    </Alert>
-                  </Fade>
-                )}
+      {success && (
+        <Fade in timeout={600}>
+          <Alert severity="success" sx={{ mb: 2, borderRadius: 3 }}>
+            {success}
+          </Alert>
+        </Fade>
+      )}
 
-                <form onSubmit={handleSubmit}>
-                  <Grid container spacing={4}>
-                    {/* Informações Básicas */}
-                    <Grid item xs={12}>
-                      <Grow in={true} timeout={1400}>
-                        <Box>
-                          <Typography variant="h6" gutterBottom fontWeight="bold">
-                            Informações Básicas
-                          </Typography>
-                          <Divider 
-                            sx={{ 
-                              mb: 3,
-                              background: isDarkMode
-                                ? 'linear-gradient(90deg, #ff9800 0%, transparent 100%)'
-                                : 'linear-gradient(90deg, #1976d2 0%, transparent 100%)',
-                              height: 2,
-                            }} 
-                          />
-                        </Box>
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={1600}>
+      {initialLoading ? (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 3 }} />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Skeleton variant="rectangular" height={400} sx={{ borderRadius: 3 }} />
+          </Grid>
+        </Grid>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <Grid container spacing={3}>
+            {/* Informações Básicas */}
+            <Grid item xs={12} md={6}>
+              <Grow in timeout={1000}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <BusinessIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Informações Básicas
+                      </Typography>
+                    </Box>
+                    
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
+                          required
                           label="Nome da Sede"
                           value={formData.name}
                           onChange={handleChange('name')}
-                          required
-                          placeholder="Ex: Sede São Paulo Centro"
+                          placeholder="Ex: Matriz São Paulo"
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             },
                           }}
                         />
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={1800}>
-                        <Box display="flex" alignItems="center" height="100%">
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={formData.is_active}
-                                onChange={handleChange('is_active')}
-                                color="primary"
-                                sx={{
-                                  '& .MuiSwitch-thumb': {
-                                    background: isDarkMode
-                                      ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                                      : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                                  },
-                                }}
-                              />
-                            }
-                            label={
-                              <Typography variant="body1" fontWeight="medium">
-                                Sede Ativa
-                              </Typography>
-                            }
-                          />
-                        </Box>
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={2000}>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControl fullWidth required>
+                          <InputLabel>Empresa</InputLabel>
+                          <Select
+                            value={formData.company}
+                            onChange={handleChange('company')}
+                            label="Empresa"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            }}
+                          >
+                            {companiesOptions.map((company) => (
+                              <MenuItem key={company} value={company}>
+                                {company}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
+                          required
                           label="Cidade"
                           value={formData.city}
                           onChange={handleChange('city')}
-                          required
                           placeholder="Ex: São Paulo"
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             },
                           }}
                         />
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={2200}>
+                      </Grid>
+                      <Grid item xs={12}>
                         <FormControl fullWidth required>
                           <InputLabel>Estado</InputLabel>
                           <Select
@@ -412,8 +386,9 @@ const LocationForm = () => {
                             label="Estado"
                             sx={{
                               borderRadius: 2,
-                              '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             }}
                           >
@@ -424,63 +399,90 @@ const LocationForm = () => {
                             ))}
                           </Select>
                         </FormControl>
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12}>
-                      <Grow in={true} timeout={2400}>
+                      </Grid>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
                           label="Endereço Completo"
                           value={formData.address}
                           onChange={handleChange('address')}
-                          placeholder="Ex: Rua das Flores, 123 - Centro"
+                          placeholder="Rua, número, bairro, CEP"
                           multiline
                           rows={2}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             },
                           }}
                         />
-                      </Grow>
+                      </Grid>
                     </Grid>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
 
-                    {/* Configurações de Rede */}
-                    <Grid item xs={12}>
-                      <Grow in={true} timeout={2600}>
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="h6" gutterBottom fontWeight="bold">
-                            Configurações de Rede
-                          </Typography>
-                          <Divider 
-                            sx={{ 
-                              mb: 3,
-                              background: isDarkMode
-                                ? 'linear-gradient(90deg, #ff9800 0%, transparent 100%)'
-                                : 'linear-gradient(90deg, #1976d2 0%, transparent 100%)',
-                              height: 2,
-                            }} 
-                          />
-                        </Box>
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={2800}>
+            {/* Configurações de Rede */}
+            <Grid item xs={12} md={6}>
+              <Grow in timeout={1200}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <NetworkIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Configurações de Rede
+                      </Typography>
+                    </Box>
+                    
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
                         <FormControl fullWidth>
-                          <InputLabel>Timezone</InputLabel>
+                          <InputLabel>Fuso Horário</InputLabel>
                           <Select
                             value={formData.timezone}
                             onChange={handleChange('timezone')}
-                            label="Timezone"
+                            label="Fuso Horário"
                             sx={{
                               borderRadius: 2,
-                              '&:hover .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             }}
                           >
@@ -491,161 +493,187 @@ const LocationForm = () => {
                             ))}
                           </Select>
                         </FormControl>
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={3000}>
+                      </Grid>
+                      <Grid item xs={12}>
                         <TextField
                           fullWidth
-                          label="Largura de Banda (Mbps)"
                           type="number"
+                          label="Largura de Banda (Mbps)"
                           value={formData.network_bandwidth_mbps}
                           onChange={handleChange('network_bandwidth_mbps')}
-                          inputProps={{ min: 1, max: 10000 }}
-                          placeholder="100"
+                          inputProps={{ min: 1, max: 1000 }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             },
                           }}
                         />
-                      </Grow>
+                      </Grid>
                     </Grid>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
 
-                    {/* Horários de Pico */}
-                    <Grid item xs={12}>
-                      <Grow in={true} timeout={3200}>
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="h6" gutterBottom fontWeight="bold">
-                            Horários de Pico
-                          </Typography>
-                          <Divider 
-                            sx={{ 
-                              mb: 2,
-                              background: isDarkMode
-                                ? 'linear-gradient(90deg, #ff9800 0%, transparent 100%)'
-                                : 'linear-gradient(90deg, #1976d2 0%, transparent 100%)',
-                              height: 2,
-                            }} 
-                          />
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                            Durante estes horários, a distribuição de conteúdo será otimizada para reduzir o impacto na rede.
-                          </Typography>
-                        </Box>
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={3400}>
+            {/* Horários de Pico */}
+            <Grid item xs={12}>
+              <Grow in timeout={1400}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <ScheduleIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Horários de Pico
+                      </Typography>
+                    </Box>
+                    
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                      Defina o horário comercial da sede para otimização de conteúdo
+                    </Typography>
+                    
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={4}>
                         <TextField
                           fullWidth
-                          label="Início do Horário de Pico"
                           type="time"
+                          label="Início do Horário de Pico"
                           value={formData.peak_hours_start}
                           onChange={handleChange('peak_hours_start')}
-                          InputLabelProps={{
-                            shrink: true,
-                          }}
+                          InputLabelProps={{ shrink: true }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             },
                           }}
                         />
-                      </Grow>
-                    </Grid>
-
-                    <Grid item xs={12} md={6}>
-                      <Grow in={true} timeout={3600}>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
                         <TextField
                           fullWidth
-                          label="Fim do Horário de Pico"
                           type="time"
+                          label="Fim do Horário de Pico"
                           value={formData.peak_hours_end}
                           onChange={handleChange('peak_hours_end')}
-                          InputLabelProps={{
-                            shrink: true,
-                          }}
+                          InputLabelProps={{ shrink: true }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
-                              '&:hover fieldset': {
-                                borderColor: 'primary.main',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
                               },
                             },
                           }}
                         />
-                      </Grow>
-                    </Grid>
-
-                    {/* Botões de Ação */}
-                    <Grid item xs={12}>
-                      <Grow in={true} timeout={3800}>
-                        <Box display="flex" justifyContent="flex-end" gap={2} mt={4}>
-                          <Button
-                            variant="outlined"
-                            startIcon={<CancelIcon />}
-                            onClick={() => navigate('/locations')}
-                            disabled={loading}
-                            sx={{
-                              borderRadius: 3,
-                              px: 4,
-                              py: 1.5,
-                              border: `2px solid ${isDarkMode ? '#555' : '#e0e0e0'}`,
-                              '&:hover': {
-                                border: `2px solid ${isDarkMode ? '#ff9800' : '#1976d2'}`,
-                                transform: 'translateY(-2px)',
-                              },
-                              transition: 'all 0.3s ease',
-                            }}
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            type="submit"
-                            variant="contained"
-                            startIcon={<SaveIcon />}
-                            disabled={loading}
-                            sx={{
-                              borderRadius: 3,
-                              px: 4,
-                              py: 1.5,
-                              background: isDarkMode
-                                ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                                : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                              '&:hover': {
-                                background: isDarkMode
-                                  ? 'linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)'
-                                  : 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
-                                transform: 'translateY(-2px)',
-                              },
-                              '&:disabled': {
-                                background: isDarkMode ? '#333' : '#e0e0e0',
-                                color: isDarkMode ? '#666' : '#999',
-                              },
-                              transition: 'all 0.3s ease',
-                            }}
-                          >
-                            {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar Sede')}
-                          </Button>
+                      </Grid>
+                      <Grid item xs={12} md={4}>
+                        <Box display="flex" alignItems="center" height="100%">
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.is_active}
+                                onChange={handleChange('is_active')}
+                              />
+                            }
+                            label="Sede ativa"
+                          />
                         </Box>
-                      </Grow>
+                      </Grid>
                     </Grid>
-                  </Grid>
-                </form>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
+
+            {/* Actions */}
+            <Grid item xs={12}>
+              <Box display="flex" gap={2} justifyContent="flex-end">
+                <Button
+                  variant="outlined"
+                  onClick={() => navigate('/locations')}
+                  disabled={loading}
+                  startIcon={<CancelIcon />}
+                  sx={{
+                    borderRadius: 2,
+                    px: 4,
+                    py: 1.5,
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      transition: 'transform 0.2s ease-in-out',
+                    },
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={loading}
+                  startIcon={<SaveIcon />}
+                  sx={{
+                    borderRadius: 2,
+                    px: 4,
+                    py: 1.5,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                      : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      transition: 'transform 0.2s ease-in-out',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(0, 0, 0, 0.12)',
+                    },
+                  }}
+                >
+                  {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar')}
+                </Button>
               </Box>
-            </Paper>
-          </Grow>
-        </Container>
-      </Box>
-    </Fade>
+            </Grid>
+          </Grid>
+        </form>
+      )}
+    </Box>
   );
 };
 

@@ -170,30 +170,30 @@ def load_content_to_cast(player_id):
         if not player.chromecast_id:
             return jsonify({'error': 'Player não possui Chromecast associado'}), 400
         
-        # Preparar dados de mídia para Chromecast
-        media_data = {
-            'contentId': content_url,
-            'contentType': content_type,
-            'streamType': 'BUFFERED',
-            'metadata': {
-                'type': 0,  # GenericMediaMetadata
-                'metadataType': 0,
-                'title': title,
-                'subtitle': description
-            },
-            'customData': {
-                'player_id': player_id,
-                'timestamp': '2024-01-15T10:30:00Z'
-            }
-        }
+        # Conectar ao dispositivo (usando UUID e fallback por nome)
+        device_name_for_discovery = getattr(player, 'chromecast_name', None) or player.name
+        connected, actual_device_id = chromecast_service.connect_to_device(
+            device_id=str(player.chromecast_id),
+            device_name=device_name_for_discovery
+        )
+        if not connected:
+            return jsonify({'error': 'Não foi possível conectar ao Chromecast'}), 500
         
-        # Carregar mídia real no Chromecast
-        success = chromecast_service.load_media(player.chromecast_id, media_data)
+        # Carregar mídia no Chromecast com a assinatura correta
+        success = chromecast_service.load_media(
+            device_id=str(player.chromecast_id),
+            media_url=content_url,
+            content_type=content_type,
+            title=title,
+            subtitles=description or ''
+        )
         
         if success:
             return jsonify({
                 'message': 'Conteúdo carregado com sucesso no Chromecast',
-                'media_data': media_data
+                'media_url': content_url,
+                'content_type': content_type,
+                'title': title
             }), 200
         else:
             return jsonify({

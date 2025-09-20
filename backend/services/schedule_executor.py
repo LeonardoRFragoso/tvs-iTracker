@@ -114,6 +114,11 @@ class ScheduleExecutor:
                     print(f"[DEBUG] Limpando overlay ativo do tracking para player {player_id} porque há conteúdo principal ativo")
                     del self.active_overlays[player_id]
 
+                # Ordenar por prioridade (desc) e data de criação (asc) para seleção determinística
+                try:
+                    schedules['main'].sort(key=lambda s: (-(getattr(s, 'priority', 0) or 0), getattr(s, 'created_at', datetime.min)))
+                except Exception:
+                    pass
                 main_schedule = schedules['main'][0]  # primeiro principal
                 if player_id not in self.active_executions:
                     self.active_executions[player_id] = {}
@@ -130,6 +135,11 @@ class ScheduleExecutor:
             # 2) Se NÃO há principal ativo, assegura overlay persistente na tela
             else:
                 if has_overlay:
+                    # Ordenar overlays também, por consistência
+                    try:
+                        schedules['overlay'].sort(key=lambda s: (-(getattr(s, 'priority', 0) or 0), getattr(s, 'created_at', datetime.min)))
+                    except Exception:
+                        pass
                     overlay_schedule = schedules['overlay'][0]  # primeiro overlay
                     current_overlay = self.active_overlays.get(player_id)
                     if current_overlay != overlay_schedule.id:

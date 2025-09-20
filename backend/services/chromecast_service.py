@@ -22,26 +22,31 @@ class ChromecastService:
         self._failed_connections = {}  # Track failed connections to prevent loops
         self._connection_retry_limit = 3
         self._connection_cooldown = 300  # 5 minutes cooldown for failed devices
-        
+        # Map device_id -> {'url': str, 'ts': float} to evitar duplicidade de comandos
+        self._last_media_sent = {}
+         
         # Registrar cleanup automático
         if not self._cleanup_registered:
             atexit.register(self.cleanup)
             self._cleanup_registered = True
     
-    def _ensure_zeroconf(self):
-        """Garante que temos uma instância Zeroconf válida"""
+    def _ensure_zeroconf(self, force_recreate: bool = False):
+        """Garante uma instância Zeroconf estável e viva. Nunca fecha para recriar
+        a menos que solicitado explicitamente (force_recreate=True).
+        """
         try:
-            if self._zeroconf is None or not hasattr(self._zeroconf, '_loop') or self._zeroconf._loop is None:
-                if self._zeroconf:
-                    try:
-                        self._zeroconf.close()
-                    except:
-                        pass
+            if force_recreate and self._zeroconf is not None:
+                try:
+                    self._zeroconf.close()
+                except Exception:
+                    pass
+                self._zeroconf = None
+            if self._zeroconf is None:
                 self._zeroconf = Zeroconf()
-                logger.info("Nova instância Zeroconf criada")
+                logger.info("Instância Zeroconf inicializada")
             return self._zeroconf
         except Exception as e:
-            logger.error(f"Erro ao criar Zeroconf: {e}")
+            logger.error(f"Erro ao inicializar Zeroconf: {e}")
             return None
     
     def discover_devices(self, timeout: int = 5) -> List[Dict]:
@@ -59,6 +64,16 @@ class ChromecastService:
             try:
                 chromecasts, browser = pychromecast.get_chromecasts(timeout=timeout, zeroconf_instance=zconf)
                 self._browser = browser
+            except AssertionError as e:
+                # Corrige situação em que a instância Zeroconf foi parada por algum motivo (ex.: mudanças de rede/hibernação)
+                logger.warning(f"Zeroconf inválido detectado ({e}); recriando instância e tentando novamente")
+                zconf = self._ensure_zeroconf(force_recreate=True)
+                try:
+                    chromecasts, browser = pychromecast.get_chromecasts(timeout=timeout, zeroconf_instance=zconf)
+                    self._browser = browser
+                except Exception as e2:
+                    logger.error(f"Erro na descoberta pychromecast após recriar Zeroconf: {e2}")
+                    return []
             except Exception as e:
                 logger.error(f"Erro na descoberta pychromecast: {e}")
                 return []
@@ -93,6 +108,7 @@ class ChromecastService:
             try:
                 if browser:
                     pychromecast.discovery.stop_discovery(browser)
+                    self._browser = None
             except Exception as e:
                 logger.warning(f"Erro ao parar discovery browser: {e}")
             
@@ -396,78 +412,117 @@ class ChromecastService:
             logger.info(f"[CHROMECAST] - Title: {title}")
             logger.info(f"[CHROMECAST] - Subtitles: {subtitles}")
             
-            if device_id not in self.active_connections:
-                logger.error(f"[CHROMECAST] Device {device_id} não está nas conexões ativas")
-                logger.info(f"[CHROMECAST] Conexões ativas: {list(self.active_connections.keys())}")
-                return False
-            
-            cast = self.active_connections[device_id]
-            logger.info(f"[CHROMECAST] Cast obtido: {cast.name}")
-            
-            mc = cast.media_controller
-            logger.info(f"[CHROMECAST] Media controller: {mc}")
-            
-            # Criar MediaController se necessário
-            if not hasattr(cast, 'media_controller') or cast.media_controller is None:
-                logger.info(f"[CHROMECAST] Criando novo MediaController")
-                mc = MediaController()
-                cast.register_handler(mc)
-            
-            # Garantir que o Default Media Receiver esteja ativo (CC1AD845)
-            try:
-                logger.info("[CHROMECAST] Iniciando Default Media Receiver (CC1AD845)")
-                cast.start_app("CC1AD845")
-                time.sleep(0.5)
-            except Exception as e:
-                logger.warning(f"[CHROMECAST] Não foi possível iniciar o Default Media Receiver: {e}")
-            
-            # Carregar mídia - para imagens, enviar também thumb
-            logger.info(f"[CHROMECAST] Chamando play_media...")
-            is_image = content_type.startswith('image/')
-            try:
-                if is_image:
-                    mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None, thumb=media_url)
-                else:
-                    mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
-            except TypeError:
-                # Compatibilidade com versões antigas sem parâmetro thumb
-                mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
-            
-            logger.info(f"[CHROMECAST] play_media chamado, aguardando ativação...")
-            mc.block_until_active()
-            time.sleep(0.3)
-            
-            # Logar status detalhado
-            status = getattr(mc, 'status', None)
-            if status:
-                logger.info(f"[CHROMECAST] Media Status após play:")
-                logger.info(f"    - player_state: {status.player_state}")
-                logger.info(f"    - content_id: {status.content_id}")
-                logger.info(f"    - content_type: {status.content_type}")
-                logger.info(f"    - title: {status.title}")
-                logger.info(f"    - duration: {status.duration}")
-            else:
-                logger.info(f"[CHROMECAST] Media Status indisponível")
-            
-            # Fallback: se permanecer IDLE com imagem, tentar novamente uma vez
-            try:
-                if is_image and (not status or status.player_state in (None, 'IDLE')):
-                    logger.info("[CHROMECAST] Fallback para imagem: reexecutando play_media após iniciar Default Receiver")
+            # Evitar condições de corrida durante envio de mídia
+            with self._connection_lock:
+                if device_id not in self.active_connections:
+                    logger.error(f"[CHROMECAST] Device {device_id} não está nas conexões ativas")
+                    logger.info(f"[CHROMECAST] Conexões ativas: {list(self.active_connections.keys())}")
+                    return False
+
+                # Anti-duplicação rápida (mesmo URL enviado em <2s)
+                last = self._last_media_sent.get(device_id)
+                now_ts = time.time()
+                if last and last.get('url') == media_url and (now_ts - float(last.get('ts', 0))) < 2.0:
+                    logger.info(f"[CHROMECAST] Ignorando envio duplicado (mesmo URL em <2s) para {device_id}")
+                    return True
+
+                cast = self.active_connections[device_id]
+                logger.info(f"[CHROMECAST] Cast obtido: {cast.name}")
+
+                mc = cast.media_controller
+                logger.info(f"[CHROMECAST] Media controller: {mc}")
+
+                # Criar MediaController se necessário
+                if not hasattr(cast, 'media_controller') or cast.media_controller is None:
+                    logger.info(f"[CHROMECAST] Criando novo MediaController")
+                    mc = MediaController()
+                    cast.register_handler(mc)
+
+                # Se já está tocando o mesmo URL, evitar reenvio
+                try:
+                    current_status = getattr(mc, 'status', None)
+                    if current_status and getattr(current_status, 'content_id', None) == media_url and getattr(current_status, 'player_state', None) in ('PLAYING', 'BUFFERING'):
+                        logger.info("[CHROMECAST] Mesmo conteúdo já está em reprodução; suprimindo reenvio")
+                        return True
+                except Exception:
+                    pass
+
+                # Garantir que o Default Media Receiver esteja ativo (CC1AD845)
+                try:
+                    logger.info("[CHROMECAST] Iniciando Default Media Receiver (CC1AD845)")
                     cast.start_app("CC1AD845")
-                    time.sleep(0.5)
-                    try:
+                    # Aguardar app ficar ativo por até ~1s
+                    for _ in range(5):
+                        time.sleep(0.2)
+                        st = getattr(cast, 'status', None)
+                        app_ok = False
+                        try:
+                            app_ok = (getattr(st, 'app_id', None) == 'CC1AD845') or (getattr(st, 'display_name', '') or '').lower().startswith('default media receiver')
+                        except Exception:
+                            app_ok = False
+                        if app_ok:
+                            break
+                except Exception as e:
+                    logger.warning(f"[CHROMECAST] Não foi possível iniciar o Default Media Receiver: {e}")
+
+                # Opcional: garantir que não esteja mutado
+                try:
+                    st2 = getattr(cast, 'status', None)
+                    if st2 and getattr(st2, 'volume_muted', False):
+                        cast.set_volume_muted(False)
+                except Exception:
+                    pass
+
+                # Carregar mídia - para imagens, enviar também thumb
+                logger.info(f"[CHROMECAST] Chamando play_media...")
+                is_image = content_type.startswith('image/')
+                try:
+                    if is_image:
                         mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None, thumb=media_url)
-                    except TypeError:
+                    else:
                         mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
-                    mc.block_until_active()
-                    time.sleep(0.3)
-                    status = getattr(mc, 'status', None)
-                    logger.info(f"[CHROMECAST] Status após fallback: {getattr(status, 'player_state', None)}")
-            except Exception as e:
-                logger.warning(f"[CHROMECAST] Erro no fallback de imagem: {e}")
-            
-            logger.info(f"Mídia carregada no Chromecast {device_id}: {title}")
-            return True
+                except TypeError:
+                    # Compatibilidade com versões antigas sem parâmetro thumb
+                    mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
+
+                logger.info(f"[CHROMECAST] play_media chamado, aguardando ativação...")
+                mc.block_until_active()
+                time.sleep(0.3)
+
+                # Logar status detalhado
+                status = getattr(mc, 'status', None)
+                if status:
+                    logger.info(f"[CHROMECAST] Media Status após play:")
+                    logger.info(f"    - player_state: {status.player_state}")
+                    logger.info(f"    - content_id: {status.content_id}")
+                    logger.info(f"    - content_type: {status.content_type}")
+                    logger.info(f"    - title: {status.title}")
+                    logger.info(f"    - duration: {status.duration}")
+                else:
+                    logger.info(f"[CHROMECAST] Media Status indisponível")
+
+                # Fallback: se permanecer IDLE com imagem, tentar novamente uma vez
+                try:
+                    if is_image and (not status or status.player_state in (None, 'IDLE')):
+                        logger.info("[CHROMECAST] Fallback para imagem: reexecutando play_media após iniciar Default Receiver")
+                        cast.start_app("CC1AD845")
+                        time.sleep(0.5)
+                        try:
+                            mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None, thumb=media_url)
+                        except TypeError:
+                            mc.play_media(media_url, content_type, title=title, subtitles=subtitles if subtitles else None)
+                        mc.block_until_active()
+                        time.sleep(0.3)
+                        status = getattr(mc, 'status', None)
+                        logger.info(f"[CHROMECAST] Status após fallback: {getattr(status, 'player_state', None)}")
+                except Exception as e:
+                    logger.warning(f"[CHROMECAST] Erro no fallback de imagem: {e}")
+
+                # Registrar último envio para anti-duplicação
+                self._last_media_sent[device_id] = {'url': media_url, 'ts': now_ts}
+
+                logger.info(f"Mídia carregada no Chromecast {device_id}: {title}")
+                return True
             
         except Exception as e:
             logger.error(f"[CHROMECAST] Erro detalhado ao carregar mídia no dispositivo {device_id}: {e}")

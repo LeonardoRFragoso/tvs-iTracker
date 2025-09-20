@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Paper,
@@ -17,23 +17,46 @@ import {
   Email as EmailIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import axios from '../config/axios';
 import { Link as RouterLink } from 'react-router-dom';
 
-const COMPANIES = [
-  'iTracker',
-  'Rio Brasil Terminal - RBT',
-  'CLIA',
-];
+const DEFAULT_COMPANIES = ['iTracker', 'Rio Brasil Terminal - RBT', 'CLIA'];
 
 const Register = () => {
   const { publicRegister } = useAuth();
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [company, setCompany] = useState(COMPANIES[0]);
+  const [companiesOptions, setCompaniesOptions] = useState(DEFAULT_COMPANIES);
+  const [company, setCompany] = useState(DEFAULT_COMPANIES[0]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Tenta buscar lista dinâmica de empresas (JWT pode não existir; fazer fallback silencioso)
+    const fetchCompanies = async () => {
+      try {
+        // 1) endpoint público
+        let res = await axios.get('/public/companies');
+        let list = res.data?.companies;
+        // 2) fallback para endpoint autenticado (caso público não exista)
+        if (!Array.isArray(list) || !list.length) {
+          res = await axios.get('/auth/companies');
+          list = res.data?.companies;
+        }
+        if (Array.isArray(list) && list.length) {
+          setCompaniesOptions(list);
+          if (!list.includes(company)) {
+            setCompany(list[0]);
+          }
+        }
+      } catch (e) {
+        // Ignora erro (ex.: sem token) e mantém DEFAULT_COMPANIES
+      }
+    };
+    fetchCompanies();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -54,7 +77,7 @@ const Register = () => {
       // Resetar formulário
       setUsername('');
       setEmail('');
-      setCompany(COMPANIES[0]);
+      setCompany((companiesOptions && companiesOptions[0]) || DEFAULT_COMPANIES[0]);
     } else {
       setError(res.error || 'Erro ao enviar cadastro');
     }
@@ -123,7 +146,7 @@ const Register = () => {
               onChange={(e) => setCompany(e.target.value)}
               SelectProps={{ native: true }}
             >
-              {COMPANIES.map((c) => (
+              {companiesOptions.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </TextField>

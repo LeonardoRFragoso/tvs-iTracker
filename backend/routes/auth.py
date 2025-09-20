@@ -4,6 +4,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 import uuid
 from models.user import User, db
+from sqlalchemy import or_
+from sqlalchemy import distinct
 from services.auto_sync_service import auto_sync_service
 
 auth_bp = Blueprint('auth', __name__)
@@ -11,14 +13,21 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/login', methods=['POST'])
 def login():
     try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
+        data = request.get_json() or {}
+        # Aceita email OU username no mesmo campo (frontend envia 'email')
+        identifier_raw = (data.get('email') or data.get('username') or '').strip()
+        identifier = identifier_raw.lower()
+        password = (data.get('password') or '').strip()
         
-        if not email or not password:
-            return jsonify({'error': 'Email e senha são obrigatórios'}), 400
+        if not identifier or not password:
+            return jsonify({'error': 'Email/usuário e senha são obrigatórios'}), 400
         
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter(
+            or_(
+                db.func.lower(User.email) == identifier,
+                db.func.lower(User.username) == identifier
+            )
+        ).first()
         
         if not user or not check_password_hash(user.password_hash, password):
             return jsonify({'error': 'Credenciais inválidas'}), 401
@@ -79,15 +88,15 @@ def public_register():
     """
     try:
         data = request.get_json() or {}
-        username = data.get('username')
-        email = data.get('email')
+        username = (data.get('username') or '').strip()
+        email = (data.get('email') or '').strip().lower()
         role = 'hr'  # Forçar RH para cadastro público
         company = data.get('company', 'iTracker')
         
         if not username or not email:
             return jsonify({'error': 'Username e email são obrigatórios'}), 400
         
-        if User.query.filter_by(email=email).first():
+        if User.query.filter(db.func.lower(User.email) == email).first():
             return jsonify({'error': 'Email já cadastrado'}), 409
         if User.query.filter_by(username=username).first():
             return jsonify({'error': 'Username já cadastrado'}), 409
@@ -224,8 +233,8 @@ def register():
             return jsonify({'error': 'Apenas administradores podem criar usuários'}), 403
         
         data = request.get_json()
-        username = data.get('username')
-        email = data.get('email')
+        username = (data.get('username') or '').strip()
+        email = (data.get('email') or '').strip().lower()
         password = data.get('password')
         role = data.get('role', 'user')
         company = data.get('company', 'iTracker')
@@ -234,7 +243,7 @@ def register():
             return jsonify({'error': 'Username, email e senha são obrigatórios'}), 400
         
         # Verificar se usuário já existe
-        if User.query.filter_by(email=email).first():
+        if User.query.filter(db.func.lower(User.email) == email).first():
             return jsonify({'error': 'Email já cadastrado'}), 409
         
         if User.query.filter_by(username=username).first():
@@ -297,10 +306,11 @@ def update_profile():
         
         if 'email' in data:
             # Verificar se email não está em uso
-            existing = User.query.filter(User.email == data['email'], User.id != user_id).first()
+            new_email = (data['email'] or '').strip().lower()
+            existing = User.query.filter(User.id != user_id, db.func.lower(User.email) == new_email).first()
             if existing:
                 return jsonify({'error': 'Email já está em uso'}), 409
-            user.email = data['email']
+            user.email = new_email
         
         if 'password' in data and data['password']:
             user.password_hash = generate_password_hash(data['password'])
@@ -324,7 +334,7 @@ def list_users():
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
         
-        if current_user.role not in ['admin', 'manager']:
+        if current_user.role != 'admin':
             return jsonify({'error': 'Acesso negado'}), 403
         
         users = User.query.all()
@@ -332,6 +342,57 @@ def list_users():
             'users': [user.to_dict() for user in users]
         }), 200
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/users/summary', methods=['GET'])
+@jwt_required()
+def users_summary():
+    """Resumo de usuários por empresa/role e pendências (apenas admin)."""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.role != 'admin':
+            return jsonify({'error': 'Apenas administradores podem visualizar o resumo'}), 403
+        
+        # Lista de empresas distintas
+        companies_rows = db.session.query(User.company).distinct().all()
+        companies = [row[0] for row in companies_rows if row and row[0]]
+        
+        total_users = db.session.query(db.func.count(User.id)).scalar() or 0
+        
+        # Contagem por empresa e role
+        rows = db.session.query(User.company, User.role, db.func.count(User.id)) \
+            .group_by(User.company, User.role).all()
+        by_company = {}
+        for company, role, count in rows:
+            comp = company or 'unknown'
+            by_company.setdefault(comp, {})[role or 'user'] = int(count or 0)
+        
+        # Pendentes por empresa
+        pend_rows = db.session.query(User.company, db.func.count(User.id)) \
+            .filter(User.status == 'pending').group_by(User.company).all()
+        pending_by_company = { (c or 'unknown'): int(cnt or 0) for c, cnt in pend_rows }
+        
+        # Lista de usuários RH por empresa (dados básicos)
+        hr_users = User.query.filter(User.role == 'hr').all()
+        hr_by_company = {}
+        for u in hr_users:
+            comp = u.company or 'unknown'
+            hr_by_company.setdefault(comp, []).append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'status': getattr(u, 'status', 'active')
+            })
+        
+        return jsonify({
+            'total_users': int(total_users),
+            'companies': companies,
+            'by_company': by_company,
+            'pending_by_company': pending_by_company,
+            'hr_by_company': hr_by_company,
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -372,19 +433,119 @@ def update_user(user_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@auth_bp.route('/users/<user_id>', methods=['DELETE'])
+@jwt_required()
+def delete_user(user_id):
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.role != 'admin':
+            return jsonify({'error': 'Apenas administradores podem excluir usuários'}), 403
+
+        if str(current_user_id) == str(user_id):
+            return jsonify({'error': 'Você não pode excluir a si mesmo'}), 400
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'Usuário não encontrado'}), 404
+
+        # Impedir exclusão do último admin ativo
+        if user.role == 'admin':
+            other_admins = db.session.query(db.func.count(User.id)).filter(
+                User.id != user_id,
+                User.role == 'admin',
+                User.is_active == True,
+                User.status != 'rejected'
+            ).scalar() or 0
+            if other_admins == 0:
+                return jsonify({'error': 'Não é possível excluir o último administrador ativo'}), 400
+
+        # Verificar vínculos obrigatórios para evitar falhas de FK
+        from models.content import Content
+        from models.campaign import Campaign
+        content_count = db.session.query(db.func.count(Content.id)).filter(Content.user_id == user_id).scalar() or 0
+        campaign_count = db.session.query(db.func.count(Campaign.id)).filter(Campaign.user_id == user_id).scalar() or 0
+        if content_count > 0 or campaign_count > 0:
+            return jsonify({'error': f'Usuário possui {int(content_count)} conteúdos e {int(campaign_count)} campanhas vinculados. Transfira a propriedade ou exclua-os antes.'}), 409
+
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'message': 'Usuário excluído com sucesso'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/users/<user_id>/set-password', methods=['POST'])
+@jwt_required()
+def admin_set_password(user_id):
+    """Permite que ADMIN redefina a senha de qualquer usuário sem a senha atual.
+    Body: { "new_password": "...", "must_change_password": bool }
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user or current_user.role != 'admin':
+            return jsonify({'error': 'Apenas administradores podem definir senha de usuários'}), 403
+        
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'Usuário não encontrado'}), 404
+        
+        data = request.get_json() or {}
+        new_password = (data.get('new_password') or '').strip()
+        must_change = bool(data.get('must_change_password', False))
+        
+        if not new_password or len(new_password) < 6:
+            return jsonify({'error': 'Nova senha é obrigatória e deve ter ao menos 6 caracteres'}), 400
+        
+        user.password_hash = generate_password_hash(new_password)
+        user.must_change_password = must_change
+        user.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Senha definida com sucesso',
+            'user': user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @auth_bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
     try:
         data = request.get_json() or {}
-        email = data.get('email')
+        email = (data.get('email') or '').strip().lower()
         if not email:
             return jsonify({'error': 'Email é obrigatório'}), 400
         
         # Opcionalmente localizar o usuário, mas não revelar existência
-        _user = User.query.filter_by(email=email).first()
+        _user = User.query.filter(db.func.lower(User.email) == email).first()
         # Aqui poderíamos gerar um token e enviar email. Por ora, apenas retornar mensagem genérica.
         return jsonify({
             'message': 'Se este email estiver cadastrado, enviaremos instruções para redefinir a senha.'
         }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/companies', methods=['GET'])
+@jwt_required()
+def list_companies():
+    """Lista de empresas conhecidas no sistema (distintas de usuários e sedes)."""
+    try:
+        # Coletar companies distintas de Users e Locations
+        from models.location import Location  # import interno para evitar ciclos
+        user_companies = [row[0] for row in db.session.query(distinct(User.company)).all()]
+        location_companies = [row[0] for row in db.session.query(distinct(Location.company)).all()]
+
+        # Unificar, remover vazios/nulos e ordenar
+        companies = sorted({c.strip() for c in (user_companies + location_companies) if c and str(c).strip()})
+
+        # Fallback amigável se vazio
+        if not companies:
+            companies = ['iTracker', 'Rio Brasil Terminal - RBT', 'CLIA']
+
+        return jsonify({'companies': companies}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

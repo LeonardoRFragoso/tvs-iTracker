@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Container,
   Paper,
@@ -30,6 +30,10 @@ import {
   Skeleton,
   LinearProgress,
   Badge,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -77,11 +81,11 @@ const StatCardSkeleton = ({ delay = 0 }) => (
 // Skeleton loading component for table rows
 const TableRowSkeleton = ({ delay = 0 }) => (
   <TableRow>
-    {Array.from({ length: 8 }, (_, index) => (
+    {Array.from({ length: 9 }, (_, index) => (
       <TableCell key={index}>
         <Skeleton 
           variant="text" 
-          width={index === 0 ? "80%" : index === 7 ? "60%" : "70%"} 
+          width={index === 0 ? "80%" : index === 8 ? "60%" : "70%"} 
           height={20} 
         />
       </TableCell>
@@ -95,10 +99,17 @@ const LocationList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
   const [deleteDialog, setDeleteDialog] = useState({ open: false, location: null });
   const [stats, setStats] = useState({});
   const { isDarkMode } = useTheme();
   const { user } = useAuth();
+
+  const companyOptions = useMemo(() => {
+    const set = new Set();
+    locations.forEach((l) => { if (l.company) set.add(l.company); });
+    return Array.from(set);
+  }, [locations]);
 
   useEffect(() => {
     fetchLocations();
@@ -154,9 +165,13 @@ const LocationList = () => {
   };
 
   const filteredLocations = locations.filter(location =>
-    location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    location.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    location.state.toLowerCase().includes(searchTerm.toLowerCase())
+    (
+      location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      location.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      location.state.toLowerCase().includes(searchTerm.toLowerCase())
+    ) && (
+      !companyFilter || location.company === companyFilter
+    )
   );
 
   const formatPeakHours = (start, end) => {
@@ -320,32 +335,52 @@ const LocationList = () => {
                 Buscar Sedes
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Encontre sedes por nome, cidade ou estado
+                Encontre sedes por nome, cidade, estado ou empresa
               </Typography>
             </Box>
           </Box>
-          <TextField
-            fullWidth
-            placeholder="Buscar sedes por nome, cidade ou estado..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                '&:hover': {
-                  transform: 'translateY(-1px)',
-                },
-                transition: 'all 0.2s ease',
-              },
-            }}
-          />
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={8}>
+              <TextField
+                fullWidth
+                placeholder="Buscar sedes por nome, cidade ou estado..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                    },
+                    transition: 'all 0.2s ease',
+                  },
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Empresa</InputLabel>
+                <Select
+                  label="Empresa"
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  sx={{ borderRadius: 2 }}
+                >
+                  <MenuItem value=""><em>Todas</em></MenuItem>
+                  {companyOptions.map((c) => (
+                    <MenuItem key={c} value={c}>{c}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
         </Paper>
       </Fade>
 
@@ -637,6 +672,7 @@ const LocationList = () => {
               <TableRow>
                 <TableCell>Nome</TableCell>
                 <TableCell>Localização</TableCell>
+                <TableCell>Empresa</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Players</TableCell>
                 <TableCell>Horário de Pico</TableCell>
@@ -683,6 +719,9 @@ const LocationList = () => {
                             </Typography>
                           )}
                         </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={location.company || '—'} size="small" sx={{ borderRadius: 2 }} />
                       </TableCell>
                       <TableCell>
                         <Chip

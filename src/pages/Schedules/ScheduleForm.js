@@ -20,6 +20,51 @@ import {
   Chip,
   Switch,
   FormHelperText,
+  Container,
+  Avatar,
+  Paper,
+  Fade,
+  Grow,
+  Skeleton,
+  Autocomplete,
+  Slider,
+  Stack,
+  Pagination,
+  PaginationItem,
+  Breadcrumbs,
+  Link,
+  LinearProgress,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Snackbar,
+  AlertTitle,
+  Collapse,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  ListSubheader,
+  Drawer,
+  AppBar,
+  Toolbar,
+  Menu,
+  MenuItem as MenuItem2,
+  MenuList,
+  Popper,
+  Popover,
+  Tabs,
+  Tab,
+  TabPanel,
+  TabList,
+  TabPanels,
+  TabContext,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon,
@@ -28,6 +73,9 @@ import {
   Event as EventIcon,
   Schedule as ScheduleIcon,
   Repeat as RepeatIcon,
+  CalendarToday as CalendarIcon,
+  AccessTime as TimeIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { DatePicker, TimePicker } from '@mui/x-date-pickers';
@@ -198,6 +246,10 @@ const ScheduleForm = () => {
     }
   };
 
+  useEffect(() => {
+    checkConflicts();
+  }, [formData.player_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time, formData.days_of_week]);
+
   const checkConflicts = async () => {
     if (!formData.player_id || !formData.start_date || !formData.end_date) return;
 
@@ -227,11 +279,6 @@ const ScheduleForm = () => {
       console.error('Check conflicts error:', err);
     }
   };
-
-  useEffect(() => {
-    const timeoutId = setTimeout(checkConflicts, 500);
-    return () => clearTimeout(timeoutId);
-  }, [formData.player_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time, formData.days_of_week]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -398,30 +445,71 @@ const ScheduleForm = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
-      <Box>
-        <Box display="flex" alignItems="center" mb={3}>
-          <IconButton onClick={() => navigate('/schedules')} sx={{ mr: 2 }}>
-            <BackIcon />
-          </IconButton>
-          <Typography variant="h4" component="h1">
-            {isEdit ? 'Editar Agendamento' : 'Novo Agendamento'}
-          </Typography>
-        </Box>
+      <Box
+        sx={{
+          background: (theme) => theme.palette.mode === 'dark' 
+            ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
+            : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+          minHeight: '100vh',
+          p: 3,
+        }}
+      >
+        {/* Enhanced Header */}
+        <Fade in timeout={800}>
+          <Box display="flex" alignItems="center" mb={4}>
+            <IconButton 
+              onClick={() => navigate('/schedules')} 
+              sx={{ 
+                mr: 2,
+                background: (theme) => theme.palette.mode === 'dark'
+                  ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                color: 'white',
+                '&:hover': {
+                  transform: 'scale(1.1)',
+                  transition: 'transform 0.2s ease-in-out',
+                },
+              }}
+            >
+              <BackIcon />
+            </IconButton>
+            <Box>
+              <Typography 
+                variant="h3" 
+                component="h1" 
+                sx={{ 
+                  fontWeight: 'bold',
+                  background: (theme) => theme.palette.mode === 'dark'
+                    ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                    : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                {isEdit ? 'Editar Agendamento' : 'Novo Agendamento'}
+              </Typography>
+              <Typography variant="subtitle1" color="text.secondary">
+                {isEdit ? 'Modifique as configurações do agendamento' : 'Configure um novo agendamento para suas campanhas'}
+              </Typography>
+            </Box>
+          </Box>
+        </Fade>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
+          <Alert severity="error" sx={{ mb: 3 }}>
             {error}
           </Alert>
         )}
 
         {success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
+          <Alert severity="success" sx={{ mb: 3 }}>
             {success}
           </Alert>
         )}
 
         {conflicts.length > 0 && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
+          <Alert severity="warning" sx={{ mb: 3 }}>
             <Typography variant="subtitle2" gutterBottom>
               Conflitos detectados:
             </Typography>
@@ -435,262 +523,513 @@ const ScheduleForm = () => {
 
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
-            {/* Basic Information */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    <EventIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Informações Básicas
-                  </Typography>
-                  
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Nome do Agendamento"
-                        value={formData.name}
-                        onChange={(e) => handleInputChange('name', e.target.value)}
-                        required
-                      />
-                    </Grid>
+            {/* Informações Básicas */}
+            <Grid item xs={12} md={6}>
+              <Grow in timeout={1000}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <EventIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Informações Básicas
+                      </Typography>
+                    </Box>
                     
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth required>
-                        <InputLabel>Campanha</InputLabel>
-                        <Select
-                          value={formData.campaign_id}
-                          onChange={(e) => handleInputChange('campaign_id', e.target.value)}
-                          label="Campanha"
-                        >
-                          {campaigns.map(campaign => (
-                            <MenuItem key={campaign.id} value={campaign.id}>
-                              {campaign.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <FormControl fullWidth required>
-                        <InputLabel>Player</InputLabel>
-                        <Select
-                          value={formData.player_id}
-                          onChange={(e) => handleInputChange('player_id', e.target.value)}
-                          label="Player"
-                        >
-                          {players.map(player => (
-                            <MenuItem key={player.id} value={player.id}>
-                              {player.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Date and Time */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    <ScheduleIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Período e Horário
-                  </Typography>
-                  
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <DatePicker
-                        label="Data de Início"
-                        value={formData.start_date}
-                        onChange={(date) => handleInputChange('start_date', date)}
-                        renderInput={(params) => <TextField {...params} fullWidth required />}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <DatePicker
-                        label="Data de Fim"
-                        value={formData.end_date}
-                        onChange={(date) => handleInputChange('end_date', date)}
-                        renderInput={(params) => <TextField {...params} fullWidth required />}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <TimePicker
-                        label="Horário de Início (opcional)"
-                        value={formData.start_time}
-                        onChange={(time) => handleInputChange('start_time', time)}
-                        disabled={formData.is_all_day}
-                        renderInput={(params) => <TextField {...params} fullWidth />}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} md={6}>
-                      <TimePicker
-                        label="Horário de Fim (opcional)"
-                        value={formData.end_time}
-                        onChange={(time) => handleInputChange('end_time', time)}
-                        disabled={formData.is_all_day}
-                        renderInput={(params) => <TextField {...params} fullWidth />}
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={formData.is_all_day}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              handleInputChange('is_all_day', checked);
-                              const today = new Date();
-                              if (checked) {
-                                const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-                                const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-                                handleInputChange('start_time', start);
-                                handleInputChange('end_time', end);
-                              } else {
-                                handleInputChange('start_time', null);
-                                handleInputChange('end_time', null);
-                              }
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Nome do Agendamento"
+                          value={formData.name}
+                          onChange={(e) => handleInputChange('name', e.target.value)}
+                          required
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
+                          }}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControl fullWidth required>
+                          <InputLabel>Campanha</InputLabel>
+                          <Select
+                            value={formData.campaign_id}
+                            onChange={(e) => handleInputChange('campaign_id', e.target.value)}
+                            label="Campanha"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
                             }}
-                          />
-                        }
-                        label="Dia inteiro (24/7)"
-                      />
+                          >
+                            {campaigns.map(campaign => (
+                              <MenuItem key={campaign.id} value={campaign.id}>
+                                {campaign.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControl fullWidth required>
+                          <InputLabel>Player</InputLabel>
+                          <Select
+                            value={formData.player_id}
+                            onChange={(e) => handleInputChange('player_id', e.target.value)}
+                            label="Player"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            }}
+                          >
+                            {players.map(player => (
+                              <MenuItem key={player.id} value={player.id}>
+                                {player.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
                     </Grid>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
+
+            {/* Período e Horário */}
+            <Grid item xs={12} md={6}>
+              <Grow in timeout={1200}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <CalendarIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Período e Horário
+                      </Typography>
+                    </Box>
                     
-                    <Grid item xs={12}>
-                      <Box display="flex" gap={1} mt={1}>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => {
-                            const today = new Date();
-                            const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-                            const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-                            handleInputChange('is_all_day', true);
-                            handleInputChange('start_time', start);
-                            handleInputChange('end_time', end);
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <DatePicker
+                          label="Data de Início"
+                          value={formData.start_date}
+                          onChange={(date) => handleInputChange('start_date', date)}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              fullWidth 
+                              required 
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    transition: 'transform 0.2s ease-in-out',
+                                  },
+                                },
+                              }}
+                            />
+                          )}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <DatePicker
+                          label="Data de Fim"
+                          value={formData.end_date}
+                          onChange={(date) => handleInputChange('end_date', date)}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              fullWidth 
+                              required 
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    transition: 'transform 0.2s ease-in-out',
+                                  },
+                                },
+                              }}
+                            />
+                          )}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <TimePicker
+                          label="Horário de Início (opcional)"
+                          value={formData.start_time}
+                          onChange={(time) => handleInputChange('start_time', time)}
+                          disabled={formData.is_all_day}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              fullWidth 
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    transition: 'transform 0.2s ease-in-out',
+                                  },
+                                },
+                              }}
+                            />
+                          )}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <TimePicker
+                          label="Horário de Fim (opcional)"
+                          value={formData.end_time}
+                          onChange={(time) => handleInputChange('end_time', time)}
+                          disabled={formData.is_all_day}
+                          renderInput={(params) => (
+                            <TextField 
+                              {...params} 
+                              fullWidth 
+                              sx={{
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  '&:hover': {
+                                    transform: 'translateY(-2px)',
+                                    transition: 'transform 0.2s ease-in-out',
+                                  },
+                                },
+                              }}
+                            />
+                          )}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.is_all_day}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                handleInputChange('is_all_day', checked);
+                                const today = new Date();
+                                if (checked) {
+                                  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+                                  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                                  handleInputChange('start_time', start);
+                                  handleInputChange('end_time', end);
+                                } else {
+                                  handleInputChange('start_time', null);
+                                  handleInputChange('end_time', null);
+                                }
+                              }}
+                            />
+                          }
+                          label="Dia inteiro (24/7)"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <Box display="flex" gap={1} mt={1}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => {
+                              const today = new Date();
+                              const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+                              const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                              handleInputChange('is_all_day', true);
+                              handleInputChange('start_time', start);
+                              handleInputChange('end_time', end);
+                            }}
+                          >
+                            24/7
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => {
+                              const today = new Date();
+                              const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 0, 0);
+                              const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 18, 0, 0);
+                              handleInputChange('is_all_day', false);
+                              handleInputChange('start_time', start);
+                              handleInputChange('end_time', end);
+                            }}
+                          >
+                            Horário Comercial (09–18)
+                          </Button>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
+
+            {/* Dias da Semana */}
+            <Grid item xs={12} md={6}>
+              <Grow in timeout={1400}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <TimeIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Dias da Semana
+                      </Typography>
+                    </Box>
+                    
+                    <FormGroup row>
+                      {daysOfWeek.map(day => (
+                        <FormControlLabel
+                          key={day.value}
+                          control={
+                            <Checkbox
+                              checked={formData.days_of_week.includes(day.value)}
+                              onChange={() => handleDayToggle(day.value)}
+                            />
+                          }
+                          label={day.label}
+                        />
+                      ))}
+                    </FormGroup>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
+
+            {/* Configurações Avançadas */}
+            <Grid item xs={12} md={6}>
+              <Grow in timeout={1600}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
+                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: (theme) => theme.palette.mode === 'dark'
+                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          mr: 2,
+                        }}
+                      >
+                        <SettingsIcon />
+                      </Avatar>
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        Configurações Avançadas
+                      </Typography>
+                    </Box>
+                    
+                    <Grid container spacing={3}>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          label="Prioridade"
+                          type="number"
+                          value={formData.priority}
+                          onChange={(e) => handleInputChange('priority', parseInt(e.target.value) || 1)}
+                          inputProps={{ min: 1, max: 10 }}
+                          helperText="1 = Baixa, 10 = Alta"
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
                           }}
-                        >
-                          24/7
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          onClick={() => {
-                            const today = new Date();
-                            const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 0, 0);
-                            const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 18, 0, 0);
-                            handleInputChange('is_all_day', false);
-                            handleInputChange('start_time', start);
-                            handleInputChange('end_time', end);
-                          }}
-                        >
-                          Horário Comercial (09–18)
-                        </Button>
-                      </Box>
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControl fullWidth>
+                          <InputLabel>Tipo de Conteúdo</InputLabel>
+                          <Select
+                            value={formData.content_type}
+                            onChange={(e) => handleInputChange('content_type', e.target.value)}
+                            label="Tipo de Conteúdo"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            }}
+                          >
+                            <MenuItem value="main">Principal (Vídeos)</MenuItem>
+                            <MenuItem value="overlay">Overlay (Logos/Imagens)</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={formData.is_persistent}
+                              onChange={(e) => handleInputChange('is_persistent', e.target.checked)}
+                            />
+                          }
+                          label="Agendamento Persistente"
+                        />
+                        <FormHelperText>
+                          Conteúdo fica fixo na tela até ser substituído por outro agendamento
+                        </FormHelperText>
+                      </Grid>
                     </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Paper>
+              </Grow>
             </Grid>
 
-            {/* Days of Week */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Dias da Semana
-                  </Typography>
-                  
-                  <FormGroup row>
-                    {daysOfWeek.map(day => (
-                      <FormControlLabel
-                        key={day.value}
-                        control={
-                          <Checkbox
-                            checked={formData.days_of_week.includes(day.value)}
-                            onChange={() => handleDayToggle(day.value)}
-                          />
-                        }
-                        label={day.label}
-                      />
-                    ))}
-                  </FormGroup>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Advanced Settings */}
-            <Grid item xs={12}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    <RepeatIcon sx={{ mr: 1, verticalAlign: 'middle' }} />
-                    Configurações Avançadas
-                  </Typography>
-                  
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
-                      <TextField
-                        fullWidth
-                        label="Prioridade"
-                        type="number"
-                        value={formData.priority}
-                        onChange={(e) => handleInputChange('priority', parseInt(e.target.value) || 1)}
-                        inputProps={{ min: 1, max: 10 }}
-                        helperText="1 = Baixa, 10 = Alta"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} sm={6}>
-                      <FormControl fullWidth>
-                        <InputLabel>Tipo de Conteúdo</InputLabel>
-                        <Select
-                          value={formData.content_type}
-                          onChange={(e) => handleInputChange('content_type', e.target.value)}
-                          label="Tipo de Conteúdo"
-                        >
-                          <MenuItem value="main">Principal (Vídeos)</MenuItem>
-                          <MenuItem value="overlay">Overlay (Logos/Imagens)</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </Grid>
-                    
-                    <Grid item xs={12}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={formData.is_persistent}
-                            onChange={(e) => handleInputChange('is_persistent', e.target.checked)}
-                          />
-                        }
-                        label="Agendamento Persistente"
-                      />
-                      <FormHelperText>
-                        Conteúdo fica fixo na tela até ser substituído por outro agendamento
-                      </FormHelperText>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Actions */}
+            {/* Ações */}
             <Grid item xs={12}>
               <Box display="flex" gap={2} justifyContent="flex-end">
                 <Button
                   variant="outlined"
                   onClick={() => navigate('/schedules')}
                   startIcon={<CancelIcon />}
+                  sx={{
+                    borderRadius: 2,
+                    px: 4,
+                    py: 1.5,
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      transition: 'transform 0.2s ease-in-out',
+                    },
+                  }}
                 >
                   Cancelar
                 </Button>
@@ -699,6 +1038,21 @@ const ScheduleForm = () => {
                   variant="contained"
                   disabled={loading}
                   startIcon={<SaveIcon />}
+                  sx={{
+                    borderRadius: 2,
+                    px: 4,
+                    py: 1.5,
+                    background: (theme) => theme.palette.mode === 'dark'
+                      ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                      : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      transition: 'transform 0.2s ease-in-out',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(0, 0, 0, 0.12)',
+                    },
+                  }}
                 >
                   {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar')}
                 </Button>

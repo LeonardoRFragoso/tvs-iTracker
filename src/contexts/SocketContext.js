@@ -78,7 +78,7 @@ export const SocketProvider = ({ children }) => {
         }
         // Admin/Manager join admin room
         try {
-          if (user && (user.role === 'admin' || user.role === 'manager')) {
+          if (user && user.role === 'admin') {
             socketInstance.emit('join_admin');
           }
         } catch (_) {}

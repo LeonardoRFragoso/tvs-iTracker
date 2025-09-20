@@ -89,6 +89,7 @@ from models.campaign import Campaign
 from models.player import Player
 from models.schedule import Schedule
 from models.editorial import Editorial
+from models.location import Location
 
 # Importar rotas
 from routes.auth import auth_bp
@@ -311,7 +312,7 @@ def handle_join_admin():
         # Usar o mapeamento criado no connect (SOCKET_SID_TO_USER) para checar permissão
         info = SOCKET_SID_TO_USER.get(request.sid)
         role = info.get('role') if info else None
-        if role in ['admin', 'manager']:
+        if role == 'admin':
             join_room('admin')
             emit('joined_admin', {'ok': True})
         else:
@@ -411,7 +412,7 @@ def handle_join_admin_room():
                 u = db.session.get(User, user_id)
                 role = getattr(u, 'role', None)
                 
-                if u and role in ['admin', 'manager']:
+                if u and role == 'admin':
                     join_room('admin')
                     emit('joined_admin_room', {'message': 'Conectado à sala de administração'})
                 else:
@@ -545,6 +546,20 @@ def get_network_info():
             'kiosk_base_url': f'http://{local_ip}:3000/k/',
             'current_detected_ip': '192.168.113.97'  # Seu IP atual
         }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Public endpoint: list known companies (no auth required)
+@app.route('/api/public/companies', methods=['GET'])
+def public_companies():
+    try:
+        # Use DISTINCT from SQLAlchemy via db.func
+        user_companies = [row[0] for row in db.session.query(db.func.distinct(User.company)).all()]
+        location_companies = [row[0] for row in db.session.query(db.func.distinct(Location.company)).all()]
+        companies = sorted({str(c).strip() for c in (user_companies + location_companies) if c and str(c).strip()})
+        if not companies:
+            companies = ['iTracker', 'Rio Brasil Terminal - RBT', 'CLIA']
+        return jsonify({'companies': companies}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -746,7 +761,7 @@ def monitor_traffic():
     try:
         user_id = get_jwt_identity()
         user = db.session.get(User, user_id)
-        if not user or user.role not in ['admin', 'manager']:
+        if not user or user.role != 'admin':
             return jsonify({'error': 'Sem permissão'}), 403
         snapshot = _traffic_snapshot()
 
@@ -817,7 +832,7 @@ def monitor_players():
     try:
         user_id = get_jwt_identity()
         user = db.session.get(User, user_id)
-        if not user or user.role not in ['admin', 'manager']:
+        if not user or user.role != 'admin':
             return jsonify({'error': 'Sem permissão'}), 403
         # Fallback seguro para bancos antigos sem coluna created_at
         try:

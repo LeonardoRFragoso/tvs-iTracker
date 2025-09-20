@@ -210,23 +210,28 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         }
       } catch (_) {}
       
-      setPlaylist(playlistRes.data.contents || []);
+      const rawItems = playlistRes.data.contents || [];
+      const dedupedItems = deduplicatePlaylist(rawItems);
+      if (rawItems.length !== dedupedItems.length) {
+        console.log(`[WebPlayer] Dedup: ${rawItems.length} -> ${dedupedItems.length} itens`);
+      }
+      setPlaylist(dedupedItems);
 
-      if (playlistRes.data.contents && playlistRes.data.contents.length > 0) {
-        console.log('[WebPlayer] Conteúdo encontrado:', playlistRes.data.contents[0]);
-        setCurrentContent(playlistRes.data.contents[0]);
+      if (dedupedItems && dedupedItems.length > 0) {
+        console.log('[WebPlayer] Conteúdo encontrado:', dedupedItems[0]);
+        setCurrentContent(dedupedItems[0]);
         setCurrentIndex(0);
         setLoadAttempts(0); // Reset counter on success
         setError(''); // Clear any previous errors
         
         // Compute campaign segments
-        const segs = buildSegments(playlistRes.data.contents);
+        const segs = buildSegments(dedupedItems);
         setSegments(segs);
         setCurrentSegmentIdx(segs.length ? 0 : -1);
         
         // Prefetch next images to smooth playback (first few items)
         try {
-          prefetchUpcomingImages(playlistRes.data.contents, 0);
+          prefetchUpcomingImages(dedupedItems, 0);
         } catch (_) {}
       } else {
         console.log('[WebPlayer] Nenhum conteúdo encontrado, aguardando...');
@@ -534,6 +539,29 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       i = end + 1;
     }
     return segs;
+  }, []);
+
+  const deduplicatePlaylist = useCallback((items) => {
+    try {
+      if (!Array.isArray(items)) return [];
+      const seenByUrl = new Set();
+      const seenById = new Set();
+      const out = [];
+      for (const it of items) {
+        const urlKey = `${it?.file_url || it?.url || ''}|${it?.type || ''}`;
+        const idKey = it?.id != null ? String(it.id) : null;
+        if ((urlKey && seenByUrl.has(urlKey)) || (idKey && seenById.has(idKey))) {
+          continue;
+        }
+        if (urlKey) seenByUrl.add(urlKey);
+        if (idKey) seenById.add(idKey);
+        out.push(it);
+      }
+      return out;
+    } catch (e) {
+      console.warn('[WebPlayer] Dedup falhou, usando lista original', e);
+      return Array.isArray(items) ? items : [];
+    }
   }, []);
 
   const prefetchImage = (url) => {

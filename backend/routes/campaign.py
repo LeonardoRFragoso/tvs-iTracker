@@ -60,6 +60,7 @@ def list_campaigns():
         per_page = request.args.get('per_page', 20, type=int)
         is_active = request.args.get('is_active')
         search = request.args.get('search')
+        company = request.args.get('company')
         
         query = Campaign.query
         
@@ -68,6 +69,10 @@ def list_campaigns():
         
         if search:
             query = query.filter(Campaign.name.contains(search))
+        
+        # Optional filter by creator's company (keeps campaigns global by default)
+        if company:
+            query = query.join(User, Campaign.user_id == User.id).filter(User.company == company)
         
         query = query.order_by(Campaign.created_at.desc())
         
@@ -79,6 +84,13 @@ def list_campaigns():
         enriched = []
         for c in pagination.items:
             cdict = c.to_dict()
+            # Incluir empresa de criação e nome do criador (para filtros/UX)
+            try:
+                cdict['company'] = getattr(c.user, 'company', None)
+                cdict['creator_name'] = getattr(c.user, 'username', None)
+            except Exception:
+                cdict['company'] = None
+                cdict['creator_name'] = None
             try:
                 # Primeiro conteúdo ativo ordenado para thumbnail
                 first_cc = CampaignContent.query.filter_by(

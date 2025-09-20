@@ -18,6 +18,7 @@ import PlayerForm from './pages/Players/PlayerForm';
 import PlayerView from './pages/Player/PlayerView';
 import LocationList from './pages/Locations/LocationList';
 import LocationForm from './pages/Locations/LocationForm';
+import LocationDetail from './pages/Locations/LocationDetail';
 import ScheduleList from './pages/Schedules/ScheduleList';
 import ScheduleForm from './pages/Schedules/ScheduleForm';
 import Settings from './pages/Settings/Settings';
@@ -26,6 +27,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ChangePassword from './pages/ChangePassword';
 import PendingUsers from './pages/Admin/PendingUsers';
 import TrafficMonitor from './pages/Admin/TrafficMonitor';
+import UsersSummary from './pages/Admin/UsersSummary';
 
 function App() {
   return (
@@ -64,6 +66,7 @@ function App() {
             <Route path="locations" element={<LocationList />} />
             <Route path="locations/new" element={<LocationForm />} />
             <Route path="locations/:id/edit" element={<LocationForm />} />
+            <Route path="locations/:id" element={<LocationDetail />} />
             <Route path="players" element={<PlayerList />} />
             <Route path="players/new" element={<PlayerForm />} />
             <Route path="players/:id" element={<PlayerDetail />} />
@@ -79,6 +82,9 @@ function App() {
             {/* Admin routes */}
             <Route path="admin/pending-users" element={<PendingUsers />} />
             <Route path="admin/traffic-monitor" element={<TrafficMonitor />} />
+            <Route path="admin/users-summary" element={<UsersSummary />} />
+            {/* Admin: Users CRUD (same component, Users tab default) */}
+            <Route path="users" element={<PendingUsers />} />
           </Route>
         </Routes>
       </SocketProvider>

@@ -86,10 +86,12 @@ const CampaignList = () => {
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [filterCompany, setFilterCompany] = useState('');
+  const [companies, setCompanies] = useState([]);
 
   useEffect(() => {
     loadCampaigns();
-  }, [page, searchTerm, filterStatus]);
+  }, [page, searchTerm, filterStatus, filterCompany]);
 
   const loadCampaigns = async () => {
     try {
@@ -101,11 +103,15 @@ const CampaignList = () => {
         // Map frontend filter to backend expected param (is_active)
         ...(filterStatus === 'active' ? { is_active: true } : {}),
         ...(filterStatus === 'inactive' ? { is_active: false } : {}),
+        ...(filterCompany ? { company: filterCompany } : {}),
       };
 
       const response = await axios.get('/campaigns', { params });
       setCampaigns(response.data.campaigns);
       setTotalPages(response.data.pages);
+      // Build company list from payload for filter options
+      const uniq = Array.from(new Set((response.data.campaigns || []).map(c => c.company).filter(Boolean)));
+      setCompanies(uniq);
     } catch (err) {
       setError('Erro ao carregar campanhas');
       console.error('Load campaigns error:', err);
@@ -368,6 +374,26 @@ const CampaignList = () => {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Empresa</InputLabel>
+                  <Select
+                    value={filterCompany}
+                    onChange={(e) => { setFilterCompany(e.target.value); setPage(1); }}
+                    label="Empresa"
+                    sx={{
+                      borderRadius: '12px',
+                      transition: 'all 0.3s ease',
+                      '&:hover': { transform: 'translateY(-1px)' }
+                    }}
+                  >
+                    <MenuItem value="">Todas as empresas</MenuItem>
+                    {companies.map(c => (
+                      <MenuItem key={c} value={c}>{c}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={3}>
                 <Button
                   variant="outlined"
                   startIcon={<FilterIcon />}
@@ -386,6 +412,7 @@ const CampaignList = () => {
                       transform: 'translateY(-1px)',
                     }
                   }}
+                  onClick={loadCampaigns}
                 >
                   Filtrar
                 </Button>
@@ -533,6 +560,32 @@ const CampaignList = () => {
                           fontSize: '0.7rem',
                         }}
                       />
+                      {campaign.company && (
+                        <Chip 
+                          label={campaign.company}
+                          size="small"
+                          sx={{
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                          }}
+                        />
+                      )}
+                      {campaign.creator_name && (
+                        <Chip 
+                          label={`por ${campaign.creator_name}`}
+                          size="small"
+                          sx={{
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                          }}
+                        />
+                      )}
                     </Box>
                     
                     <Box display="flex" justifyContent="space-between" alignItems="center">

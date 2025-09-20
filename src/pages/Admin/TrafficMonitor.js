@@ -36,7 +36,7 @@ const formatBytes = (bytes = 0) => {
 };
 
 const TrafficMonitor = () => {
-  const { user, isAdmin, isManager } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { adminTraffic, connected } = useSocket();
   const [snapshot, setSnapshot] = useState(null);
   const [playersInfo, setPlayersInfo] = useState([]);
@@ -45,7 +45,7 @@ const TrafficMonitor = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [filter, setFilter] = useState('');
 
-  const canView = isAdmin || isManager;
+  const canView = isAdmin;
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -131,7 +131,7 @@ const TrafficMonitor = () => {
       <Box p={3}>
         <Typography variant="h6">Acesso restrito</Typography>
         <Typography variant="body2" color="text.secondary">
-          Esta página é exclusiva para administradores e gerentes.
+          Esta página é exclusiva para administradores.
         </Typography>
       </Box>
     );

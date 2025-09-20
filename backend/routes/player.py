@@ -96,8 +96,9 @@ def create_player():
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         
-        if user.role not in ['admin', 'manager']:
-            return jsonify({'error': 'Apenas administradores e gerentes podem criar players'}), 403
+        # Permissões: admin e manager podem criar em qualquer empresa; RH pode criar somente na própria empresa
+        if user.role not in ['admin', 'manager', 'hr']:
+            return jsonify({'error': 'Sem permissão para criar players'}), 403
         
         data = request.get_json()
         
@@ -112,7 +113,13 @@ def create_player():
         if not location:
             return jsonify({'error': 'Sede (location) não encontrada'}), 404
         
-        # Even admins/managers can create across companies; HR is not allowed to create
+        # HR só pode criar players na própria empresa
+        if user.role == 'hr':
+            user_company = getattr(user, 'company', None)
+            location_company = getattr(location, 'company', None)
+            if not user_company or not location_company or user_company != location_company:
+                return jsonify({'error': 'RH só pode criar players na própria empresa'}), 403
+        
         player = Player(
             name=data['name'],
             description=data.get('description', ''),
@@ -774,6 +781,9 @@ def get_player_playlist(player_id):
 
         media_base = request.host_url.rstrip('/')
         items = []
+        # Guards to evitar itens duplicados quando múltiplos schedules ativos incluem a mesma campanha/conteúdo
+        added_compiled_campaigns = set()  # campaign_id
+        added_file_urls = set()  # absolute file URLs
 
         def append_schedule_items(sch):
             # 1) Include compiled campaign video once per schedule if applicable
@@ -787,17 +797,21 @@ def get_player_playlist(player_id):
                     ):
                         compiled_rel_path = str(camp.compiled_video_path).lstrip('/').replace('\\', '/')
                         compiled_url = f"{media_base}/uploads/{compiled_rel_path}?pid={player_id}"
-                        items.append({
-                            'id': f"compiled-{camp.id}",
-                            'title': f"Campanha: {camp.name} (Compilado)",
-                            'description': 'Vídeo compilado a partir de imagens',
-                            'type': 'video',
-                            'file_url': compiled_url,
-                            'duration': getattr(camp, 'compiled_video_duration', None) or (camp.content_duration if getattr(camp, 'content_duration', None) else 10),
-                            'campaign_id': camp.id,
-                            'campaign_name': camp.name,
-                            'schedule_id': sch.id,
-                        })
+                        # Evitar duplicar compilado da mesma campanha
+                        if str(camp.id) not in added_compiled_campaigns and compiled_url not in added_file_urls:
+                            items.append({
+                                'id': f"compiled-{camp.id}",
+                                'title': f"Campanha: {camp.name} (Compilado)",
+                                'description': 'Vídeo compilado a partir de imagens',
+                                'type': 'video',
+                                'file_url': compiled_url,
+                                'duration': getattr(camp, 'compiled_video_duration', None) or (camp.content_duration if getattr(camp, 'content_duration', None) else 10),
+                                'campaign_id': camp.id,
+                                'campaign_name': camp.name,
+                                'schedule_id': sch.id,
+                            })
+                            added_compiled_campaigns.add(str(camp.id))
+                            added_file_urls.add(compiled_url)
                 except Exception:
                     pass
 
@@ -824,6 +838,9 @@ def get_player_playlist(player_id):
                     except Exception:
                         duration = getattr(content, 'duration', None)
 
+                    # Evitar duplicação do mesmo arquivo (quando múltiplos schedules incluem o mesmo conteúdo)
+                    if file_url in added_file_urls:
+                        continue
                     items.append({
                         'id': content.id,
                         'title': content.title,
@@ -835,6 +852,7 @@ def get_player_playlist(player_id):
                         'campaign_name': camp.name if camp else None,
                         'schedule_id': sch.id,
                     })
+                    added_file_urls.add(file_url)
             except Exception:
                 pass
 

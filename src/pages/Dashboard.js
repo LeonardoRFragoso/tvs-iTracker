@@ -402,23 +402,45 @@ const Dashboard = () => {
   const loadDashboardData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const [statsRes, alertsRes, performanceRes, healthRes, trafficRes] = await Promise.all([
+
+      const requests = [
         axios.get('/dashboard/stats'),
         axios.get('/dashboard/alerts'),
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
-        axios.get('/monitor/traffic'),
-      ]);
+      ];
 
-      setStats(statsRes.data);
-      setAlerts(alertsRes.data.alerts);
-      setPerformance(performanceRes.data);
-      setHealth(healthRes.data);
-      setTraffic(trafficRes.data);
+      const includeTraffic = user?.role === 'admin';
+      if (includeTraffic) {
+        requests.push(axios.get('/monitor/traffic'));
+      }
+
+      const results = await Promise.allSettled(requests);
+      const [statsRes, alertsRes, performanceRes, healthRes, trafficRes] = results;
+
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
+      if (performanceRes.status === 'fulfilled') setPerformance(performanceRes.value.data);
+      if (healthRes.status === 'fulfilled') setHealth(healthRes.value.data);
+
+      if (includeTraffic) {
+        if (trafficRes?.status === 'fulfilled') {
+          setTraffic(trafficRes.value.data);
+        } else {
+          // 403 (FORBIDDEN) ou outro erro de tráfego: não bloquear o dashboard
+          setTraffic(null);
+        }
+      } else {
+        // Não-admins (manager/HR) não consultam tráfego admin
+        setTraffic(null);
+      }
+
+      setError('');
       setLastUpdated(new Date());
     } catch (err) {
+      // Como usamos allSettled, só erros inesperados devem cair aqui
+      console.error('Dashboard error (fatal):', err);
       setError('Erro ao carregar dados do dashboard');
-      console.error('Dashboard error:', err);
     } finally {
       if (!silent) setLoading(false);
     }

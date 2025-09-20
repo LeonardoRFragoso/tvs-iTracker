@@ -191,6 +191,50 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Admin: definir/redefinir senha de usuário
+  const adminSetPassword = async (userId, { new_password, must_change_password = false }) => {
+    try {
+      const response = await axios.post(`/auth/users/${userId}/set-password`, { new_password, must_change_password });
+      return { success: true, user: response.data.user };
+    } catch (error) {
+      const message = error.response?.data?.error || 'Erro ao definir senha';
+      return { success: false, error: message };
+    }
+  };
+
+  // Admin: listar todos os usuários
+  const listUsers = async () => {
+    try {
+      const response = await axios.get('/auth/users');
+      return { success: true, users: response.data.users };
+    } catch (error) {
+      const message = error.response?.data?.error || 'Erro ao listar usuários';
+      return { success: false, error: message };
+    }
+  };
+
+  // Admin: atualizar usuário (papel, empresa, ativo)
+  const updateUser = async (userId, payload) => {
+    try {
+      const response = await axios.put(`/auth/users/${userId}`, payload);
+      return { success: true, user: response.data.user };
+    } catch (error) {
+      const message = error.response?.data?.error || 'Erro ao atualizar usuário';
+      return { success: false, error: message };
+    }
+  };
+
+  // Admin: excluir usuário
+  const deleteUser = async (userId) => {
+    try {
+      const response = await axios.delete(`/auth/users/${userId}`);
+      return { success: true, message: response.data?.message || 'Usuário excluído' };
+    } catch (error) {
+      const message = error.response?.data?.error || 'Erro ao excluir usuário';
+      return { success: false, error: message };
+    }
+  };
+
   const value = {
     user,
     login,
@@ -203,10 +247,15 @@ export const AuthProvider = ({ children }) => {
     listPendingUsers,
     approveUser,
     rejectUser,
+    adminSetPassword,
     loading,
     isAdmin: user?.role === 'admin',
     isManager: user?.role === 'manager' || user?.role === 'admin',
     isHR: user?.role === 'hr',
+    // Expose new admin helpers
+    listUsers,
+    updateUser,
+    deleteUser,
   };
 
   return (
