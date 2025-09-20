@@ -27,6 +27,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import axios from '../../config/axios';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 const formatBytes = (bytes = 0) => {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -131,7 +132,7 @@ const TrafficMonitor = () => {
       <Box p={3}>
         <Typography variant="h6">Acesso restrito</Typography>
         <Typography variant="body2" color="text.secondary">
-          Esta página é exclusiva para administradores.
+          Você não tem permissão para acessar esta página.
         </Typography>
       </Box>
     );
@@ -139,45 +140,67 @@ const TrafficMonitor = () => {
 
   return (
     <Box>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
-        <Box display="flex" alignItems="center" gap={2}>
-          <TrafficIcon color="warning" />
-          <Typography variant="h5" fontWeight="bold">
-            Monitoramento de Tráfego e Players
-          </Typography>
-          {connected ? (
-            <Chip size="small" color="success" icon={<WifiIcon />} label="Socket conectado" />
-          ) : (
-            <Chip size="small" color="default" icon={<WifiOffIcon />} label="Socket desconectado" />
-          )}
-        </Box>
-        <Stack direction="row" spacing={1}>
-          <TextField
-            size="small"
-            placeholder="Filtrar por nome ou ID"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-          />
-          <Tooltip title="Atualizar agora">
-            <span>
-              <IconButton color="primary" onClick={fetchSnapshot} disabled={loading}>
-                <RefreshIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Resetar contadores (desde)">
-            <span>
-              <IconButton color="warning" onClick={resetCounters} disabled={loading}>
-                <RestartAltIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Stack>
-      </Box>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Monitoramento de Tráfego e Players"
+        subtitle="Acompanhe o uso de rede e status dos dispositivos em tempo real"
+        actions={
+          <>
+            <TextField
+              size="small"
+              placeholder="Filtrar por nome ou ID"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              sx={{ mr: 1 }}
+            />
+            <Tooltip title="Atualizar agora">
+              <span>
+                <IconButton 
+                  color="primary" 
+                  onClick={fetchSnapshot} 
+                  disabled={loading}
+                  sx={{
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'primary.main',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'primary.dark',
+                      transform: 'rotate(180deg)',
+                    },
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  <RefreshIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Resetar contadores (desde)">
+              <span>
+                <IconButton 
+                  color="secondary" 
+                  onClick={resetCounters} 
+                  disabled={loading}
+                  sx={{
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'secondary.main',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'secondary.dark',
+                    },
+                  }}
+                >
+                  <RestartAltIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {connected ? (
+              <Chip size="small" color="success" icon={<WifiIcon />} label="Socket conectado" />
+            ) : (
+              <Chip size="small" color="default" icon={<WifiOffIcon />} label="Socket desconectado" />
+            )}
+          </>
+        }
+      />
 
-      {loading && (
-        <Box mb={2}><LinearProgress /></Box>
-      )}
+      {loading && <LinearProgress sx={{ mb: 2 }} />}
       {error && (
         <Box mb={2}><Typography color="error">{error}</Typography></Box>
       )}

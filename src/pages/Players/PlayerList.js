@@ -49,10 +49,11 @@ import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSocket } from '../../contexts/SocketContext';
 import axios from '../../config/axios';
+import PageTitle from '../../components/Common/PageTitle';
 
 const PlayerList = () => {
   const navigate = useNavigate();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   const { sendPlayerCommand } = useSocket();
   
   const [players, setPlayers] = useState([]);
@@ -280,38 +281,36 @@ const PlayerList = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Grow in={true} timeout={1000}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Box display="flex" alignItems="center">
-            <Avatar
-              sx={{
-                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                mr: 2,
-                width: 48,
-                height: 48,
-              }}
-            >
-              <ComputerIcon />
-            </Avatar>
-            <Typography 
-              variant="h4" 
-              component="h1"
-              sx={{
-                fontWeight: 700,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                  : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Gerenciar Players
-            </Typography>
-          </Box>
-        </Box>
-      </Grow>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Gerenciar Players"
+        subtitle="Monitore e controle todos os dispositivos de exibição"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/players/new')}
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              background: (theme) => theme.palette.mode === 'dark' 
+                ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+              '&:hover': {
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
+                  : 'linear-gradient(45deg, #21CBF3, #2196F3)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 8px 15px rgba(0,0,0,0.1)',
+              },
+              transition: 'all 0.3s ease',
+            }}
+          >
+            Novo Player
+          </Button>
+        }
+      />
 
       {/* Alerts */}
       {error && (
@@ -358,11 +357,9 @@ const PlayerList = () => {
             mb: 3,
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
-              ? 'rgba(255, 255, 255, 0.05)' 
-              : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-            boxShadow: isDarkMode 
+            background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
+            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: theme.palette.mode === 'dark' 
               ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
               : '0 8px 32px rgba(0, 0, 0, 0.1)',
           }}
@@ -486,17 +483,15 @@ const PlayerList = () => {
                     overflow: 'hidden',
                     transition: 'all 0.3s ease',
                     cursor: 'pointer',
-                    background: isDarkMode 
-                      ? 'rgba(255, 255, 255, 0.05)' 
-                      : 'rgba(255, 255, 255, 0.9)',
+                    background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                     backdropFilter: 'blur(20px)',
-                    border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                    boxShadow: isDarkMode 
+                    border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                    boxShadow: theme.palette.mode === 'dark' 
                       ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
                       : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     '&:hover': {
                       transform: 'translateY(-8px) scale(1.02)',
-                      boxShadow: isDarkMode 
+                      boxShadow: theme.palette.mode === 'dark' 
                         ? '0 16px 48px rgba(0, 0, 0, 0.4)' 
                         : '0 16px 48px rgba(0, 0, 0, 0.15)',
                     }
@@ -514,20 +509,27 @@ const PlayerList = () => {
                               width: 16,
                               height: 16,
                               borderRadius: '50%',
-                              background: getStatusColor(player.status) === 'success' 
-                                ? 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)'
-                                : getStatusColor(player.status) === 'warning'
-                                ? 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)'
-                                : 'linear-gradient(135deg, #f44336 0%, #e57373 100%)',
-                              border: '2px solid white',
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                              background: theme.palette.mode === 'dark'
+                                ? (getStatusColor(player.status) === 'success' 
+                                    ? theme.palette.success.main 
+                                    : getStatusColor(player.status) === 'warning' 
+                                      ? theme.palette.warning.main 
+                                      : theme.palette.error.main)
+                                : (getStatusColor(player.status) === 'success' 
+                                    ? 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)'
+                                    : getStatusColor(player.status) === 'warning'
+                                      ? 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)'
+                                      : 'linear-gradient(135deg, #f44336 0%, #e57373 100%)'),
+                               border: '2px solid white',
+                               boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                             }}
                           />
                         }
                       >
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             width: 48,
                             height: 48,
                           }}
@@ -543,12 +545,7 @@ const PlayerList = () => {
                           sx={{ 
                             mb: 0.5, 
                             fontWeight: 700,
-                            background: isDarkMode 
-                              ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                              : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                            backgroundClip: 'text',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
+                            color: 'text.primary',
                           }}
                         >
                           {player.name}
@@ -658,8 +655,8 @@ const PlayerList = () => {
                           sx={{
                             transition: 'all 0.3s ease',
                             '&:hover': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              color: 'white',
+                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.12)' : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              color: theme.palette.mode === 'dark' ? 'primary.main' : 'white',
                               transform: 'scale(1.1)',
                             }
                           }}
@@ -680,7 +677,7 @@ const PlayerList = () => {
                 textAlign="center" 
                 py={8}
                 sx={{
-                  background: isDarkMode
+                  background: theme.palette.mode === 'dark'
                     ? 'radial-gradient(circle, rgba(255, 119, 48, 0.05) 0%, transparent 70%)'
                     : 'radial-gradient(circle, rgba(255, 119, 48, 0.02) 0%, transparent 70%)',
                   borderRadius: '16px',
@@ -692,7 +689,8 @@ const PlayerList = () => {
                     height: 80,
                     mx: 'auto',
                     mb: 3,
-                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                     fontSize: '2rem',
                   }}
                 >
@@ -717,7 +715,7 @@ const PlayerList = () => {
                   startIcon={<AddIcon />}
                   onClick={() => navigate('/players/new')}
                   sx={{
-                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                     borderRadius: '12px',
                     px: 4,
                     py: 1.5,
@@ -726,7 +724,7 @@ const PlayerList = () => {
                     boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
                     transition: 'all 0.3s ease',
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
                       transform: 'translateY(-2px)',
                       boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
                     }
@@ -757,8 +755,8 @@ const PlayerList = () => {
                     transform: 'translateY(-1px)',
                   },
                   '&.Mui-selected': {
-                    background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                    color: 'white',
+                    background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                    color: theme.palette.mode === 'dark' ? '#000' : 'white',
                   }
                 }
               }}
@@ -776,11 +774,11 @@ const PlayerList = () => {
             position: 'fixed',
             bottom: 24,
             right: 24,
-            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
             boxShadow: '0 8px 32px rgba(255, 119, 48, 0.3)',
             transition: 'all 0.3s ease',
             '&:hover': {
-              background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
               transform: 'scale(1.1)',
               boxShadow: '0 12px 40px rgba(255, 119, 48, 0.4)',
             }
@@ -799,11 +797,10 @@ const PlayerList = () => {
           sx: {
             borderRadius: '12px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
+            background: theme.palette.mode === 'dark' 
               ? 'rgba(30, 30, 30, 0.9)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
           }
         }}
       >
@@ -904,10 +901,10 @@ const PlayerList = () => {
           sx: {
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
+            background: theme.palette.mode === 'dark' 
               ? 'rgba(30, 30, 30, 0.9)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
           }
         }}
       >

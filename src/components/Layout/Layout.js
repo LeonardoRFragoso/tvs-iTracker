@@ -128,32 +128,16 @@ const Layout = () => {
       badge: null,
       description: 'Programação de conteúdo'
     },
-    { 
-      text: 'Configurações', 
-      icon: <Settings />, 
-      path: '/settings',
-      badge: null,
-      description: 'Configurações do sistema'
-    },
-    { 
-      text: 'Monitor de Tráfego', 
-      icon: <TrendingUp />, 
-      path: '/admin/traffic-monitor',
-      badge: null,
-      description: 'Estatísticas de rede por player'
-    },
   ];
 
   const computedMenuItems = useMemo(() => {
     let items = [...menuItems];
     const isAdmin = user?.role === 'admin';
 
-    // Ocultar Monitor de Tráfego para não-admin
-    if (!isAdmin) {
-      items = items.filter(i => i.path !== '/admin/traffic-monitor');
-    }
+    // Remover Monitor de Tráfego e Configurações temporariamente
+    items = items.filter(i => i.path !== '/admin/traffic-monitor' && i.path !== '/settings');
 
-    // Inserir item de aprovações para admin, preferencialmente antes do Monitor de Tráfego
+    // Adicionar item de aprovações para admin
     if (isAdmin) {
       const adminItem = {
         text: 'Solicitações de Acesso',
@@ -162,10 +146,28 @@ const Layout = () => {
         badge: null,
         description: 'Aprovar/Rejeitar novos usuários',
       };
-      const monitorIdx = items.findIndex(i => i.path === '/admin/traffic-monitor');
-      const insertIdx = monitorIdx >= 0 ? monitorIdx : items.length;
-      items.splice(insertIdx, 0, adminItem);
+      items.push(adminItem);
+
+      // Adicionar Monitor de Tráfego para admin
+      const monitorItem = {
+        text: 'Monitor de Tráfego',
+        icon: <TrendingUp />,
+        path: '/admin/traffic-monitor',
+        badge: null,
+        description: 'Estatísticas de rede por player'
+      };
+      items.push(monitorItem);
     }
+
+    // Sempre adicionar Configurações como último item
+    const configItem = {
+      text: 'Configurações',
+      icon: <Settings />,
+      path: '/settings',
+      badge: null,
+      description: 'Configurações do sistema'
+    };
+    items.push(configItem);
 
     return items;
   }, [menuItems, user]);
@@ -192,53 +194,28 @@ const Layout = () => {
     <Box
       sx={{
         height: '100%',
-        background: isDarkMode 
-          ? 'linear-gradient(180deg, #000000 0%, #1a1a1a 100%)'
-          : 'linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%)',
+        background: isDarkMode ? '#151515' : '#ffffff',
         position: 'relative',
         overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
         '&::before': {
           content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: isDarkMode 
-            ? 'radial-gradient(circle at top left, rgba(255, 152, 0, 0.1) 0%, transparent 50%)'
-            : 'radial-gradient(circle at top left, rgba(25, 118, 210, 0.05) 0%, transparent 50%)',
+          background: 'transparent',
           pointerEvents: 'none',
         },
       }}
     >
       <Toolbar
         sx={{
-          background: isDarkMode 
-            ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-            : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          background: isDarkMode ? '#121212' : '#1976d2',
           color: 'white',
           position: 'relative',
           overflow: 'hidden',
+          flexShrink: 0,
           '&::after': {
             content: '""',
-            position: 'absolute',
-            top: -50,
-            right: -50,
-            width: 100,
-            height: 100,
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '50%',
-            animation: 'pulse 4s ease-in-out infinite',
-          },
-          '@keyframes pulse': {
-            '0%, 100%': {
-              transform: 'scale(1)',
-              opacity: 0.7,
-            },
-            '50%': {
-              transform: 'scale(1.2)',
-              opacity: 0.3,
-            },
+            display: 'none',
           },
         }}
       >
@@ -264,7 +241,7 @@ const Layout = () => {
         </Box>
       </Toolbar>
 
-      <Box sx={{ p: 2, position: 'relative', zIndex: 1 }}>
+      <Box sx={{ p: 2, position: 'relative', zIndex: 1, flexShrink: 0 }}>
         <Chip
           label={`Bem-vindo, ${user?.username || 'Usuário'}`}
           avatar={<Avatar sx={{ bgcolor: 'primary.main' }}><AccountCircle /></Avatar>}
@@ -282,136 +259,180 @@ const Layout = () => {
         />
       </Box>
 
-      <Divider sx={{ mx: 2, opacity: 0.3 }} />
+      <Divider sx={{ mx: 2, opacity: 0.3, flexShrink: 0 }} />
 
-      <List sx={{ px: 1, pt: 2, pb: 8 }}>
-        {computedMenuItems.map((item, index) => {
-          const isActive = location.pathname === item.path || 
-                          (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
-          
-          return (
-            <Fade in={true} timeout={300 + index * 100} key={item.text}>
-              <ListItem disablePadding sx={{ mb: 0.5 }}>
-                <ListItemButton
-                  selected={isActive}
-                  onClick={() => navigate(item.path)}
-                  sx={{
-                    borderRadius: 2,
-                    mx: 1,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    minHeight: 48,
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: isActive 
-                        ? (isDarkMode 
-                          ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.2) 0%, rgba(245, 124, 0, 0.1) 100%)'
-                          : 'linear-gradient(135deg, rgba(25, 118, 210, 0.15) 0%, rgba(21, 101, 192, 0.1) 100%)')
-                        : 'transparent',
-                      transition: 'all 0.3s ease',
-                    },
-                    '&:hover': {
-                      transform: 'translateX(4px)',
-                      bgcolor: 'transparent',
-                      '&::before': {
-                        background: isDarkMode 
-                          ? 'linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(245, 124, 0, 0.05) 100%)'
-                          : 'linear-gradient(135deg, rgba(25, 118, 210, 0.1) 0%, rgba(21, 101, 192, 0.05) 100%)',
-                      },
-                    },
-                    '&.Mui-selected': {
-                      bgcolor: 'transparent',
-                      '&::after': {
-                        content: '""',
-                        position: 'absolute',
-                        left: 0,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        width: 4,
-                        height: '60%',
-                        background: isDarkMode 
-                          ? 'linear-gradient(180deg, #ff9800 0%, #f57c00 100%)'
-                          : 'linear-gradient(180deg, #1976d2 0%, #1565c0 100%)',
-                        borderRadius: '0 2px 2px 0',
-                      },
-                      '&:hover': {
-                        bgcolor: 'transparent',
-                      },
-                    },
-                  }}
-                >
-                  <ListItemIcon
-                    sx={{
-                      position: 'relative',
-                      zIndex: 1,
-                      color: isActive 
-                        ? (isDarkMode ? '#ff9800' : '#1976d2')
-                        : 'inherit',
-                      transition: 'all 0.3s ease',
-                      transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                      minWidth: 40,
-                    }}
+      <Box 
+        sx={{ 
+          flex: 1, 
+          overflow: 'auto',
+          '&::-webkit-scrollbar': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: isDarkMode ? 'rgba(255, 152, 0, 0.3)' : 'rgba(25, 118, 210, 0.3)',
+            borderRadius: '3px',
+            '&:hover': {
+              background: isDarkMode ? 'rgba(255, 152, 0, 0.5)' : 'rgba(25, 118, 210, 0.5)',
+            },
+          },
+        }}
+      >
+        <List sx={{ px: 1, pt: 2, pb: 4 }}>
+          {computedMenuItems.map((item, index) => {
+            const isActive = location.pathname === item.path || 
+                            (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+            
+            // Adicionar separador antes dos itens administrativos
+            const isAdminItem = item.path.startsWith('/admin') || item.path === '/settings';
+            const prevItem = computedMenuItems[index - 1];
+            const showDivider = isAdminItem && prevItem && !prevItem.path.startsWith('/admin') && prevItem.path !== '/settings';
+            
+            return (
+              <React.Fragment key={item.text}>
+                {showDivider && (
+                  <Divider 
+                    sx={{ 
+                      mx: 2, 
+                      my: 2, 
+                      opacity: 0.3,
+                      '&::before, &::after': {
+                        borderColor: isDarkMode ? 'rgba(255, 152, 0, 0.2)' : 'rgba(25, 118, 210, 0.2)',
+                      }
+                    }} 
                   >
-                    {item.icon}
-                  </ListItemIcon>
-                  <ListItemText
-                    sx={{ position: 'relative', zIndex: 1 }}
-                    primary={
-                      <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Typography
-                          variant="body2"
-                          fontWeight={isActive ? 'bold' : 'medium'}
-                          sx={{
-                            color: isActive 
-                              ? (isDarkMode ? '#ff9800' : '#1976d2')
-                              : 'inherit',
-                            transition: 'all 0.3s ease',
-                          }}
-                        >
-                          {item.text}
-                        </Typography>
-                        {item.badge && (
-                          <Badge
-                            badgeContent={item.badge}
-                            color="primary"
-                            sx={{
-                              '& .MuiBadge-badge': {
-                                fontSize: '0.7rem',
-                                minWidth: 18,
-                                height: 18,
-                                bgcolor: isDarkMode ? '#ff9800' : '#1976d2',
-                              },
-                            }}
-                          />
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      <Typography
-                        variant="caption"
+                    <Chip 
+                      label="Administração" 
+                      size="small" 
+                      sx={{ 
+                        fontSize: '0.7rem',
+                        height: 20,
+                        bgcolor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
+                        color: isDarkMode ? '#ff9800' : '#1976d2',
+                        border: `1px solid ${isDarkMode ? 'rgba(255, 152, 0, 0.3)' : 'rgba(25, 118, 210, 0.3)'}`,
+                      }} 
+                    />
+                  </Divider>
+                )}
+                
+                <Fade in={true} timeout={300 + index * 100}>
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      selected={isActive}
+                      onClick={() => navigate(item.path)}
+                      sx={{
+                        borderRadius: 2,
+                        mx: 1,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        minHeight: 48,
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          background: isActive
+                            ? (isDarkMode ? 'rgba(255, 152, 0, 0.12)' : 'rgba(25, 118, 210, 0.12)')
+                            : 'transparent',
+                          transition: 'all 0.3s ease',
+                        },
+                        '&:hover': {
+                          transform: 'translateX(4px)',
+                          bgcolor: isDarkMode ? '#1e1e1e' : 'rgba(0,0,0,0.03)',
+                          '&::before': {
+                            background: isDarkMode ? 'rgba(255, 152, 0, 0.08)' : 'rgba(25,118,210,0.08)',
+                          },
+                        },
+                        '&.Mui-selected': {
+                          bgcolor: isDarkMode ? '#232323' : 'rgba(0,0,0,0.04)',
+                          '&::after': {
+                            content: '""',
+                            position: 'absolute',
+                            left: 0,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: 4,
+                            height: '60%',
+                            background: isDarkMode ? '#ff9800' : '#1976d2',
+                            borderRadius: '0 2px 2px 0',
+                          },
+                          '&:hover': {
+                            bgcolor: isDarkMode ? '#262626' : 'rgba(0,0,0,0.06)',
+                          },
+                        },
+                      }}
+                    >
+                      <ListItemIcon
                         sx={{
-                          color: 'text.secondary',
-                          opacity: isActive ? 1 : 0.7,
-                          transition: 'opacity 0.3s ease',
-                          fontSize: '0.75rem',
+                          position: 'relative',
+                          zIndex: 1,
+                          color: isActive ? (isDarkMode ? '#ff9800' : '#1976d2') : 'inherit',
+                          transition: 'all 0.3s ease',
+                          transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                          minWidth: 40,
                         }}
                       >
-                        {item.description}
-                      </Typography>
-                    }
-                  />
-                </ListItemButton>
-              </ListItem>
-            </Fade>
-          );
-        })}
-      </List>
+                        {item.icon}
+                      </ListItemIcon>
+                      <ListItemText
+                        sx={{ position: 'relative', zIndex: 1 }}
+                        primary={
+                          <Box display="flex" alignItems="center" justifyContent="space-between">
+                            <Typography
+                              variant="body2"
+                              fontWeight={isActive ? 'bold' : 'medium'}
+                              sx={{
+                                color: isActive
+                                  ? (isDarkMode ? '#ff9800' : '#1976d2')
+                                  : 'inherit',
+                                transition: 'all 0.3s ease',
+                              }}
+                            >
+                              {item.text}
+                            </Typography>
+                            {item.badge && (
+                              <Badge
+                                badgeContent={item.badge}
+                                color="primary"
+                                sx={{
+                                  '& .MuiBadge-badge': {
+                                    fontSize: '0.7rem',
+                                    minWidth: 18,
+                                    height: 18,
+                                    bgcolor: isDarkMode ? '#ff9800' : '#1976d2',
+                                  },
+                                }}
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              color: 'text.secondary',
+                              opacity: isActive ? 1 : 0.7,
+                              transition: 'opacity 0.3s ease',
+                              fontSize: '0.75rem',
+                            }}
+                          >
+                            {item.description}
+                          </Typography>
+                        }
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                </Fade>
+              </React.Fragment>
+            );
+          })}
+        </List>
+      </Box>
     </Box>
   );
 
@@ -423,38 +444,15 @@ const Layout = () => {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
-          background: isDarkMode 
-            ? 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(26, 26, 26, 0.95) 70%, rgba(255, 119, 48, 0.15) 100%)'
-            : 'linear-gradient(135deg, rgba(25, 118, 210, 0.95) 0%, rgba(21, 101, 192, 0.95) 70%, rgba(255, 152, 0, 0.15) 100%)',
+          background: isDarkMode ? '#121212' : '#1976d2',
           backdropFilter: 'blur(20px)',
-          borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 119, 48, 0.3)' : 'rgba(255, 255, 255, 0.3)'}`,
-          boxShadow: isDarkMode 
-            ? '0 4px 20px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(255, 119, 48, 0.2)' 
-            : '0 4px 20px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(255, 152, 0, 0.2)',
+          borderBottom: `1px solid ${isDarkMode ? '#2a2a2a' : 'rgba(255,255,255,0.3)'}`,
+          boxShadow: 'none',
           '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: isDarkMode
-              ? 'radial-gradient(ellipse at 30% 0%, rgba(255, 119, 48, 0.08) 0%, transparent 70%)'
-              : 'radial-gradient(ellipse at 30% 0%, rgba(255, 152, 0, 0.08) 0%, transparent 70%)',
-            pointerEvents: 'none',
-            zIndex: -1,
+            display: 'none',
           },
           '&::after': {
-            content: '""',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '1px',
-            background: isDarkMode
-              ? 'linear-gradient(90deg, transparent 0%, rgba(255, 119, 48, 0.5) 50%, transparent 100%)'
-              : 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
-            zIndex: 1,
+            display: 'none',
           }
         }}
       >
@@ -521,9 +519,7 @@ const Layout = () => {
               onClose={handleClose}
               sx={{
                 '& .MuiPaper-root': {
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                    : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                  background: isDarkMode ? '#1a1a1a' : '#ffffff',
                   backdropFilter: 'blur(10px)',
                   border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
                 },

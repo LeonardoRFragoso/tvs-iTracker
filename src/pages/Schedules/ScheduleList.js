@@ -48,8 +48,9 @@ import {
   ContentCopy as DuplicateIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
+import { useTheme } from '../../contexts/ThemeContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 // BR datetime helpers for display and comparisons
 const parseDateTimeFlexible = (value) => {
@@ -79,7 +80,6 @@ const parseDateTimeFlexible = (value) => {
 
 const ScheduleList = () => {
   const navigate = useNavigate();
-  const { isDarkMode } = useTheme();
   
   const [schedules, setSchedules] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -301,60 +301,36 @@ const ScheduleList = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Grow in={true} timeout={1000}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Box display="flex" alignItems="center">
-            <Avatar
-              sx={{
-                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                mr: 2,
-                width: 48,
-                height: 48,
-              }}
-            >
-              <ScheduleIcon />
-            </Avatar>
-            <Typography 
-              variant="h4" 
-              component="h1"
-              sx={{
-                fontWeight: 700,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                  : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Agendamentos
-            </Typography>
-          </Box>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Agendamentos"
+        subtitle="Gerencie os horários de exibição de conteúdo"
+        actions={
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate('/schedules/new')}
             sx={{
-              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-              borderRadius: '12px',
+              borderRadius: 2,
               px: 3,
               py: 1.5,
-              textTransform: 'none',
-              fontWeight: 600,
-              boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
-              transition: 'all 0.3s ease',
+              background: (theme) => theme.palette.mode === 'dark' 
+                ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
               '&:hover': {
-                background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
+                  : 'linear-gradient(45deg, #21CBF3, #2196F3)',
                 transform: 'translateY(-2px)',
-                boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
-              }
+                boxShadow: '0 8px 15px rgba(0,0,0,0.1)',
+              },
+              transition: 'all 0.3s ease',
             }}
           >
             Novo Agendamento
           </Button>
-        </Box>
-      </Grow>
+        }
+      />
 
       {/* Alerts */}
       {error && (
@@ -365,7 +341,7 @@ const ScheduleList = () => {
               mb: 2,
               borderRadius: '12px',
               backdropFilter: 'blur(10px)',
-              background: isDarkMode 
+              background: useTheme().isDarkMode 
                 ? 'rgba(244, 67, 54, 0.1)' 
                 : 'rgba(244, 67, 54, 0.05)',
             }} 
@@ -383,7 +359,7 @@ const ScheduleList = () => {
               mb: 2,
               borderRadius: '12px',
               backdropFilter: 'blur(10px)',
-              background: isDarkMode 
+              background: useTheme().isDarkMode 
                 ? 'rgba(76, 175, 80, 0.1)' 
                 : 'rgba(76, 175, 80, 0.05)',
             }} 
@@ -401,11 +377,11 @@ const ScheduleList = () => {
             mb: 3,
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
+            background: useTheme().isDarkMode 
               ? 'rgba(255, 255, 255, 0.05)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-            boxShadow: isDarkMode 
+            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: useTheme().isDarkMode 
               ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
               : '0 8px 32px rgba(0, 0, 0, 0.1)',
           }}
@@ -516,11 +492,11 @@ const ScheduleList = () => {
           sx={{
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
+            background: useTheme().isDarkMode 
               ? 'rgba(255, 255, 255, 0.05)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-            boxShadow: isDarkMode 
+            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: useTheme().isDarkMode 
               ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
               : '0 8px 32px rgba(0, 0, 0, 0.1)',
             overflow: 'hidden',
@@ -538,7 +514,7 @@ const ScheduleList = () => {
                 <TableHead>
                   <TableRow
                     sx={{
-                      background: isDarkMode
+                      background: useTheme().isDarkMode
                         ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%)'
                         : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.05) 100%)',
                     }}
@@ -566,7 +542,7 @@ const ScheduleList = () => {
                           sx={{
                             transition: 'all 0.3s ease',
                             '&:hover': {
-                              background: isDarkMode
+                              background: useTheme().isDarkMode
                                 ? 'rgba(255, 119, 48, 0.05)'
                                 : 'rgba(255, 119, 48, 0.02)',
                               transform: 'scale(1.01)',
@@ -689,7 +665,7 @@ const ScheduleList = () => {
                   textAlign="center" 
                   py={8}
                   sx={{
-                    background: isDarkMode
+                    background: useTheme().isDarkMode
                       ? 'radial-gradient(circle, rgba(255, 119, 48, 0.05) 0%, transparent 70%)'
                       : 'radial-gradient(circle, rgba(255, 119, 48, 0.02) 0%, transparent 70%)',
                   }}
@@ -785,10 +761,10 @@ const ScheduleList = () => {
           sx: {
             borderRadius: '12px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
+            background: useTheme().isDarkMode 
               ? 'rgba(30, 30, 30, 0.9)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
           }
         }}
@@ -880,10 +856,10 @@ const ScheduleList = () => {
           sx: {
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: isDarkMode 
+            background: useTheme().isDarkMode 
               ? 'rgba(30, 30, 30, 0.9)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
           }
         }}
       >

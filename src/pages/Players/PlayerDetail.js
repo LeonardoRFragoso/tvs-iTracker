@@ -46,6 +46,7 @@ import {
 import axios from '../../config/axios';
 import { useSocket } from '../../contexts/SocketContext';
 import CastManager from '../../components/Cast/CastManager';
+import PageTitle from '../../components/Common/PageTitle';
 
 const PlayerDetail = () => {
   const { id } = useParams();
@@ -151,80 +152,67 @@ const PlayerDetail = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box display="flex" alignItems="center" gap={2}>
-          <IconButton onClick={() => navigate('/players')}>
-            <BackIcon />
-          </IconButton>
-          <Avatar sx={{ bgcolor: 'primary.main' }}>
-            <ComputerIcon />
-          </Avatar>
-          <Box>
-            <Typography variant="h4" component="h1">
-              {player.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {player.location_name} - {player.room_name}
-            </Typography>
-          </Box>
-        </Box>
-        
-        <Box display="flex" gap={1}>
-          <Chip 
-            label={player.status} 
-            color={getStatusColor(player.status)}
-            size="small"
-          />
-          {player.access_code && (
-            <Chip label={`Código: ${player.access_code}`} size="small" />
-          )}
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<OpenInNewIcon />}
-            onClick={() => window.open(`${window.location.origin}/kiosk/player/${id}?fullscreen=true`, '_blank')}
-          >
-            Abrir Player
-          </Button>
-          {player.access_code && (
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title={player.name}
+        subtitle={`${player.location_name} - ${player.room_name || 'Sem ambiente'}`}
+        backTo="/players"
+        actions={
+          <>
+            <Chip 
+              label={player.status} 
+              color={getStatusColor(player.status)}
+              size="small"
+            />
+            {player.access_code && (
+              <Chip label={`Código: ${player.access_code}`} size="small" />
+            )}
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<OpenInNewIcon />}
+              onClick={() => window.open(`${window.location.origin}/kiosk/player/${id}?fullscreen=true`, '_blank')}
+            >
+              Abrir Player
+            </Button>
+            {player.access_code && (
+              <Button
+                variant="outlined"
+                onClick={() => window.open(`${window.location.origin}/k/${player.access_code}`, '_blank')}
+              >
+                Abrir Link Curto
+              </Button>
+            )}
             <Button
               variant="outlined"
-              onClick={() => window.open(`${window.location.origin}/k/${player.access_code}`, '_blank')}
+              startIcon={<RefreshIcon />}
+              onClick={loadPlayer}
             >
-              Abrir Link Curto
+              Atualizar
             </Button>
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={loadPlayer}
-          >
-            Atualizar
-          </Button>
-          <IconButton
-            color="primary"
-            onClick={() => navigate(`/players/${id}/edit`)}
-            sx={{ mr: 1 }}
-          >
-            <EditIcon />
-          </IconButton>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={() => setDeleteDialog(true)}
-          >
-            Excluir
-          </Button>
-          <Button
-            variant="text"
-            onClick={regenerateCode}
-          >
-            Regenerar Código
-          </Button>
-        </Box>
-      </Box>
+            <IconButton
+              color="primary"
+              onClick={() => navigate(`/players/${id}/edit`)}
+            >
+              <EditIcon />
+            </IconButton>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={() => setDeleteDialog(true)}
+            >
+              Excluir
+            </Button>
+            <Button
+              variant="text"
+              onClick={regenerateCode}
+            >
+              Regenerar Código
+            </Button>
+          </>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

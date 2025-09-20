@@ -788,7 +788,7 @@ const CampaignForm = () => {
       <Box
         sx={{
           background: (theme) => theme.palette.mode === 'dark' 
-            ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
+            ? theme.palette.background.default
             : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
           minHeight: '100vh',
           p: 3,
@@ -801,13 +801,14 @@ const CampaignForm = () => {
               onClick={() => navigate('/campaigns')} 
               sx={{ 
                 mr: 2,
-                background: (theme) => theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                color: 'white',
+                color: 'primary.main',
+                border: '1px solid',
+                borderColor: 'primary.main',
+                backgroundColor: 'transparent',
                 '&:hover': {
                   transform: 'scale(1.1)',
                   transition: 'transform 0.2s ease-in-out',
+                  backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,152,0,0.12)' : 'rgba(25,118,210,0.1)',
                 },
               }}
             >
@@ -819,12 +820,7 @@ const CampaignForm = () => {
                 component="h1" 
                 sx={{ 
                   fontWeight: 'bold',
-                  background: (theme) => theme.palette.mode === 'dark'
-                    ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                    : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
+                  color: 'text.primary',
                 }}
               >
                 {isEdit ? 'Editar Campanha' : 'Nova Campanha'}
@@ -871,9 +867,7 @@ const CampaignForm = () => {
                     elevation={0}
                     sx={{
                       borderRadius: 3,
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                        : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                      backgroundColor: (theme) => theme.palette.background.paper,
                       backdropFilter: 'blur(10px)',
                       border: (theme) => `1px solid ${theme.palette.divider}`,
                       overflow: 'hidden',
@@ -885,9 +879,7 @@ const CampaignForm = () => {
                         left: 0,
                         right: 0,
                         height: '4px',
-                        background: (theme) => theme.palette.mode === 'dark'
-                          ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                          : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                        background: (theme) => theme.palette.primary.main,
                       },
                     }}
                   >
@@ -895,9 +887,8 @@ const CampaignForm = () => {
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: (theme) => theme.palette.mode === 'dark'
-                              ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                              : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                            bgcolor: 'primary.main',
+                            color: '#000',
                             mr: 2,
                           }}
                         >
@@ -931,23 +922,28 @@ const CampaignForm = () => {
                         </Grid>
 
                         <Grid item xs={12}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.is_active}
+                                onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                                disabled={loading}
+                              />
+                            }
+                            label="Campanha Ativa"
+                          />
+                        </Grid>
+
+                        <Grid item xs={12}>
                           <TextField
                             fullWidth
+                            multiline
+                            rows={3}
                             label="Descrição"
                             name="description"
                             value={formData.description}
                             onChange={handleInputChange}
-                            multiline
-                            rows={3}
-                            sx={{
-                              '& .MuiOutlinedInput-root': {
-                                borderRadius: 2,
-                                '&:hover': {
-                                  transform: 'translateY(-2px)',
-                                  transition: 'transform 0.2s ease-in-out',
-                                },
-                              },
-                            }}
+                            disabled={loading}
                           />
                         </Grid>
 
@@ -1030,9 +1026,7 @@ const CampaignForm = () => {
                     elevation={0}
                     sx={{
                       borderRadius: 3,
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                        : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                      backgroundColor: (theme) => theme.palette.background.paper,
                       backdropFilter: 'blur(10px)',
                       border: (theme) => `1px solid ${theme.palette.divider}`,
                       overflow: 'hidden',
@@ -1044,9 +1038,7 @@ const CampaignForm = () => {
                         left: 0,
                         right: 0,
                         height: '4px',
-                        background: (theme) => theme.palette.mode === 'dark'
-                          ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                          : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                        background: (theme) => theme.palette.primary.main,
                       },
                     }}
                   >
@@ -1055,9 +1047,8 @@ const CampaignForm = () => {
                         <Box display="flex" alignItems="center">
                           <Avatar
                             sx={{
-                              background: (theme) => theme.palette.mode === 'dark'
-                                ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                              bgcolor: 'primary.main',
+                              color: '#000',
                               mr: 2,
                             }}
                           >
@@ -1080,9 +1071,9 @@ const CampaignForm = () => {
                           sx={{
                             borderRadius: 2,
                             background: (theme) => theme.palette.mode === 'dark'
-                              ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                              ? theme.palette.primary.main
                               : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                            color: 'white',
+                            color: (theme) => theme.palette.mode === 'dark' ? '#000' : 'white',
                             '&:hover': {
                               transform: 'scale(1.03)',
                             },
@@ -1098,7 +1089,7 @@ const CampaignForm = () => {
                             label={`Duração total: ${formatDuration(getTotalDuration())}`}
                             sx={{
                               background: (theme) => theme.palette.mode === 'dark'
-                                ? 'linear-gradient(45deg, rgba(255, 119, 48, 0.2), rgba(255, 152, 0, 0.2))'
+                                ? 'rgba(255, 152, 0, 0.12)'
                                 : 'linear-gradient(45deg, rgba(255, 119, 48, 0.05), rgba(255, 152, 0, 0.02))',
                               color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : '#2196F3',
                               fontWeight: 'bold',
@@ -1146,8 +1137,9 @@ const CampaignForm = () => {
                               width: 56,
                               height: 56,
                               background: (theme) => theme.palette.mode === 'dark'
-                                ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                                ? theme.palette.primary.main
                                 : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                              color: (theme) => theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             }}
                           >
                             <ContentIcon />
@@ -1195,7 +1187,7 @@ const CampaignForm = () => {
                         px: 4,
                         py: 1.5,
                         background: (theme) => theme.palette.mode === 'dark'
-                          ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                          ? theme.palette.primary.main
                           : 'linear-gradient(45deg, #2196F3, #21CBF3)',
                         '&:hover': {
                           transform: 'translateY(-2px)',
@@ -1238,8 +1230,8 @@ const CampaignForm = () => {
           }}
         >
           <DialogTitle sx={{ 
-            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-            color: 'white',
+            background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+            color: (theme) => theme.palette.mode === 'dark' ? theme.palette.text.primary : 'white',
             fontWeight: 700,
             fontSize: '1.5rem',
             py: 2,
@@ -1251,9 +1243,10 @@ const CampaignForm = () => {
             flexShrink: 0,
           }}>
             <Avatar sx={{ 
-              background: 'rgba(255, 255, 255, 0.2)',
+              background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
               width: 40,
               height: 40,
+              color: (theme) => theme.palette.mode === 'dark' ? '#000' : 'inherit',
             }}>
               <ContentIcon sx={{ fontSize: 24 }} />
             </Avatar>
@@ -1279,7 +1272,7 @@ const CampaignForm = () => {
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 py: 8, px: 4, textAlign: 'center'
               }}>
-                <Avatar sx={{ width: 80, height: 80, mb: 3, background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', opacity: 0.7 }}>
+                <Avatar sx={{ width: 80, height: 80, mb: 3, background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', opacity: 0.7, color: (theme) => theme.palette.mode === 'dark' ? '#000' : 'inherit' }}>
                   <ContentIcon sx={{ fontSize: 40 }} />
                 </Avatar>
                 <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
@@ -1359,8 +1352,8 @@ const CampaignForm = () => {
                                       border: selectedContents.includes(content.id) ? '2px solid #ff7730' : '2px solid transparent',
                                       background: (theme) => selectedContents.includes(content.id)
                                         ? (theme.palette.mode === 'dark' 
-                                          ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                                          : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.02) 100%)')
+                                          ? 'rgba(255, 152, 0, 0.08)'
+                                          : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05), rgba(255, 152, 0, 0.02) 100%)')
                                         : (theme.palette.mode === 'dark' 
                                           ? 'rgba(40, 40, 40, 0.8)'
                                           : 'rgba(255, 255, 255, 0.8)'),
@@ -1397,7 +1390,7 @@ const CampaignForm = () => {
                                           </Tooltip>
                                         ) : (
                                           <Tooltip title={renderContentTooltip(content)} arrow placement="top">
-                                            <Avatar sx={{ width: 96, height: 96, background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)' }}>
+                                            <Avatar sx={{ width: 96, height: 96, background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)' }}>
                                               <ContentIcon sx={{ fontSize: 40 }} />
                                             </Avatar>
                                           </Tooltip>
@@ -1407,8 +1400,8 @@ const CampaignForm = () => {
                                             {content.title}
                                           </Typography>
                                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                                            <Chip label={formatDuration(content.duration || 0)} size="small" sx={{ background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', color: 'white', fontWeight: 600, fontSize: '0.75rem' }} />
-                                            <Chip label={getTypeFor(content)} size="small" variant="outlined" sx={{ borderColor: '#ff7730', color: '#ff7730', fontWeight: 600, fontSize: '0.75rem' }} />
+                                            <Chip label={formatDuration(content.duration || 0)} size="small" sx={{ background: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.12)' : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05), rgba(255, 152, 0, 0.02) 100%)', color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : 'white', fontWeight: 600, fontSize: '0.75rem' }} />
+                                            <Chip label={getTypeFor(content)} size="small" variant="outlined" sx={{ borderColor: (theme) => theme.palette.mode === 'dark' ? '#ff7730' : 'rgba(0, 0, 0, 0.23)', color: (theme) => theme.palette.mode === 'dark' ? '#ff7730' : 'rgba(0, 0, 0, 0.54)', fontWeight: 600, fontSize: '0.75rem' }} />
                                             <Chip label={content.category || 'Sem categoria'} size="small" sx={{ backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)', fontSize: '0.75rem' }} />
                                           </Box>
                                           {content.description && (
@@ -1749,10 +1742,10 @@ const CampaignForm = () => {
                   py: 1.5,
                   fontWeight: 600,
                   textTransform: 'none',
-                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                  background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                   boxShadow: '0 4px 12px rgba(255, 119, 48, 0.3)',
                   '&:hover': {
-                    background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                    background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
                     transform: 'translateY(-2px)',
                     boxShadow: '0 8px 20px rgba(255, 119, 48, 0.4)',
                   },
@@ -1932,7 +1925,7 @@ const CampaignForm = () => {
                       px: 4,
                       py: 1.5,
                       background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(45deg, #ff7730, #ff9800)'
+                        ? theme.palette.primary.main
                         : 'linear-gradient(45deg, #2196F3, #21CBF3)',
                       '&:hover': {
                         transform: 'translateY(-2px)',

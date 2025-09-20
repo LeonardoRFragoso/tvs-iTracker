@@ -36,6 +36,7 @@ import {
 import { useLocation } from 'react-router-dom';
 import axios from '../../config/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 const AdminUsers = () => {
   const {
@@ -259,16 +260,36 @@ const AdminUsers = () => {
   }
 
   return (
-    <Container component="main" maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Header com padrão visual */}
-      <Box display="flex" alignItems="center" gap={2} mb={3}>
-        <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
-          <AdminIcon />
-        </Avatar>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-          Administração de Usuários
-        </Typography>
-      </Box>
+    <Box sx={{ mt: 4, mb: 4 }}>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Administração de Usuários"
+        subtitle="Gerencie solicitações de acesso e usuários do sistema"
+        actions={
+          <Button
+            variant="contained"
+            onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'hr', company: companies[0] || 'iTracker', password: '' })}
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              background: (theme) => theme.palette.mode === 'dark' 
+                ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+              '&:hover': {
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
+                  : 'linear-gradient(45deg, #21CBF3, #2196F3)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 8px 15px rgba(0,0,0,0.1)',
+              },
+              transition: 'all 0.3s ease',
+            }}
+          >
+            Novo Usuário
+          </Button>
+        }
+      />
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3 }}>
         <Tab value="pending" label={`Pendentes ${loadingPending ? '' : `(${filteredPending.length})`}`} />
@@ -374,7 +395,7 @@ const AdminUsers = () => {
             </TextField>
             <Button variant="outlined" onClick={fetchUsers} disabled={loadingUsers}>Atualizar</Button>
             <Box sx={{ flex: 1 }} />
-            <Button variant="contained" onClick={openCreate}>Novo Usuário</Button>
+            <Button variant="contained" onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'hr', company: companies[0] || 'iTracker', password: '' })}>Novo Usuário</Button>
           </Toolbar>
 
           <Paper>
@@ -549,7 +570,7 @@ const AdminUsers = () => {
             <Button onClick={handleCreate} variant="contained">Criar</Button>
           </DialogActions>
         </Dialog>
-      </Container>
+      </Box>
     );
   };
 

@@ -44,20 +44,27 @@ import {
   Info as InfoIcon,
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
+  TrendingDown as TrendingDownIcon,
   Storage as StorageIcon,
   CheckCircle as CheckCircleIcon,
   Timeline as TimelineIcon,
   Add as AddIcon,
+  Keyboard as KeyboardIcon,
+  FileDownload as ExportIcon,
   Upload as UploadIcon,
   PlayArrow as PlayIcon,
-  Settings as SettingsIcon,
-  TrendingDown as TrendingDownIcon,
-  Remove as RemoveIcon,
-  GetApp as ExportIcon,
-  Notifications as NotificationIcon,
+  Pause as PauseIcon,
+  LocationOn as LocationIcon,
+  Visibility as VisibilityIcon,
+  MoreVert as MoreVertIcon,
   Close as CloseIcon,
-  Keyboard as KeyboardIcon,
+  Remove,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import axios from '../config/axios';
+import PageTitle from '../components/Common/PageTitle';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -70,9 +77,6 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import axios from '../config/axios';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
 
 ChartJS.register(
   CategoryScale,
@@ -105,18 +109,10 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
   const { isDarkMode } = useTheme();
   
   const gradients = {
-    primary: isDarkMode 
-      ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-      : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-    success: isDarkMode
-      ? 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)'
-      : 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
-    warning: isDarkMode
-      ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-      : 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-    info: isDarkMode
-      ? 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)'
-      : 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
+    primary: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+    success: 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
+    warning: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+    info: 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
   };
 
   // Calculate trend direction
@@ -127,7 +123,8 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
     
     if (isPositive) return <TrendingUpIcon fontSize="small" />;
     if (isNegative) return <TrendingDownIcon fontSize="small" />;
-    return <RemoveIcon fontSize="small" />;
+    // Usar o ícone Remove importado
+    return <Remove fontSize="small" />;
   };
 
   const getTrendColor = () => {
@@ -145,17 +142,15 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
       <Card
         sx={{
           height: '100%',
-          background: gradients[color] || gradients.primary,
-          color: 'white',
+          background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : (gradients[color] || gradients.primary),
+          color: (theme) => theme.palette.mode === 'dark' ? theme.palette.text.primary : 'white',
           position: 'relative',
           overflow: 'hidden',
           cursor: 'pointer',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
             transform: 'translateY(-4px) scale(1.02)',
-            boxShadow: isDarkMode 
-              ? '0 12px 35px rgba(255, 152, 0, 0.4)'
-              : '0 12px 35px rgba(0, 0, 0, 0.25)',
+            boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(0, 0, 0, 0.25)',
           },
           '&::before': {
             content: '""',
@@ -163,13 +158,13 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
             top: 0,
             left: 0,
             right: 0,
-            bottom: 0,
-            background: 'rgba(255, 255, 255, 0.1)',
-            opacity: 0,
+            height: 4,
+            background: (theme) => theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+            opacity: (theme) => theme.palette.mode === 'dark' ? 0 : 0,
             transition: 'opacity 0.3s ease',
           },
           '&:hover::before': {
-            opacity: 1,
+            opacity: (theme) => theme.palette.mode === 'dark' ? 0 : 1,
           },
           '&::after': {
             content: '""',
@@ -178,13 +173,14 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
             right: -50,
             width: 100,
             height: 100,
-            background: 'rgba(255, 255, 255, 0.1)',
+            background: (theme) => theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
             borderRadius: '50%',
             transition: 'all 0.5s ease',
+            display: (theme) => theme.palette.mode === 'dark' ? 'none' : 'block',
           },
           '&:hover::after': {
-            transform: 'scale(1.5)',
-            opacity: 0,
+            transform: (theme) => theme.palette.mode === 'dark' ? 'none' : 'scale(1.5)',
+            opacity: (theme) => theme.palette.mode === 'dark' ? 1 : 0,
           },
         }}
       >
@@ -192,7 +188,7 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
             <Avatar
               sx={{
-                bgcolor: 'rgba(255, 255, 255, 0.2)',
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
                 width: 56,
                 height: 56,
                 transition: 'all 0.3s ease',
@@ -206,7 +202,7 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
                 alignItems="center" 
                 gap={0.5}
                 sx={{
-                  bgcolor: 'rgba(255, 255, 255, 0.2)',
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
                   borderRadius: 2,
                   px: 1,
                   py: 0.5,
@@ -227,9 +223,9 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
             fontWeight="bold" 
             mb={1}
             sx={{
-              textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              textShadow: (theme) => theme.palette.mode === 'dark' ? 'none' : '0 2px 4px rgba(0,0,0,0.3)',
               transition: 'all 0.3s ease',
-              color: isDarkMode ? '#ffffff' : 'inherit',
+              color: (theme) => theme.palette.mode === 'dark' ? theme.palette.text.primary : 'inherit',
             }}
           >
             {value}
@@ -482,7 +478,7 @@ const Dashboard = () => {
       legend: {
         position: 'top',
         labels: {
-          color: isDarkMode ? '#ff9800' : '#000000',
+          color: isDarkMode ? '#ffffff' : '#000000',
           usePointStyle: true,
           padding: 20,
           font: {
@@ -494,7 +490,7 @@ const Dashboard = () => {
       title: {
         display: true,
         text: 'Atividade dos Últimos 7 Dias',
-        color: isDarkMode ? '#ff9800' : '#000000',
+        color: isDarkMode ? '#ffffff' : '#000000',
         font: {
           size: 16,
           weight: 'bold',
@@ -503,7 +499,7 @@ const Dashboard = () => {
       },
       tooltip: {
         backgroundColor: isDarkMode ? '#1a1a1a' : '#ffffff',
-        titleColor: isDarkMode ? '#ff9800' : '#000000',
+        titleColor: isDarkMode ? '#ffffff' : '#000000',
         bodyColor: isDarkMode ? '#ffffff' : '#666666',
         borderColor: isDarkMode ? '#333333' : '#e0e0e0',
         borderWidth: 1,
@@ -587,31 +583,24 @@ const Dashboard = () => {
       <Box>
         <Fade in={true} timeout={800}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-            <Box>
-              <Skeleton variant="text" width={200} height={48} />
-              <Skeleton variant="text" width={300} height={24} />
+            <Box display="flex" alignItems="center">
+              <Skeleton variant="circular" width={48} height={48} sx={{ mr: 2 }} />
+              <Skeleton variant="text" width={200} height={40} />
             </Box>
-            <Skeleton variant="circular" width={56} height={56} />
+            <Box display="flex" gap={1}>
+              <Skeleton variant="circular" width={40} height={40} />
+              <Skeleton variant="circular" width={40} height={40} />
+              <Skeleton variant="circular" width={40} height={40} />
+              <Skeleton variant="circular" width={40} height={40} />
+            </Box>
           </Box>
         </Fade>
-
-        <Skeleton variant="rectangular" width="100%" height={120} sx={{ mb: 4, borderRadius: 3 }} />
-
-        <Grid container spacing={3} mb={4}>
-          {[0, 1, 2, 3].map((index) => (
+        <Grid container spacing={3}>
+          {Array.from({ length: 8 }, (_, index) => (
             <Grid item xs={12} sm={6} md={3} key={index}>
               <StatCardSkeleton delay={index} />
             </Grid>
           ))}
-        </Grid>
-
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
-            <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 3 }} />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 3 }} />
-          </Grid>
         </Grid>
       </Box>
     );
@@ -623,9 +612,9 @@ const Dashboard = () => {
         severity="error" 
         sx={{ borderRadius: 2 }}
         action={
-          <IconButton color="inherit" size="small" onClick={loadDashboardData}>
-            <RefreshIcon />
-          </IconButton>
+          <Button color="inherit" size="small" onClick={() => loadDashboardData()}>
+            Tentar novamente
+          </Button>
         }
       >
         {error}
@@ -635,189 +624,79 @@ const Dashboard = () => {
 
   return (
     <Box>
-      <Fade in={true} timeout={800}>
-        <Grow in={true} timeout={1000}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-            <Box display="flex" alignItems="center">
-              <Avatar
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Dashboard"
+        subtitle="Visão geral do sistema e estatísticas em tempo real"
+        actions={
+          <>
+            <Tooltip title="Atalhos do teclado (Ctrl+H)">
+              <IconButton 
+                onClick={() => setKeyboardShortcutsOpen(true)}
                 sx={{
-                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                  mr: 2,
-                  width: 48,
-                  height: 48,
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'info.main',
+                  color: (theme) => theme.palette.mode === 'dark' ? 'white' : 'white',
+                  '&:hover': {
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'info.dark',
+                  },
                 }}
               >
-                <TimelineIcon />
-              </Avatar>
-              <Typography 
-                variant="h4" 
-                component="h1"
+                <KeyboardIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Exportar dados">
+              <IconButton 
+                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
                 sx={{
-                  fontWeight: 700,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                    : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'secondary.main',
+                  color: (theme) => theme.palette.mode === 'dark' ? 'white' : 'white',
+                  '&:hover': {
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'secondary.dark',
+                  },
                 }}
               >
-                Dashboard
-              </Typography>
-            </Box>
-            <Box display="flex" gap={1}>
-              <Tooltip title="Atalhos do teclado (Ctrl+H)">
-                <IconButton 
-                  onClick={() => setKeyboardShortcutsOpen(true)}
-                  sx={{
-                    bgcolor: 'info.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'info.dark',
-                    },
-                  }}
-                >
-                  <KeyboardIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Exportar dados">
-                <IconButton 
-                  onClick={(e) => setExportMenuAnchor(e.currentTarget)}
-                  sx={{
-                    bgcolor: 'secondary.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'secondary.dark',
-                    },
-                  }}
-                >
-                  <ExportIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
-                <IconButton 
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  sx={{
-                    bgcolor: autoRefresh ? 'success.main' : 'action.disabled',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: autoRefresh ? 'success.dark' : 'action.hover',
-                    },
-                  }}
-                >
-                  <PlayIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Atualizar dados">
-                <IconButton 
-                  onClick={() => loadDashboardData()}
-                  sx={{
-                    bgcolor: 'primary.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
-                      transform: 'rotate(180deg)',
-                    },
-                    transition: 'all 0.3s ease',
-                  }}
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </Box>
-        </Grow>
-      </Fade>
+                <ExportIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
+              <IconButton 
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                sx={{
+                  bgcolor: (theme) => theme.palette.mode === 'dark' 
+                    ? (autoRefresh ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)')
+                    : (autoRefresh ? 'success.main' : 'action.disabled'),
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: (theme) => theme.palette.mode === 'dark'
+                      ? (autoRefresh ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)')
+                      : (autoRefresh ? 'success.dark' : 'action.hover'),
+                  },
+                }}
+              >
+                <PlayIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Atualizar dados">
+              <IconButton 
+                onClick={() => loadDashboardData()}
+                sx={{
+                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'primary.main',
+                  color: 'white',
+                  '&:hover': {
+                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'primary.dark',
+                    transform: 'rotate(180deg)',
+                  },
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+          </>
+        }
+      />
 
-      {/* Status de Saúde do Sistema */}
-      {health && (
-        <Fade in={true} timeout={1000}>
-          <Paper
-            elevation={0}
-            sx={{
-              mb: 4,
-              p: 3,
-              borderRadius: 3,
-              background: isDarkMode 
-                ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-              border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
-              position: 'relative',
-              overflow: 'hidden',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 4,
-                background: health.status === 'healthy' ? 'linear-gradient(90deg, #4caf50, #81c784)' :
-                           health.status === 'warning' ? 'linear-gradient(90deg, #ff9800, #ffb74d)' :
-                           'linear-gradient(90deg, #f44336, #e57373)',
-              },
-            }}
-          >
-            <Box display="flex" alignItems="center" justifyContent="space-between">
-              <Box display="flex" alignItems="center" gap={3}>
-                <Badge
-                  badgeContent={health.overall_health}
-                  color={health.status === 'healthy' ? 'success' : 
-                         health.status === 'warning' ? 'warning' : 'error'}
-                  sx={{
-                    '& .MuiBadge-badge': {
-                      fontSize: '0.75rem',
-                      fontWeight: 'bold',
-                    },
-                  }}
-                >
-                  <Avatar
-                    sx={{
-                      bgcolor: health.status === 'healthy' ? 'success.main' : 
-                              health.status === 'warning' ? 'warning.main' : 'error.main',
-                      width: 56,
-                      height: 56,
-                    }}
-                  >
-                    <CheckCircleIcon />
-                  </Avatar>
-                </Badge>
-                <Box>
-                  <Typography variant="h5" fontWeight="bold" gutterBottom>
-                    Status do Sistema
-                  </Typography>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Chip 
-                      label={health.status === 'healthy' ? 'Saudável' : 
-                            health.status === 'warning' ? 'Atenção' : 'Crítico'}
-                      color={getHealthColor(health.status)}
-                      sx={{ fontWeight: 'bold' }}
-                    />
-                    <Typography variant="body1" color="text.secondary">
-                      {health.overall_health}% de saúde geral
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-              <Box sx={{ width: 200 }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={health.overall_health}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    bgcolor: isDarkMode ? '#333' : '#e0e0e0',
-                    '& .MuiLinearProgress-bar': {
-                      borderRadius: 4,
-                    },
-                  }}
-                />
-              </Box>
-            </Box>
-          </Paper>
-        </Fade>
-      )}
-
-      {/* Estatísticas Principais */}
+      {/* Estatísticas */}
       <Grid container spacing={3} mb={4}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -902,9 +781,7 @@ const Dashboard = () => {
                 p: 3,
                 borderRadius: 3,
                 height: 400,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                  : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
                 border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
                 position: 'relative',
                 overflow: 'hidden',
@@ -915,7 +792,7 @@ const Dashboard = () => {
                   right: 0,
                   width: 100,
                   height: 100,
-                  background: `radial-gradient(circle, ${isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
+                  background: (theme) => theme.palette.mode === 'dark' ? 'transparent' : `radial-gradient(circle, rgba(25, 118, 210, 0.1) 0%, transparent 70%)`,
                 },
               }}
             >
@@ -950,9 +827,7 @@ const Dashboard = () => {
                 p: 3,
                 borderRadius: 3,
                 height: 400,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                  : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
                 border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
               }}
             >

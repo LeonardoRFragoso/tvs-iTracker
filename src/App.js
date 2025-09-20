@@ -15,6 +15,7 @@ import CampaignForm from './pages/Campaigns/CampaignForm';
 import PlayerList from './pages/Players/PlayerList';
 import PlayerDetail from './pages/Players/PlayerDetail';
 import PlayerForm from './pages/Players/PlayerForm';
+import PlayerSettings from './pages/Players/PlayerSettings';
 import PlayerView from './pages/Player/PlayerView';
 import LocationList from './pages/Locations/LocationList';
 import LocationForm from './pages/Locations/LocationForm';
@@ -71,6 +72,7 @@ function App() {
             <Route path="players/new" element={<PlayerForm />} />
             <Route path="players/:id" element={<PlayerDetail />} />
             <Route path="players/:id/edit" element={<PlayerForm />} />
+            <Route path="players/:id/settings" element={<PlayerSettings />} />
             
             {/* Schedule routes - specific routes first */}
             <Route path="schedules" element={<ScheduleList />} />

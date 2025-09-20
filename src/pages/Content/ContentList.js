@@ -49,6 +49,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import axios from '../../config/axios';
 import { useTheme } from '../../contexts/ThemeContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 // BR datetime helpers for display
 const parseDateTimeFlexible = (value) => {
@@ -107,7 +108,7 @@ const ContentCardSkeleton = ({ delay = 0 }) => (
 
 const ContentList = () => {
   const navigate = useNavigate();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   const [contents, setContents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -211,78 +212,61 @@ const ContentList = () => {
 
   return (
     <Box>
-      <Fade in={true} timeout={800}>
-        <Grow in={true} timeout={1000}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-            <Box display="flex" alignItems="center">
-              <Avatar
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Gerenciar Conteúdo"
+        subtitle="Gerencie e organize sua biblioteca de mídia"
+        actions={
+          <>
+            <Tooltip title="Atualizar lista">
+              <IconButton 
+                onClick={loadContents}
                 sx={{
-                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                  mr: 2,
-                  width: 48,
-                  height: 48,
-                }}
-              >
-                <VideoIcon />
-              </Avatar>
-              <Typography 
-                variant="h4" 
-                component="h1"
-                sx={{
-                  fontWeight: 700,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                    : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
-                Gerenciar Conteúdo
-              </Typography>
-            </Box>
-            <Box display="flex" gap={1}>
-              <Tooltip title="Atualizar lista">
-                <IconButton 
-                  onClick={loadContents}
-                  sx={{
-                    bgcolor: 'info.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'info.dark',
-                      transform: 'rotate(180deg)',
-                    },
-                    transition: 'all 0.3s ease',
-                  }}
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/content/new')}
-                sx={{
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 'bold',
-                  px: 3,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                    : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                  bgcolor: 'info.main',
+                  color: 'white',
                   '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.2)',
+                    bgcolor: 'info.dark',
+                    transform: 'rotate(180deg)',
                   },
                   transition: 'all 0.3s ease',
                 }}
               >
-                Novo Conteúdo
-              </Button>
-            </Box>
-          </Box>
-        </Grow>
-      </Fade>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/content/new')}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1.5,
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                '&:hover': {
+                  background: (theme) => theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
+                    : 'linear-gradient(45deg, #21CBF3, #2196F3)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 15px rgba(0,0,0,0.1)',
+                },
+                transition: 'all 0.3s ease',
+              }}
+            >
+              Novo Conteúdo
+            </Button>
+          </>
+        }
+      />
+
+      {/* Alerts */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       {/* Filtros e Busca */}
       <Fade in={true} timeout={1000}>
@@ -292,20 +276,12 @@ const ContentList = () => {
             mb: 4,
             p: 3,
             borderRadius: 3,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+            background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
             border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
             position: 'relative',
             overflow: 'hidden',
             '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: 100,
-              height: 100,
-              background: `radial-gradient(circle, ${isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
+              display: 'none',
             },
           }}
         >
@@ -411,12 +387,6 @@ const ContentList = () => {
         </Paper>
       </Fade>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
       {/* Lista de Conteúdos */}
       <Grid container spacing={3}>
         {loading ? (
@@ -441,9 +411,7 @@ const ContentList = () => {
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     '&:hover': {
                       transform: 'translateY(-8px) scale(1.02)',
-                      boxShadow: isDarkMode 
-                        ? '0 12px 35px rgba(255, 152, 0, 0.2)'
-                        : '0 12px 35px rgba(0, 0, 0, 0.15)',
+                      boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.2)' : '0 12px 35px rgba(0, 0, 0, 0.15)',
                     },
                     '&::before': {
                       content: '""',
@@ -468,7 +436,7 @@ const ContentList = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      bgcolor: isDarkMode ? '#2a2a2a' : 'grey.100',
+                      bgcolor: theme.palette.mode === 'dark' ? '#2a2a2a' : 'grey.100',
                       position: 'relative',
                       overflow: 'hidden',
                       '&::after': {
@@ -506,7 +474,7 @@ const ContentList = () => {
                     <Box 
                       sx={{ 
                         fontSize: 60, 
-                        color: isDarkMode ? '#666' : 'grey.400',
+                        color: theme.palette.mode === 'dark' ? '#666' : 'grey.400',
                         display: content.thumbnail_path ? 'none' : 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -609,7 +577,7 @@ const ContentList = () => {
                         alignItems: 'center',
                         mt: 'auto',
                         pt: 1,
-                        borderTop: `1px solid ${isDarkMode ? '#333' : '#f0f0f0'}`,
+                        borderTop: `1px solid ${theme.palette.mode === 'dark' ? '#333' : '#f0f0f0'}`,
                       }}
                     >
                       <Box>
@@ -660,10 +628,8 @@ const ContentList = () => {
               py: 8,
               px: 4,
               borderRadius: 3,
-              background: isDarkMode 
-                ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-              border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+              background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+              border: `1px solid ${theme.palette.mode === 'dark' ? '#333' : '#e0e0e0'}`,
               position: 'relative',
               overflow: 'hidden',
               '&::before': {
@@ -673,7 +639,7 @@ const ContentList = () => {
                 right: -50,
                 width: 100,
                 height: 100,
-                background: `radial-gradient(circle, ${isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
+                background: `radial-gradient(circle, ${theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
               },
             }}
           >
@@ -706,9 +672,7 @@ const ContentList = () => {
                 fontWeight: 'bold',
                 px: 4,
                 py: 1.5,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                  : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
                 '&:hover': {
                   transform: 'translateY(-2px)',
                   boxShadow: '0 8px 25px rgba(0,0,0,0.2)',
@@ -740,14 +704,10 @@ const ContentList = () => {
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   },
                   '&.Mui-selected': {
-                    background: isDarkMode 
-                      ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                      : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                    color: 'white',
+                    background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                    color: theme.palette.mode === 'dark' ? '#000' : 'white',
                     '&:hover': {
-                      background: isDarkMode 
-                        ? 'linear-gradient(135deg, #f57c00 0%, #ef6c00 100%)'
-                        : 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
                     },
                   },
                 },
@@ -774,17 +734,15 @@ const ContentList = () => {
           sx: {
             borderRadius: 2,
             minWidth: 200,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+            background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+            border: `1px solid ${theme.palette.mode === 'dark' ? '#333' : '#e0e0e0'}`,
             '& .MuiMenuItem-root': {
               borderRadius: 1,
               mx: 1,
               my: 0.5,
               transition: 'all 0.2s ease',
               '&:hover': {
-                background: isDarkMode ? '#333' : '#f5f5f5',
+                background: theme.palette.mode === 'dark' ? 'rgba(255,152,0,0.08)' : '#f5f5f5',
                 transform: 'translateX(4px)',
               },
             },
@@ -944,14 +902,10 @@ const ContentList = () => {
             position: 'fixed',
             bottom: 24,
             right: 24,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-              : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
             '&:hover': {
               transform: 'scale(1.1) translateY(-2px)',
-              boxShadow: isDarkMode 
-                ? '0 12px 35px rgba(255, 152, 0, 0.4)'
-                : '0 12px 35px rgba(25, 118, 210, 0.4)',
+              boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.4)' : '0 12px 35px rgba(25, 118, 210, 0.4)',
             },
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             zIndex: 1000,

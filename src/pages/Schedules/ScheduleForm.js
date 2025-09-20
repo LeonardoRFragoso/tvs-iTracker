@@ -447,9 +447,7 @@ const ScheduleForm = () => {
     <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box
         sx={{
-          background: (theme) => theme.palette.mode === 'dark' 
-            ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
-            : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+          backgroundColor: (theme) => theme.palette.background.default,
           minHeight: '100vh',
           p: 3,
         }}
@@ -461,13 +459,14 @@ const ScheduleForm = () => {
               onClick={() => navigate('/schedules')} 
               sx={{ 
                 mr: 2,
-                background: (theme) => theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                color: 'white',
+                color: 'primary.main',
+                border: '1px solid',
+                borderColor: 'primary.main',
+                backgroundColor: 'transparent',
                 '&:hover': {
                   transform: 'scale(1.1)',
                   transition: 'transform 0.2s ease-in-out',
+                  backgroundColor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,152,0,0.12)' : 'rgba(25,118,210,0.1)',
                 },
               }}
             >
@@ -479,12 +478,7 @@ const ScheduleForm = () => {
                 component="h1" 
                 sx={{ 
                   fontWeight: 'bold',
-                  background: (theme) => theme.palette.mode === 'dark'
-                    ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                    : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
+                  color: 'text.primary',
                 }}
               >
                 {isEdit ? 'Editar Agendamento' : 'Novo Agendamento'}
@@ -530,9 +524,7 @@ const ScheduleForm = () => {
                   elevation={0}
                   sx={{
                     borderRadius: 3,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backgroundColor: (theme) => theme.palette.background.paper,
                     backdropFilter: 'blur(10px)',
                     border: (theme) => `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
@@ -544,9 +536,7 @@ const ScheduleForm = () => {
                       left: 0,
                       right: 0,
                       height: '4px',
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                      background: (theme) => theme.palette.primary.main,
                     },
                   }}
                 >
@@ -554,9 +544,8 @@ const ScheduleForm = () => {
                     <Box display="flex" alignItems="center" mb={3}>
                       <Avatar
                         sx={{
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          bgcolor: 'primary.main',
+                          color: '#000',
                           mr: 2,
                         }}
                       >
@@ -647,9 +636,7 @@ const ScheduleForm = () => {
                   elevation={0}
                   sx={{
                     borderRadius: 3,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backgroundColor: (theme) => theme.palette.background.paper,
                     backdropFilter: 'blur(10px)',
                     border: (theme) => `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
@@ -661,9 +648,7 @@ const ScheduleForm = () => {
                       left: 0,
                       right: 0,
                       height: '4px',
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                      background: (theme) => theme.palette.primary.main,
                     },
                   }}
                 >
@@ -671,9 +656,8 @@ const ScheduleForm = () => {
                     <Box display="flex" alignItems="center" mb={3}>
                       <Avatar
                         sx={{
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          bgcolor: 'primary.main',
+                          color: '#000',
                           mr: 2,
                         }}
                       >
@@ -851,9 +835,7 @@ const ScheduleForm = () => {
                   elevation={0}
                   sx={{
                     borderRadius: 3,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backgroundColor: (theme) => theme.palette.background.paper,
                     backdropFilter: 'blur(10px)',
                     border: (theme) => `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
@@ -865,9 +847,7 @@ const ScheduleForm = () => {
                       left: 0,
                       right: 0,
                       height: '4px',
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                      background: (theme) => theme.palette.primary.main,
                     },
                   }}
                 >
@@ -875,9 +855,8 @@ const ScheduleForm = () => {
                     <Box display="flex" alignItems="center" mb={3}>
                       <Avatar
                         sx={{
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          bgcolor: 'primary.main',
+                          color: '#000',
                           mr: 2,
                         }}
                       >
@@ -914,9 +893,7 @@ const ScheduleForm = () => {
                   elevation={0}
                   sx={{
                     borderRadius: 3,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backgroundColor: (theme) => theme.palette.background.paper,
                     backdropFilter: 'blur(10px)',
                     border: (theme) => `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
@@ -928,9 +905,7 @@ const ScheduleForm = () => {
                       left: 0,
                       right: 0,
                       height: '4px',
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                      background: (theme) => theme.palette.primary.main,
                     },
                   }}
                 >
@@ -938,9 +913,8 @@ const ScheduleForm = () => {
                     <Box display="flex" alignItems="center" mb={3}>
                       <Avatar
                         sx={{
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          bgcolor: 'primary.main',
+                          color: '#000',
                           mr: 2,
                         }}
                       >
@@ -1042,15 +1016,9 @@ const ScheduleForm = () => {
                     borderRadius: 2,
                     px: 4,
                     py: 1.5,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                      : 'linear-gradient(45deg, #2196F3, #21CBF3)',
                     '&:hover': {
                       transform: 'translateY(-2px)',
                       transition: 'transform 0.2s ease-in-out',
-                    },
-                    '&:disabled': {
-                      background: 'rgba(0, 0, 0, 0.12)',
                     },
                   }}
                 >

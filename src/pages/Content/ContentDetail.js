@@ -283,7 +283,7 @@ const ContentDetail = () => {
                 <Button
                   variant="outlined"
                   startIcon={<DownloadIcon />}
-                  onClick={() => window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`, '_blank')}
+                  onClick={() => window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/uploads/${content.file_path}`, '_blank')}
                   fullWidth
                   sx={{
                     borderRadius: 2,
@@ -445,7 +445,7 @@ const ContentDetail = () => {
         <DialogContent sx={{ p: 3 }}>
           {content.content_type === 'video' && (
             <video
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/uploads/${content.file_path}`}
               controls
               style={{ 
                 width: '100%', 
@@ -456,7 +456,7 @@ const ContentDetail = () => {
           )}
           {content.content_type === 'image' && (
             <img
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/uploads/${content.file_path}`}
               alt={content.title}
               style={{ 
                 width: '100%', 
@@ -468,7 +468,7 @@ const ContentDetail = () => {
           )}
           {content.content_type === 'audio' && (
             <audio
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.file_path}`}
+              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/uploads/${content.file_path}`}
               controls
               style={{ 
                 width: '100%',

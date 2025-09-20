@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Container,
+  Box,
   Paper,
   Typography,
-  Box,
   Grid,
   Card,
   CardContent,
@@ -38,10 +37,12 @@ import {
   Edit,
   Delete,
   Add,
-  Remove
+  Remove,
+  Assessment
 } from '@mui/icons-material';
 import axios from '../../config/axios';
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
+import PageTitle from '../../components/Common/PageTitle';
 
 const CampaignDetail = () => {
   const { id } = useParams();
@@ -241,53 +242,51 @@ const CampaignDetail = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
         <CircularProgress />
-      </Container>
+      </Box>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4 }}>
         <Alert severity="error">{error}</Alert>
-      </Container>
+      </Box>
     );
   }
 
   if (!campaign) {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Box sx={{ mt: 4 }}>
         <Alert severity="warning">Campanha não encontrada</Alert>
-      </Container>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Button
-          startIcon={<ArrowBack />}
-          onClick={() => navigate('/campaigns')}
-          variant="outlined"
-        >
-          Voltar
-        </Button>
-        <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
-          {campaign.name}
-        </Typography>
-        <Chip
-          label={getStatusText(campaign.is_active)}
-          color={getStatusColor(campaign.is_active)}
-          variant="filled"
-        />
-      </Box>
+    <Box sx={{ mt: 4, mb: 4 }}>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title={campaign.name}
+        backTo="/campaigns"
+        actions={
+          <Chip
+            label={getStatusText(campaign.is_active)}
+            color={getStatusColor(campaign.is_active)}
+            variant="filled"
+          />
+        }
+      />
 
       <Grid container spacing={3}>
         {/* Informações da Campanha */}
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3, mb: 3 }}>
+          <Paper sx={{ 
+            p: 3, mb: 3, borderRadius: 3,
+            background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : undefined,
+            border: (theme) => theme.palette.mode === 'dark' ? '1px solid #333' : undefined,
+          }}>
             <Typography variant="h6" gutterBottom>
               Informações da Campanha
             </Typography>
@@ -342,7 +341,11 @@ const CampaignDetail = () => {
           </Paper>
 
           {/* Conteúdos */}
-          <Paper sx={{ p: 3, mb: 3 }}>
+          <Paper sx={{ 
+            p: 3, mb: 3, borderRadius: 3,
+            background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : undefined,
+            border: (theme) => theme.palette.mode === 'dark' ? '1px solid #333' : undefined,
+          }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <VideoLibrary sx={{ mr: 1 }} />
@@ -424,7 +427,11 @@ const CampaignDetail = () => {
         {/* Sidebar */}
         <Grid item xs={12} md={4}>
           {/* Estatísticas */}
-          <Paper sx={{ p: 3, mb: 3 }}>
+          <Paper sx={{ 
+            p: 3, mb: 3, borderRadius: 3,
+            background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : undefined,
+            border: (theme) => theme.palette.mode === 'dark' ? '1px solid #333' : undefined,
+          }}>
             <Typography variant="h6" gutterBottom>
               Estatísticas
             </Typography>
@@ -453,7 +460,11 @@ const CampaignDetail = () => {
           </Paper>
 
           {/* Agendamentos */}
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ 
+            p: 3, borderRadius: 3,
+            background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : undefined,
+            border: (theme) => theme.palette.mode === 'dark' ? '1px solid #333' : undefined,
+          }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <Schedule sx={{ mr: 1 }} />
               <Typography variant="h6">
@@ -495,11 +506,22 @@ const CampaignDetail = () => {
       </Grid>
 
       {/* Analytics Section */}
-      <Box id="analytics" sx={{ mt: 3 }}>
-        <Paper sx={{ p: 3 }}>
-          <CampaignAnalytics campaignId={id} />
-        </Paper>
-      </Box>
+      <Paper sx={{ 
+        p: 3, 
+        mb: 3, 
+        borderRadius: 3,
+        background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : undefined,
+        border: (theme) => theme.palette.mode === 'dark' ? '1px solid #333' : undefined,
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Assessment sx={{ mr: 1 }} />
+          <Typography variant="h6">
+            Analytics da Campanha
+          </Typography>
+        </Box>
+        <Divider sx={{ mb: 2 }} />
+        <CampaignAnalytics campaignId={id} />
+      </Paper>
 
       {/* Content Selection Dialog */}
       <Dialog
@@ -577,7 +599,7 @@ const CampaignDetail = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   );
 };
 

@@ -41,7 +41,7 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 
 const Settings = () => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   
   const [settings, setSettings] = useState({
     company_name: 'TVS Digital Signage',
@@ -144,7 +144,8 @@ const Settings = () => {
           <Box display="flex" alignItems="center">
             <Avatar
               sx={{
-                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                 mr: 2,
                 width: 48,
                 height: 48,
@@ -158,12 +159,7 @@ const Settings = () => {
                 component="h1"
                 sx={{
                   fontWeight: 700,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                    : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
+                  color: 'text.primary',
                 }}
               >
                 Configurações
@@ -182,12 +178,12 @@ const Settings = () => {
                 borderRadius: '12px',
                 textTransform: 'none',
                 fontWeight: 600,
-                borderColor: 'rgba(255, 119, 48, 0.5)',
-                color: '#ff7730',
+                borderColor: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'rgba(255, 119, 48, 0.5)',
+                color: theme.palette.mode === 'dark' ? theme.palette.primary.main : '#ff7730',
                 transition: 'all 0.3s ease',
                 '&:hover': {
-                  borderColor: '#ff7730',
-                  background: 'rgba(255, 119, 48, 0.05)',
+                  borderColor: theme.palette.primary.main,
+                  background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.08)' : 'rgba(255, 119, 48, 0.05)',
                   transform: 'translateY(-1px)',
                 }
               }}
@@ -200,16 +196,16 @@ const Settings = () => {
               onClick={handleSave}
               disabled={saving}
               sx={{
-                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                 borderRadius: '12px',
                 textTransform: 'none',
                 fontWeight: 600,
-                boxShadow: '0 4px 20px rgba(255, 119, 48, 0.3)',
+                boxShadow: theme.palette.mode === 'dark' ? '0 4px 20px rgba(255, 152, 0, 0.25)' : '0 4px 20px rgba(255, 119, 48, 0.3)',
                 transition: 'all 0.3s ease',
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                  background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
                   transform: 'translateY(-2px)',
-                  boxShadow: '0 6px 25px rgba(255, 119, 48, 0.4)',
+                  boxShadow: theme.palette.mode === 'dark' ? '0 6px 25px rgba(255, 152, 0, 0.35)' : '0 6px 25px rgba(255, 119, 48, 0.4)',
                 }
               }}
             >
@@ -228,9 +224,7 @@ const Settings = () => {
               mb: 2,
               borderRadius: '12px',
               backdropFilter: 'blur(10px)',
-              background: isDarkMode 
-                ? 'rgba(244, 67, 54, 0.1)' 
-                : 'rgba(244, 67, 54, 0.05)',
+              background: theme.palette.mode === 'dark' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(244, 67, 54, 0.05)',
             }} 
             onClose={() => setError('')}
           >
@@ -246,9 +240,7 @@ const Settings = () => {
               mb: 2,
               borderRadius: '12px',
               backdropFilter: 'blur(10px)',
-              background: isDarkMode 
-                ? 'rgba(76, 175, 80, 0.1)' 
-                : 'rgba(76, 175, 80, 0.05)',
+              background: theme.palette.mode === 'dark' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.05)',
             }} 
             onClose={() => setSuccess('')}
           >
@@ -268,13 +260,9 @@ const Settings = () => {
                 mb: 3,
                 borderRadius: '16px',
                 backdropFilter: 'blur(20px)',
-                background: isDarkMode 
-                  ? 'rgba(255, 255, 255, 0.05)' 
-                  : 'rgba(255, 255, 255, 0.9)',
-                border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                boxShadow: isDarkMode 
-                  ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                  : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
+                border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
               }}
             >
               <Tabs
@@ -292,12 +280,12 @@ const Settings = () => {
                     mx: 0.5,
                     transition: 'all 0.3s ease',
                     '&:hover': {
-                      background: 'rgba(255, 119, 48, 0.05)',
+                      background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.08)' : 'rgba(255, 119, 48, 0.05)',
                       transform: 'translateY(-1px)',
                     },
                     '&.Mui-selected': {
-                      background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                      color: 'white',
+                      background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                      color: theme.palette.mode === 'dark' ? '#000' : 'white',
                     }
                   },
                   '& .MuiTabs-indicator': {
@@ -345,19 +333,19 @@ const Settings = () => {
                 position: 'fixed',
                 bottom: 24,
                 right: 24,
-                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                 borderRadius: '16px',
                 px: 3,
                 py: 1.5,
                 textTransform: 'none',
                 fontWeight: 600,
-                boxShadow: '0 8px 32px rgba(255, 119, 48, 0.3)',
+                boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(255, 152, 0, 0.3)' : '0 8px 32px rgba(255, 119, 48, 0.3)',
                 transition: 'all 0.3s ease',
                 zIndex: 1000,
                 '&:hover': {
-                  background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                  background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
                   transform: 'scale(1.05)',
-                  boxShadow: '0 12px 40px rgba(255, 119, 48, 0.4)',
+                  boxShadow: theme.palette.mode === 'dark' ? '0 12px 40px rgba(255, 152, 0, 0.35)' : '0 12px 40px rgba(255, 119, 48, 0.4)',
                 }
               }}
             >
@@ -373,21 +361,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #2196f3 0%, #64b5f6 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -470,21 +455,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -504,10 +486,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('auto_sync', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -523,10 +505,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('auto_update', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -542,10 +524,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('debug_mode', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -568,21 +550,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -647,10 +626,10 @@ const Settings = () => {
                           max={100}
                           sx={{
                             '& .MuiSlider-thumb': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             },
                             '& .MuiSlider-track': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             }
                           }}
                         />
@@ -665,21 +644,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #e91e63 0%, #f06292 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #e91e63 0%, #f06292 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -699,10 +675,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('dark_theme', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -718,10 +694,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('animations_enabled', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -743,10 +719,10 @@ const Settings = () => {
                           step={50}
                           sx={{
                             '& .MuiSlider-thumb': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             },
                             '& .MuiSlider-track': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             }
                           }}
                         />
@@ -766,21 +742,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -800,10 +773,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('email_notifications', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -819,10 +792,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('push_notifications', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -838,10 +811,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('system_alerts', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -864,21 +837,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #607d8b 0%, #90a4ae 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #607d8b 0%, #90a4ae 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -904,10 +874,10 @@ const Settings = () => {
                           step={10}
                           sx={{
                             '& .MuiSlider-thumb': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             },
                             '& .MuiSlider-track': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             }
                           }}
                         />
@@ -920,10 +890,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('auto_cleanup', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -939,10 +909,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('backup_enabled', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -965,21 +935,18 @@ const Settings = () => {
                   <Card 
                     sx={{ 
                       borderRadius: '16px',
-                      background: isDarkMode 
-                        ? 'rgba(255, 255, 255, 0.05)' 
-                        : 'rgba(255, 255, 255, 0.9)',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
                       backdropFilter: 'blur(20px)',
-                      border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: isDarkMode 
-                        ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
-                        : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
                     }}
                   >
                     <CardContent sx={{ p: 3 }}>
                       <Box display="flex" alignItems="center" mb={3}>
                         <Avatar
                           sx={{
-                            background: 'linear-gradient(135deg, #f44336 0%, #ef5350 100%)',
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #f44336 0%, #ef5350 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
                             mr: 2,
                             width: 40,
                             height: 40,
@@ -999,10 +966,10 @@ const Settings = () => {
                             onChange={(e) => handleSettingChange('two_factor_auth', e.target.checked)}
                             sx={{
                               '& .MuiSwitch-thumb': {
-                                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                               },
                               '& .Mui-checked + .MuiSwitch-track': {
-                                background: 'rgba(255, 119, 48, 0.3)',
+                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
                               }
                             }}
                           />
@@ -1024,10 +991,10 @@ const Settings = () => {
                           step={5}
                           sx={{
                             '& .MuiSlider-thumb': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             },
                             '& .MuiSlider-track': {
-                              background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
                             }
                           }}
                         />

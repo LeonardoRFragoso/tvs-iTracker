@@ -32,6 +32,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import axios from '../../config/axios';
+import PageTitle from '../../components/Common/PageTitle';
 
 const ContentForm = () => {
   const navigate = useNavigate();
@@ -255,54 +256,19 @@ const ContentForm = () => {
   return (
     <Box
       sx={{
-        background: (theme) => theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, #000000 0%, #1a1a1a 100%)'
+        background: (theme) => theme.palette.mode === 'dark'
+          ? theme.palette.background.default
           : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
         minHeight: '100vh',
         p: 3,
       }}
     >
-      {/* Enhanced Header */}
-      <Fade in timeout={800}>
-        <Box display="flex" alignItems="center" mb={4}>
-          <IconButton 
-            onClick={() => navigate('/content')} 
-            sx={{ 
-              mr: 2,
-              background: (theme) => theme.palette.mode === 'dark'
-                ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-              color: 'white',
-              '&:hover': {
-                transform: 'scale(1.1)',
-                transition: 'transform 0.2s ease-in-out',
-              },
-            }}
-          >
-            <BackIcon />
-          </IconButton>
-          <Box>
-            <Typography 
-              variant="h3" 
-              component="h1" 
-              sx={{ 
-                fontWeight: 'bold',
-                background: (theme) => theme.palette.mode === 'dark'
-                  ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              {isEdit ? 'Editar Conteúdo' : 'Novo Conteúdo'}
-            </Typography>
-            <Typography variant="subtitle1" color="text.secondary">
-              {isEdit ? 'Modifique as configurações do conteúdo' : 'Configure um novo conteúdo para suas campanhas'}
-            </Typography>
-          </Box>
-        </Box>
-      </Fade>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title={isEdit ? 'Editar Conteúdo' : 'Novo Conteúdo'}
+        subtitle={isEdit ? 'Atualize as informações do conteúdo' : 'Adicione um novo conteúdo à biblioteca de mídia'}
+        backTo="/content"
+      />
 
       {error && (
         <Fade in timeout={600}>
@@ -339,9 +305,7 @@ const ContentForm = () => {
                   elevation={0}
                   sx={{
                     borderRadius: 3,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backgroundColor: (theme) => theme.palette.background.paper,
                     backdropFilter: 'blur(10px)',
                     border: (theme) => `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
@@ -353,9 +317,7 @@ const ContentForm = () => {
                       left: 0,
                       right: 0,
                       height: '4px',
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                      background: (theme) => theme.palette.primary.main,
                     },
                   }}
                 >
@@ -363,9 +325,8 @@ const ContentForm = () => {
                     <Box display="flex" alignItems="center" mb={3}>
                       <Avatar
                         sx={{
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          bgcolor: 'primary.main',
+                          color: '#000',
                           mr: 2,
                         }}
                       >
@@ -467,9 +428,7 @@ const ContentForm = () => {
                   elevation={0}
                   sx={{
                     borderRadius: 3,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.05) 100%)'
-                      : 'linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 203, 243, 0.05) 100%)',
+                    backgroundColor: (theme) => theme.palette.background.paper,
                     backdropFilter: 'blur(10px)',
                     border: (theme) => `1px solid ${theme.palette.divider}`,
                     overflow: 'hidden',
@@ -481,9 +440,7 @@ const ContentForm = () => {
                       left: 0,
                       right: 0,
                       height: '4px',
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? 'linear-gradient(90deg, #ff7730, #ff9800)'
-                        : 'linear-gradient(90deg, #2196F3, #21CBF3)',
+                      background: (theme) => theme.palette.primary.main,
                     },
                   }}
                 >
@@ -491,9 +448,8 @@ const ContentForm = () => {
                     <Box display="flex" alignItems="center" mb={3}>
                       <Avatar
                         sx={{
-                          background: (theme) => theme.palette.mode === 'dark'
-                            ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                            : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                          bgcolor: 'primary.main',
+                          color: '#000',
                           mr: 2,
                         }}
                       >
@@ -669,15 +625,10 @@ const ContentForm = () => {
                     borderRadius: 2,
                     px: 4,
                     py: 1.5,
-                    background: (theme) => theme.palette.mode === 'dark'
-                      ? 'linear-gradient(45deg, #ff7730, #ff9800)'
-                      : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                    backgroundColor: 'primary.main',
                     '&:hover': {
                       transform: 'translateY(-2px)',
                       transition: 'transform 0.2s ease-in-out',
-                    },
-                    '&:disabled': {
-                      background: 'rgba(0, 0, 0, 0.12)',
                     },
                   }}
                 >

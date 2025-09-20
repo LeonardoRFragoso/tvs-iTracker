@@ -44,6 +44,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
+import PageTitle from '../../components/Common/PageTitle';
 
 // BR datetime helpers for display
 const parseDateTimeFlexible = (value) => {
@@ -256,38 +257,36 @@ const CampaignList = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Grow in={true} timeout={1000}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Box display="flex" alignItems="center">
-            <Avatar
-              sx={{
-                background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                mr: 2,
-                width: 48,
-                height: 48,
-              }}
-            >
-              <CampaignIcon />
-            </Avatar>
-            <Typography 
-              variant="h4" 
-              component="h1"
-              sx={{
-                fontWeight: 700,
-                background: isDarkMode 
-                  ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                  : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              Gerenciar Campanhas
-            </Typography>
-          </Box>
-        </Box>
-      </Grow>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Gerenciar Campanhas"
+        subtitle="Organize e controle suas campanhas de conteúdo"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/campaigns/new')}
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              py: 1.5,
+              background: (theme) => theme.palette.mode === 'dark' 
+                ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+              '&:hover': {
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
+                  : 'linear-gradient(45deg, #21CBF3, #2196F3)',
+                transform: 'translateY(-2px)',
+                boxShadow: '0 8px 15px rgba(0,0,0,0.1)',
+              },
+              transition: 'all 0.3s ease',
+            }}
+          >
+            Nova Campanha
+          </Button>
+        }
+      />
 
       {/* Alerts */}
       {error && (

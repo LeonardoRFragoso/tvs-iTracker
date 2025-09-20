@@ -55,6 +55,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from '../../config/axios';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 // Skeleton loading component for statistics cards
 const StatCardSkeleton = ({ delay = 0 }) => (
@@ -102,7 +103,7 @@ const LocationList = () => {
   const [companyFilter, setCompanyFilter] = useState('');
   const [deleteDialog, setDeleteDialog] = useState({ open: false, location: null });
   const [stats, setStats] = useState({});
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   const { user } = useAuth();
 
   const companyOptions = useMemo(() => {
@@ -198,110 +199,70 @@ const LocationList = () => {
       <Box sx={{ p: 4 }}>
         <Fade in={true} timeout={800}>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-            <Box>
-              <Skeleton variant="text" width={300} height={48} />
-              <Skeleton variant="text" width={200} height={24} />
+            <Box display="flex" alignItems="center">
+              <Skeleton variant="circular" width={48} height={48} sx={{ mr: 2 }} />
+              <Skeleton variant="text" width={300} height={40} />
             </Box>
-            <Box display="flex" gap={1}>
-              <Skeleton variant="circular" width={56} height={56} />
-              <Skeleton variant="rectangular" width={120} height={56} sx={{ borderRadius: 2 }} />
-            </Box>
+            <Skeleton variant="rectangular" width={180} height={40} />
           </Box>
         </Fade>
-        <Skeleton variant="rectangular" width="100%" height={56} sx={{ mb: 3, borderRadius: 2 }} />
-        <Grid container spacing={3} sx={{ mb: 3 }}>
-          {Array.from({ length: 4 }, (_, index) => (
-            <Grid item xs={12} sm={6} md={3} key={index}>
-              <StatCardSkeleton delay={index} />
-            </Grid>
-          ))}
-        </Grid>
-        <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 3 }} />
+        <LinearProgress />
       </Box>
     );
   }
 
   return (
     <Box sx={{ p: 4 }}>
-      <Fade in={true} timeout={800}>
-        <Grow in={true} timeout={1000}>
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
-            <Box display="flex" alignItems="center">
-              <Avatar
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Gerenciamento de Sedes"
+        subtitle="Administre as localizações e seus dispositivos"
+        actions={
+          <>
+            <Tooltip title="Atualizar dados">
+              <IconButton 
+                onClick={fetchLocations}
                 sx={{
-                  background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                  mr: 2,
-                  width: 48,
-                  height: 48,
-                }}
-              >
-                <LocationIcon />
-              </Avatar>
-              <Typography 
-                variant="h4" 
-                component="h1"
-                sx={{
-                  fontWeight: 700,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%)'
-                    : 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-                  backgroundClip: 'text',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
-                Gerenciamento de Sedes
-              </Typography>
-            </Box>
-            <Box display="flex" gap={1}>
-              <Tooltip title="Atualizar dados">
-                <IconButton 
-                  onClick={fetchLocations}
-                  sx={{
-                    bgcolor: 'info.main',
-                    color: 'white',
-                    '&:hover': {
-                      bgcolor: 'info.dark',
-                      transform: 'rotate(180deg)',
-                    },
-                    transition: 'all 0.3s ease',
-                  }}
-                >
-                  <RefreshIcon />
-                </IconButton>
-              </Tooltip>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/locations/new')}
-                sx={{
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 'bold',
-                  px: 3,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
-                    : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+                  bgcolor: 'info.main',
+                  color: 'white',
                   '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.2)',
+                    bgcolor: 'info.dark',
+                    transform: 'rotate(180deg)',
                   },
                   transition: 'all 0.3s ease',
                 }}
               >
-                Nova Sede
-              </Button>
-            </Box>
-          </Box>
-        </Grow>
-      </Fade>
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
-          {error}
-        </Alert>
-      )}
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/locations/new')}
+              sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1.5,
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                '&:hover': {
+                  background: (theme) => theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
+                    : 'linear-gradient(45deg, #21CBF3, #2196F3)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 8px 15px rgba(0,0,0,0.1)',
+                },
+                transition: 'all 0.3s ease',
+              }}
+            >
+              Nova Sede
+            </Button>
+          </>
+        }
+      />
 
-      {/* Search */}
+      {/* Search and Filter Bar */}
       <Fade in={true} timeout={1000}>
         <Paper
           elevation={0}
@@ -309,8 +270,8 @@ const LocationList = () => {
             mb: 4,
             p: 3,
             borderRadius: 3,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+            background: theme.palette.mode === 'dark' 
+              ? theme.palette.background.paper
               : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
             border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
             position: 'relative',
@@ -322,7 +283,7 @@ const LocationList = () => {
               right: 0,
               width: 100,
               height: 100,
-              background: `radial-gradient(circle, ${isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)'} 0%, transparent 70%)`,
+              background: theme.palette.mode === 'dark' ? 'transparent' : 'radial-gradient(circle, rgba(25, 118, 210, 0.1) 0%, transparent 70%)',
             },
           }}
         >
@@ -392,17 +353,17 @@ const LocationList = () => {
               <Card 
                 sx={{
                   borderRadius: 3,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)'
+                  background: theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
                     : 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
-                  color: 'white',
+                  color: theme.palette.mode === 'dark' ? 'white' : 'white',
                   position: 'relative',
                   overflow: 'hidden',
                   cursor: 'pointer',
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     transform: 'translateY(-4px) scale(1.02)',
-                    boxShadow: '0 12px 35px rgba(25, 118, 210, 0.3)',
+                    boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(25, 118, 210, 0.3)',
                   },
                   '&::before': {
                     content: '""',
@@ -411,13 +372,14 @@ const LocationList = () => {
                     right: -50,
                     width: 100,
                     height: 100,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+                    display: theme.palette.mode === 'dark' ? 'none' : 'block',
                     borderRadius: '50%',
                     transition: 'all 0.5s ease',
                   },
                   '&:hover::before': {
-                    transform: 'scale(1.5)',
-                    opacity: 0,
+                    transform: theme.palette.mode === 'dark' ? 'none' : 'scale(1.5)',
+                    opacity: theme.palette.mode === 'dark' ? 1 : 0,
                   },
                 }}
               >
@@ -433,7 +395,7 @@ const LocationList = () => {
                     </Box>
                     <Avatar
                       sx={{
-                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
                         width: 56,
                         height: 56,
                       }}
@@ -450,17 +412,17 @@ const LocationList = () => {
               <Card 
                 sx={{
                   borderRadius: 3,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)'
+                  background: theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
                     : 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)',
-                  color: 'white',
+                  color: theme.palette.mode === 'dark' ? 'white' : 'white',
                   position: 'relative',
                   overflow: 'hidden',
                   cursor: 'pointer',
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     transform: 'translateY(-4px) scale(1.02)',
-                    boxShadow: '0 12px 35px rgba(76, 175, 80, 0.3)',
+                    boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(76, 175, 80, 0.3)',
                   },
                   '&::before': {
                     content: '""',
@@ -469,13 +431,14 @@ const LocationList = () => {
                     right: -50,
                     width: 100,
                     height: 100,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+                    display: theme.palette.mode === 'dark' ? 'none' : 'block',
                     borderRadius: '50%',
                     transition: 'all 0.5s ease',
                   },
                   '&:hover::before': {
-                    transform: 'scale(1.5)',
-                    opacity: 0,
+                    transform: theme.palette.mode === 'dark' ? 'none' : 'scale(1.5)',
+                    opacity: theme.palette.mode === 'dark' ? 1 : 0,
                   },
                 }}
               >
@@ -493,7 +456,7 @@ const LocationList = () => {
                     </Box>
                     <Avatar
                       sx={{
-                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
                         width: 56,
                         height: 56,
                       }}
@@ -510,17 +473,17 @@ const LocationList = () => {
               <Card 
                 sx={{
                   borderRadius: 3,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #2196f3 0%, #1976d2 100%)'
+                  background: theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
                     : 'linear-gradient(135deg, #2196f3 0%, #1565c0 100%)',
-                  color: 'white',
+                  color: theme.palette.mode === 'dark' ? 'white' : 'white',
                   position: 'relative',
                   overflow: 'hidden',
                   cursor: 'pointer',
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     transform: 'translateY(-4px) scale(1.02)',
-                    boxShadow: '0 12px 35px rgba(33, 150, 243, 0.3)',
+                    boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(33, 150, 243, 0.3)',
                   },
                   '&::before': {
                     content: '""',
@@ -529,13 +492,14 @@ const LocationList = () => {
                     right: -50,
                     width: 100,
                     height: 100,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+                    display: theme.palette.mode === 'dark' ? 'none' : 'block',
                     borderRadius: '50%',
                     transition: 'all 0.5s ease',
                   },
                   '&:hover::before': {
-                    transform: 'scale(1.5)',
-                    opacity: 0,
+                    transform: theme.palette.mode === 'dark' ? 'none' : 'scale(1.5)',
+                    opacity: theme.palette.mode === 'dark' ? 1 : 0,
                   },
                 }}
               >
@@ -553,7 +517,7 @@ const LocationList = () => {
                     </Box>
                     <Avatar
                       sx={{
-                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
                         width: 56,
                         height: 56,
                       }}
@@ -570,17 +534,17 @@ const LocationList = () => {
               <Card 
                 sx={{
                   borderRadius: 3,
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)'
+                  background: theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
                     : 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-                  color: 'white',
+                  color: theme.palette.mode === 'dark' ? 'white' : 'white',
                   position: 'relative',
                   overflow: 'hidden',
                   cursor: 'pointer',
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   '&:hover': {
                     transform: 'translateY(-4px) scale(1.02)',
-                    boxShadow: '0 12px 35px rgba(255, 152, 0, 0.3)',
+                    boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(255, 152, 0, 0.3)',
                   },
                   '&::before': {
                     content: '""',
@@ -589,13 +553,14 @@ const LocationList = () => {
                     right: -50,
                     width: 100,
                     height: 100,
-                    background: 'rgba(255, 255, 255, 0.1)',
+                    background: theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
+                    display: theme.palette.mode === 'dark' ? 'none' : 'block',
                     borderRadius: '50%',
                     transition: 'all 0.5s ease',
                   },
                   '&:hover::before': {
-                    transform: 'scale(1.5)',
-                    opacity: 0,
+                    transform: theme.palette.mode === 'dark' ? 'none' : 'scale(1.5)',
+                    opacity: theme.palette.mode === 'dark' ? 1 : 0,
                   },
                 }}
               >
@@ -613,7 +578,7 @@ const LocationList = () => {
                     </Box>
                     <Avatar
                       sx={{
-                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
                         width: 56,
                         height: 56,
                       }}
@@ -634,16 +599,16 @@ const LocationList = () => {
           component={Paper}
           sx={{
             borderRadius: 3,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+            background: theme.palette.mode === 'dark' 
+              ? theme.palette.background.paper
               : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
             border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
             overflow: 'hidden',
             '& .MuiTable-root': {
               '& .MuiTableHead-root': {
                 '& .MuiTableRow-root': {
-                  background: isDarkMode 
-                    ? 'linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%)'
+                  background: theme.palette.mode === 'dark' 
+                    ? 'rgba(255, 255, 255, 0.04)'
                     : 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
                   '& .MuiTableCell-root': {
                     fontWeight: 'bold',
@@ -656,7 +621,7 @@ const LocationList = () => {
                 '& .MuiTableRow-root': {
                   transition: 'all 0.2s ease',
                   '&:hover': {
-                    background: isDarkMode ? '#2a2a2a' : '#f5f5f5',
+                    background: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f5f5f5',
                     transform: 'scale(1.01)',
                   },
                   '& .MuiTableCell-root': {
@@ -756,7 +721,7 @@ const LocationList = () => {
                               sx={{
                                 height: 4,
                                 borderRadius: 2,
-                                bgcolor: isDarkMode ? '#333' : '#e0e0e0',
+                                bgcolor: theme.palette.mode === 'dark' ? '#333' : '#e0e0e0',
                                 '& .MuiLinearProgress-bar': {
                                   borderRadius: 2,
                                 },
@@ -821,7 +786,7 @@ const LocationList = () => {
                               sx={{
                                 height: 4,
                                 borderRadius: 2,
-                                bgcolor: isDarkMode ? '#333' : '#e0e0e0',
+                                bgcolor: theme.palette.mode === 'dark' ? '#333' : '#e0e0e0',
                                 '& .MuiLinearProgress-bar': {
                                   borderRadius: 2,
                                 },
