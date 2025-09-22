@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import {
   Box,
   Card,
@@ -23,6 +23,7 @@ import {
   Fade,
   Grow,
   Skeleton,
+  LinearProgress
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -39,55 +40,189 @@ import {
   CloudUpload as CloudIcon,
 } from '@mui/icons-material';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
+
+// Componente otimizado para o campo de texto do nome da empresa
+const CompanyNameField = memo(({ value, onChange, theme }) => {
+  // Estado local para edição sem causar re-renders no parent a cada tecla
+  const [displayValue, setDisplayValue] = useState(value);
+  const lastPropValueRef = useRef(value);
+
+  // Atualizar o valor de exibição quando a prop mudar externamente
+  useEffect(() => {
+    if (value !== lastPropValueRef.current) {
+      setDisplayValue(value);
+      lastPropValueRef.current = value;
+    }
+  }, [value]);
+
+  const commitChange = useCallback(() => {
+    // Só propagar se de fato mudou
+    if (displayValue !== lastPropValueRef.current) {
+      onChange(displayValue);
+      lastPropValueRef.current = displayValue;
+    }
+  }, [displayValue, onChange]);
+
+  return (
+    <TextField
+      fullWidth
+      label="Nome da Empresa"
+      value={displayValue}
+      onChange={(e) => setDisplayValue(e.target.value)}
+      onBlur={commitChange}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitChange();
+        }
+      }}
+      autoComplete="off"
+      sx={{ 
+        mb: 3,
+        '& .MuiOutlinedInput-root': {
+          borderRadius: '12px',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+          },
+          '&.Mui-focused': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
+          }
+        }
+      }}
+    />
+  );
+});
+
+// Componente otimizado para switches
+const SettingSwitch = memo(({ checked, onChange, label, sx, theme }) => {
+  return (
+    <FormControlLabel
+      control={
+        <Switch
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          sx={{
+            '& .MuiSwitch-thumb': {
+              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+            },
+            '& .Mui-checked + .MuiSwitch-track': {
+              background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
+            }
+          }}
+        />
+      }
+      label={label}
+      sx={sx}
+    />
+  );
+});
 
 const Settings = () => {
-  const { isDarkMode, theme } = useTheme();
+  const { isDarkMode, toggleTheme, theme, animationsEnabled, transitionDuration, toggleAnimations, updateTransitionDuration } = useTheme();
+  const { settings, uiPreferences, loading: contextLoading, updateSettings } = useSettings();
+  const { isAdmin } = useAuth();
   
-  const [settings, setSettings] = useState({
-    company_name: 'TVS Digital Signage',
-    timezone: 'America/Sao_Paulo',
-    language: 'pt-BR',
-    auto_sync: true,
-    auto_update: true,
-    debug_mode: false,
-    default_resolution: '1920x1080',
-    default_volume: 50,
-    default_orientation: 'landscape',
-    dark_theme: false,
-    animations_enabled: true,
-    transition_duration: 300,
-    email_notifications: true,
-    push_notifications: true,
-    system_alerts: true,
-    max_storage_gb: 100,
-    auto_cleanup: true,
-    backup_enabled: false,
-    two_factor_auth: false,
-    session_timeout: 30,
-    password_policy: 'medium'
+  // Usar useRef para evitar re-renderizações desnecessárias
+  const formSettingsRef = useRef({
+    // Configurações Gerais
+    'general.company_name': 'TVS Digital Signage',
+    'general.timezone': 'America/Sao_Paulo',
+    'general.language': 'pt-BR',
+    'general.auto_sync': true,
+    'general.auto_update': true,
+    'general.debug_mode': false,
+    
+    // Configurações de UI
+    'ui.dark_theme': isDarkMode,
+    'ui.animations_enabled': true,
+    'ui.transition_duration': 300,
+    
+    // Configurações de Display
+    'display.default_orientation': 'landscape',
+    'display.default_volume': 50,
+    
+    // Configurações de Armazenamento
+    'storage.max_storage_gb': 100,
+    'storage.auto_cleanup': true,
+    'storage.backup_enabled': false,
+    
+    // Configurações de Segurança
+    'security.session_timeout': 30,
+    'security.password_policy': 'medium',
+    'security.two_factor_auth': false,
+    'security.login_by_trusted_ip': false,
+    'security.block_after_failed_attempts': false,
   });
   
+  // Estado para UI
+  const [formSettings, setFormSettings] = useState(formSettingsRef.current);
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Carregar configurações do contexto quando disponíveis
   useEffect(() => {
-    setLoading(false);
+    if (!contextLoading && Object.keys(settings).length > 0) {
+      const updatedSettings = {
+        ...formSettingsRef.current,
+        ...settings
+      };
+      // Enforce fixed values in UI/state
+      updatedSettings['general.language'] = 'pt-BR';
+      updatedSettings['general.timezone'] = 'America/Sao_Paulo';
+      formSettingsRef.current = updatedSettings;
+      setFormSettings(updatedSettings);
+    }
+  }, [contextLoading, settings]);
+
+  // Sincronizar tema com isDarkMode (fonte da verdade visual)
+  useEffect(() => {
+    const updatedSettings = {
+      ...formSettingsRef.current,
+      'ui.dark_theme': isDarkMode,
+    };
+    formSettingsRef.current = updatedSettings;
+    setFormSettings(updatedSettings);
+  }, [isDarkMode]);
+
+  // Função memoizada para atualizar configurações
+  const handleSettingChange = useCallback((key, value) => {
+    // Atualizar a referência primeiro
+    formSettingsRef.current = {
+      ...formSettingsRef.current,
+      [key]: value
+    };
+    
+    // Depois atualizar o estado para UI
+    setFormSettings(formSettingsRef.current);
   }, []);
 
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  const handleSave = async () => {
+  // Função memoizada para salvar configurações
+  const handleSave = useCallback(async () => {
     try {
       setSaving(true);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Enforce fixed settings before computing diffs
+      formSettingsRef.current['general.language'] = 'pt-BR';
+      formSettingsRef.current['general.timezone'] = 'America/Sao_Paulo';
+      
+      // Enviar apenas configurações que foram alteradas
+      const changedSettings = {};
+      Object.keys(formSettingsRef.current).forEach(key => {
+        if (settings[key] !== formSettingsRef.current[key]) {
+          changedSettings[key] = formSettingsRef.current[key];
+        }
+      });
+      
+      if (Object.keys(changedSettings).length > 0) {
+        await updateSettings(changedSettings);
+      }
+      
       setSuccess('Configurações salvas com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -96,7 +231,7 @@ const Settings = () => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [settings, updateSettings]);
 
   const SettingsSkeleton = () => (
     <Box>
@@ -303,11 +438,13 @@ const Settings = () => {
                   label="Exibição" 
                   iconPosition="start"
                 />
-                <Tab 
-                  icon={<NotificationsIcon />} 
-                  label="Notificações" 
-                  iconPosition="start"
-                />
+                {false && (
+                  <Tab 
+                    icon={<NotificationsIcon />} 
+                    label="Notificações" 
+                    iconPosition="start"
+                  />
+                )}
                 <Tab 
                   icon={<StorageIcon />} 
                   label="Armazenamento" 
@@ -385,66 +522,44 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
+                      <CompanyNameField 
+                        value={formSettings['general.company_name']} 
+                        onChange={(value) => handleSettingChange('general.company_name', value)}
+                        theme={theme}
+                      />
+                      
                       <TextField
                         fullWidth
-                        label="Nome da Empresa"
-                        value={settings.company_name}
-                        onChange={(e) => handleSettingChange('company_name', e.target.value)}
+                        label="Timezone"
+                        value="São Paulo (GMT-3)"
+                        disabled
                         sx={{ 
                           mb: 3,
-                          '& .MuiOutlinedInput-root': {
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                            },
-                            '&.Mui-focused': {
-                              transform: 'translateY(-2px)',
-                              boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
-                            }
-                          }
+                          '& .MuiOutlinedInput-root': { borderRadius: '12px' }
                         }}
                       />
                       
-                      <FormControl fullWidth sx={{ mb: 3 }}>
-                        <InputLabel>Timezone</InputLabel>
-                        <Select
-                          value={settings.timezone}
-                          onChange={(e) => handleSettingChange('timezone', e.target.value)}
-                          label="Timezone"
-                          sx={{
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                            }
-                          }}
-                        >
-                          <MenuItem value="America/Sao_Paulo">São Paulo (GMT-3)</MenuItem>
-                          <MenuItem value="America/New_York">New York (GMT-5)</MenuItem>
-                          <MenuItem value="Europe/London">London (GMT+0)</MenuItem>
-                        </Select>
-                      </FormControl>
-                      
-                      <FormControl fullWidth>
-                        <InputLabel>Idioma</InputLabel>
-                        <Select
-                          value={settings.language}
-                          onChange={(e) => handleSettingChange('language', e.target.value)}
-                          label="Idioma"
-                          sx={{
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                            }
-                          }}
-                        >
-                          <MenuItem value="pt-BR">Português (Brasil)</MenuItem>
-                          <MenuItem value="en-US">English (US)</MenuItem>
-                          <MenuItem value="es-ES">Español</MenuItem>
-                        </Select>
-                      </FormControl>
+                      {false && (
+                        <FormControl fullWidth>
+                          <InputLabel>Idioma</InputLabel>
+                          <Select
+                            value={formSettings['general.language']}
+                            onChange={(e) => handleSettingChange('general.language', e.target.value)}
+                            label="Idioma"
+                            sx={{
+                              borderRadius: '12px',
+                              transition: 'all 0.3s ease',
+                              '&:hover': {
+                                transform: 'translateY(-1px)',
+                              }
+                            }}
+                          >
+                            <MenuItem value="pt-BR">Português (Brasil)</MenuItem>
+                            <MenuItem value="en-US">English (US)</MenuItem>
+                            <MenuItem value="es-ES">Español</MenuItem>
+                          </Select>
+                        </FormControl>
+                      )}
                     </CardContent>
                   </Card>
                 </Grow>
@@ -479,62 +594,31 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.auto_sync}
-                            onChange={(e) => handleSettingChange('auto_sync', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={formSettings['general.auto_sync']}
+                        onChange={(checked) => handleSettingChange('general.auto_sync', checked)}
                         label="Sincronização Automática"
                         sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
                       />
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.auto_update}
-                            onChange={(e) => handleSettingChange('auto_update', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={formSettings['general.auto_update']}
+                        onChange={(checked) => handleSettingChange('general.auto_update', checked)}
                         label="Atualizações Automáticas"
                         sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
                       />
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.debug_mode}
-                            onChange={(e) => handleSettingChange('debug_mode', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
-                        label="Modo Debug"
-                        sx={{ display: 'block' }}
-                      />
+                      {isAdmin && (
+                        <SettingSwitch
+                          checked={formSettings['general.debug_mode']}
+                          onChange={(checked) => handleSettingChange('general.debug_mode', checked)}
+                          label="Modo Debug"
+                          sx={{ display: 'block' }}
+                          theme={theme}
+                        />
+                      )}
                     </CardContent>
                   </Card>
                 </Grow>
@@ -574,32 +658,35 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <FormControl fullWidth sx={{ mb: 3 }}>
-                        <InputLabel>Resolução Padrão</InputLabel>
-                        <Select
-                          value={settings.default_resolution}
-                          onChange={(e) => handleSettingChange('default_resolution', e.target.value)}
-                          label="Resolução Padrão"
-                          sx={{
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                            }
-                          }}
-                        >
-                          <MenuItem value="1920x1080">Full HD (1920x1080)</MenuItem>
-                          <MenuItem value="1366x768">HD (1366x768)</MenuItem>
-                          <MenuItem value="3840x2160">4K (3840x2160)</MenuItem>
-                          <MenuItem value="2560x1440">2K (2560x1440)</MenuItem>
-                        </Select>
-                      </FormControl>
+                      {/* Resolução Padrão – ocultada por não ser funcional */}
+                      {false && (
+                        <FormControl fullWidth sx={{ mb: 3 }}>
+                          <InputLabel>Resolução Padrão</InputLabel>
+                          <Select
+                            value={formSettings['display.default_resolution']}
+                            onChange={(e) => handleSettingChange('display.default_resolution', e.target.value)}
+                            label="Resolução Padrão"
+                            sx={{
+                              borderRadius: '12px',
+                              transition: 'all 0.3s ease',
+                              '&:hover': {
+                                transform: 'translateY(-1px)',
+                              }
+                            }}
+                          >
+                            <MenuItem value="1920x1080">Full HD (1920x1080)</MenuItem>
+                            <MenuItem value="1366x768">HD (1366x768)</MenuItem>
+                            <MenuItem value="3840x2160">4K (3840x2160)</MenuItem>
+                            <MenuItem value="2560x1440">2K (2560x1440)</MenuItem>
+                          </Select>
+                        </FormControl>
+                      )}
                       
                       <FormControl fullWidth sx={{ mb: 3 }}>
                         <InputLabel>Orientação</InputLabel>
                         <Select
-                          value={settings.default_orientation}
-                          onChange={(e) => handleSettingChange('default_orientation', e.target.value)}
+                          value={formSettings['display.default_orientation']}
+                          onChange={(e) => handleSettingChange('display.default_orientation', e.target.value)}
                           label="Orientação"
                           sx={{
                             borderRadius: '12px',
@@ -616,11 +703,11 @@ const Settings = () => {
 
                       <Box sx={{ mb: 3 }}>
                         <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Volume Padrão: {settings.default_volume}%
+                          Volume Padrão: {formSettings['display.default_volume']}%
                         </Typography>
                         <Slider
-                          value={settings.default_volume}
-                          onChange={(e, value) => handleSettingChange('default_volume', value)}
+                          value={formSettings['display.default_volume']}
+                          onChange={(e, value) => handleSettingChange('display.default_volume', value)}
                           valueLabelDisplay="auto"
                           min={0}
                           max={100}
@@ -668,51 +755,29 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.dark_theme}
-                            onChange={(e) => handleSettingChange('dark_theme', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={isDarkMode}
+                        onChange={(checked) => { handleSettingChange('ui.dark_theme', checked); toggleTheme(); }}
                         label="Tema Escuro"
                         sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
                       />
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.animations_enabled}
-                            onChange={(e) => handleSettingChange('animations_enabled', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={animationsEnabled}
+                        onChange={(checked) => { handleSettingChange('ui.animations_enabled', checked); toggleAnimations(); }}
                         label="Animações Habilitadas"
                         sx={{ mb: 3, display: 'block' }}
+                        theme={theme}
                       />
 
                       <Box>
                         <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Duração das Transições: {settings.transition_duration}ms
+                          Duração das Transições: {transitionDuration}ms
                         </Typography>
                         <Slider
-                          value={settings.transition_duration}
-                          onChange={(e, value) => handleSettingChange('transition_duration', value)}
+                          value={transitionDuration}
+                          onChange={(e, value) => { handleSettingChange('ui.transition_duration', value); updateTransitionDuration(value); }}
                           valueLabelDisplay="auto"
                           min={100}
                           max={1000}
@@ -735,6 +800,7 @@ const Settings = () => {
           </TabPanel>
 
           {/* Aba Notificações */}
+          {false && (
           <TabPanel value={activeTab} index={2}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
@@ -766,61 +832,32 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.email_notifications}
-                            onChange={(e) => handleSettingChange('email_notifications', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <Alert severity="info" sx={{ mb: 3, borderRadius: '12px' }}>
+                        As configurações de notificações por email requerem configuração adicional do servidor SMTP.
+                      </Alert>
+                      
+                      <SettingSwitch
+                        checked={false}
+                        onChange={(checked) => {}}
                         label="Notificações por Email"
                         sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
                       />
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.push_notifications}
-                            onChange={(e) => handleSettingChange('push_notifications', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={false}
+                        onChange={(checked) => {}}
                         label="Notificações Push"
                         sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
                       />
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.system_alerts}
-                            onChange={(e) => handleSettingChange('system_alerts', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={false}
+                        onChange={(checked) => {}}
                         label="Alertas do Sistema"
                         sx={{ display: 'block' }}
+                        theme={theme}
                       />
                     </CardContent>
                   </Card>
@@ -828,9 +865,10 @@ const Settings = () => {
               </Grid>
             </Grid>
           </TabPanel>
+          )}
 
           {/* Aba Armazenamento */}
-          <TabPanel value={activeTab} index={3}>
+          <TabPanel value={activeTab} index={2}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Grow in={true} timeout={1400}>
@@ -863,11 +901,11 @@ const Settings = () => {
                       
                       <Box sx={{ mb: 3 }}>
                         <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Limite de Armazenamento: {settings.max_storage_gb} GB
+                          Limite de Armazenamento: {formSettings['storage.max_storage_gb']} GB
                         </Typography>
                         <Slider
-                          value={settings.max_storage_gb}
-                          onChange={(e, value) => handleSettingChange('max_storage_gb', value)}
+                          value={formSettings['storage.max_storage_gb']}
+                          onChange={(e, value) => handleSettingChange('storage.max_storage_gb', value)}
                           valueLabelDisplay="auto"
                           min={10}
                           max={1000}
@@ -883,52 +921,162 @@ const Settings = () => {
                         />
                       </Box>
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.auto_cleanup}
-                            onChange={(e) => handleSettingChange('auto_cleanup', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={formSettings['storage.auto_cleanup']}
+                        onChange={(checked) => handleSettingChange('storage.auto_cleanup', checked)}
                         label="Limpeza Automática"
                         sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
                       />
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.backup_enabled}
-                            onChange={(e) => handleSettingChange('backup_enabled', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
+                      <SettingSwitch
+                        checked={formSettings['storage.backup_enabled']}
+                        onChange={(checked) => handleSettingChange('storage.backup_enabled', checked)}
                         label="Backup Automático"
                         sx={{ display: 'block' }}
+                        theme={theme}
                       />
                     </CardContent>
                   </Card>
                 </Grow>
               </Grid>
+                
+              {false && (
+              <Grid item xs={12} md={6}>
+                <Grow in={true} timeout={1600}>
+                  <Card 
+                    sx={{ 
+                      borderRadius: '16px',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
+                      backdropFilter: 'blur(20px)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                    }}
+                  >
+                    <CardContent sx={{ p: 3 }}>
+                      <Box display="flex" alignItems="center" mb={3}>
+                        <Avatar
+                          sx={{
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #3f51b5 0%, #7986cb 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
+                            mr: 2,
+                            width: 40,
+                            height: 40,
+                          }}
+                        >
+                          <CloudIcon />
+                        </Avatar>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                          Uso de Armazenamento
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ mb: 3, p: 2, border: `1px solid ${theme.palette.divider}`, borderRadius: '12px' }}>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          Uso atual do armazenamento
+                        </Typography>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                          <Typography variant="body1">Conteúdo</Typography>
+                          <Typography variant="body1" fontWeight="bold">12.4 GB</Typography>
+                        </Box>
+                        <Box sx={{ width: '100%', mb: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={25} 
+                            sx={{ 
+                              height: 8, 
+                              borderRadius: 4,
+                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                              '& .MuiLinearProgress-bar': {
+                                background: 'linear-gradient(90deg, #2196f3, #21CBF3)'
+                              }
+                            }} 
+                          />
+                        </Box>
+                        
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1} mt={2}>
+                          <Typography variant="body1">Campanhas</Typography>
+                          <Typography variant="body1" fontWeight="bold">5.8 GB</Typography>
+                        </Box>
+                        <Box sx={{ width: '100%', mb: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={12} 
+                            sx={{ 
+                              height: 8, 
+                              borderRadius: 4,
+                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                              '& .MuiLinearProgress-bar': {
+                                background: 'linear-gradient(90deg, #ff9800, #ff7730)'
+                              }
+                            }} 
+                          />
+                        </Box>
+                        
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1} mt={2}>
+                          <Typography variant="body1">Sistema</Typography>
+                          <Typography variant="body1" fontWeight="bold">2.3 GB</Typography>
+                        </Box>
+                        <Box sx={{ width: '100%', mb: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={5} 
+                            sx={{ 
+                              height: 8, 
+                              borderRadius: 4,
+                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                              '& .MuiLinearProgress-bar': {
+                                background: 'linear-gradient(90deg, #4caf50, #81c784)'
+                              }
+                            }} 
+                          />
+                        </Box>
+                        
+                        <Divider sx={{ my: 2 }} />
+                        
+                        <Box display="flex" alignItems="center" justifyContent="space-between">
+                          <Typography variant="body1" fontWeight="bold">Total</Typography>
+                          <Typography variant="body1" fontWeight="bold">20.5 GB / {formSettings['storage.max_storage_gb']} GB</Typography>
+                        </Box>
+                        <Box sx={{ width: '100%', mt: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={(20.5 / formSettings['storage.max_storage_gb']) * 100} 
+                            sx={{ 
+                              height: 10, 
+                              borderRadius: 4,
+                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                              '& .MuiLinearProgress-bar': {
+                                background: 'linear-gradient(90deg, #3f51b5, #7986cb)'
+                              }
+                            }} 
+                          />
+                        </Box>
+                      </Box>
+                      
+                      <Button
+                        variant="outlined"
+                        startIcon={<RefreshIcon />}
+                        fullWidth
+                        sx={{
+                          borderRadius: '12px',
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          py: 1,
+                        }}
+                      >
+                        Atualizar Estatísticas
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Grow>
+              </Grid>
+              )}
             </Grid>
           </TabPanel>
 
           {/* Aba Segurança */}
-          <TabPanel value={activeTab} index={4}>
+          <TabPanel value={activeTab} index={3}>
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Grow in={true} timeout={1400}>
@@ -959,32 +1107,13 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={settings.two_factor_auth}
-                            onChange={(e) => handleSettingChange('two_factor_auth', e.target.checked)}
-                            sx={{
-                              '& .MuiSwitch-thumb': {
-                                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                              },
-                              '& .Mui-checked + .MuiSwitch-track': {
-                                background: theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.3)' : 'rgba(255, 119, 48, 0.3)',
-                              }
-                            }}
-                          />
-                        }
-                        label="Autenticação de Dois Fatores"
-                        sx={{ mb: 3, display: 'block' }}
-                      />
-                      
                       <Box sx={{ mb: 3 }}>
                         <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Timeout da Sessão: {settings.session_timeout} minutos
+                          Timeout da Sessão: {formSettings['security.session_timeout']} minutos
                         </Typography>
                         <Slider
-                          value={settings.session_timeout}
-                          onChange={(e, value) => handleSettingChange('session_timeout', value)}
+                          value={formSettings['security.session_timeout']}
+                          onChange={(e, value) => handleSettingChange('security.session_timeout', value)}
                           valueLabelDisplay="auto"
                           min={5}
                           max={120}
@@ -1003,8 +1132,8 @@ const Settings = () => {
                       <FormControl fullWidth>
                         <InputLabel>Política de Senha</InputLabel>
                         <Select
-                          value={settings.password_policy}
-                          onChange={(e) => handleSettingChange('password_policy', e.target.value)}
+                          value={formSettings['security.password_policy']}
+                          onChange={(e) => handleSettingChange('security.password_policy', e.target.value)}
                           label="Política de Senha"
                           sx={{
                             borderRadius: '12px',
@@ -1023,6 +1152,69 @@ const Settings = () => {
                   </Card>
                 </Grow>
               </Grid>
+                
+              {false && (
+              <Grid item xs={12} md={6}>
+                <Grow in={true} timeout={1600}>
+                  <Card 
+                    sx={{ 
+                      borderRadius: '16px',
+                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
+                      backdropFilter: 'blur(20px)',
+                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
+                    }}
+                  >
+                    <CardContent sx={{ p: 3 }}>
+                      <Box display="flex" alignItems="center" mb={3}>
+                        <Avatar
+                          sx={{
+                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
+                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
+                            mr: 2,
+                            width: 40,
+                            height: 40,
+                          }}
+                        >
+                          <SecurityIcon />
+                        </Avatar>
+                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                          Autenticação Avançada
+                        </Typography>
+                      </Box>
+                      
+                      <Alert severity="info" sx={{ mb: 3, borderRadius: '12px' }}>
+                        Recursos de autenticação avançada serão implementados em uma atualização futura.
+                      </Alert>
+                      
+                      <SettingSwitch
+                        checked={false}
+                        onChange={(checked) => {}}
+                        label="Autenticação de Dois Fatores"
+                        sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
+                      />
+                      
+                      <SettingSwitch
+                        checked={false}
+                        onChange={(checked) => {}}
+                        label="Login por IP Confiável"
+                        sx={{ mb: 2, display: 'block' }}
+                        theme={theme}
+                      />
+                      
+                      <SettingSwitch
+                        checked={false}
+                        onChange={(checked) => {}}
+                        label="Bloqueio Após Tentativas Falhas"
+                        sx={{ display: 'block' }}
+                        theme={theme}
+                      />
+                    </CardContent>
+                  </Card>
+                </Grow>
+              </Grid>
+              )}
             </Grid>
           </TabPanel>
         </>

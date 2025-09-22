@@ -90,6 +90,7 @@ from models.player import Player
 from models.schedule import Schedule
 from models.editorial import Editorial
 from models.location import Location
+from models.system_config import SystemConfig
 
 # Importar rotas
 from routes.auth import auth_bp
@@ -101,6 +102,7 @@ from routes.player import player_bp
 from routes.schedule import schedule_bp
 from routes.dashboard import dashboard_bp
 from routes.cast import cast_bp
+from routes.settings import settings_bp
 
 # Registrar blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -112,6 +114,7 @@ app.register_blueprint(player_bp, url_prefix='/api/players')
 app.register_blueprint(schedule_bp, url_prefix='/api/schedules')
 app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
 app.register_blueprint(cast_bp, url_prefix='/api/cast')
+app.register_blueprint(settings_bp)
 
 # Configurar scheduler para tarefas automáticas
 scheduler = BackgroundScheduler()
@@ -151,8 +154,13 @@ scheduler.add_job(
 def sync_player_statuses_job():
     try:
         with app.app_context():
-            from services.auto_sync_service import auto_sync_service
-            auto_sync_service.sync_all_players()
+            # Respeitar configuração do sistema: general.auto_sync
+            enabled = SystemConfig.get_value('general.auto_sync')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True or enabled is None:
+                from services.auto_sync_service import auto_sync_service
+                auto_sync_service.sync_all_players()
+            else:
+                print("[AutoSync] Ignorado (general.auto_sync = false)")
     except Exception as e:
         print(f"[AutoSync] Falha ao sincronizar players: {e}")
 

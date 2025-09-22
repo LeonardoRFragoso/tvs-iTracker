@@ -42,6 +42,28 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const connectTimeoutRef = useRef(null);
   const debounceRef = useRef(null);
 
+  // Preferências globais de player vindas do backend (público)
+  const [playerPrefs, setPlayerPrefs] = useState({
+    orientation: 'landscape',
+    volume: 50,
+  });
+
+  // Carregar preferências públicas do player (sem exigir autenticação)
+  useEffect(() => {
+    const loadPrefs = async () => {
+      try {
+        const res = await axios.get('/settings/player-preferences');
+        const prefs = res.data?.preferences || {};
+        const orientation = prefs['display.default_orientation'] || 'landscape';
+        const volume = typeof prefs['display.default_volume'] === 'number' ? prefs['display.default_volume'] : 50;
+        setPlayerPrefs({ orientation, volume });
+      } catch (e) {
+        // Defaults já definidos
+      }
+    };
+    loadPrefs();
+  }, []);
+
   // Circuit Breaker: Previne loops infinitos
   const MAX_ATTEMPTS = 5;
   const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 segundos
@@ -100,11 +122,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     const onUserInteract = () => {
       if (userInteractedRef.current) return;
       userInteractedRef.current = true;
-      setMuted(false);
+      setMuted(playerPrefs.volume <= 0);
       if (mediaRef.current) {
         try {
-          mediaRef.current.muted = false;
-          mediaRef.current.volume = 1.0;
+          mediaRef.current.muted = playerPrefs.volume <= 0;
+          mediaRef.current.volume = Math.max(0, Math.min(1, (playerPrefs.volume || 0) / 100));
           mediaRef.current.play().catch(() => {});
         } catch (_) {}
       }
@@ -122,7 +144,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       document.removeEventListener('keydown', onUserInteract);
       document.removeEventListener('touchstart', onUserInteract);
     };
-  }, []);
+  }, [playerPrefs.volume]);
 
   useEffect(() => {
     mediaErrorCountRef.current = 0;
@@ -453,7 +475,8 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     if (mediaRef.current) {
       try {
         mediaRef.current.muted = muted;
-        mediaRef.current.volume = muted ? 0 : 1.0;
+        // Se não estiver mudo, usar o volume padrão das preferências
+        mediaRef.current.volume = muted ? 0 : Math.max(0, Math.min(1, (playerPrefs.volume || 100) / 100));
         mediaRef.current.play().catch(() => {});
       } catch (_) {}
       setIsPlaying(true);
@@ -760,6 +783,9 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         height: fullscreen ? '100vh' : '400px',
         backgroundColor: '#000',
         overflow: 'hidden',
+        // Aplicar orientação: em portrait, rotacionar o container interno para ocupar a tela
+        transform: playerPrefs.orientation === 'portrait' ? 'rotate(90deg)' : 'none',
+        transformOrigin: 'center center',
       }}
     >
       {renderContent()}
@@ -835,11 +861,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
           <Button
             variant="contained"
             onClick={() => {
-              setMuted(false);
+              setMuted(playerPrefs.volume <= 0);
               if (mediaRef.current) {
                 try {
-                  mediaRef.current.muted = false;
-                  mediaRef.current.volume = 1.0;
+                  mediaRef.current.muted = playerPrefs.volume <= 0;
+                  mediaRef.current.volume = Math.max(0, Math.min(1, (playerPrefs.volume || 0) / 100));
                   mediaRef.current.play().catch(() => {});
                 } catch (_) {}
               }

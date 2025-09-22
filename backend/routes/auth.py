@@ -7,6 +7,7 @@ from models.user import User, db
 from sqlalchemy import or_
 from sqlalchemy import distinct
 from services.auto_sync_service import auto_sync_service
+from models.system_config import SystemConfig
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -48,27 +49,31 @@ def login():
         # Criar token JWT
         access_token = create_access_token(identity=user.id)
         
-        # Iniciar sincronização automática de players em background
+        # Iniciar sincronização automática de players em background (se habilitada)
         try:
-            print("[AUTH] Iniciando sincronização automática de players após login...")
-            
-            # Executar sync em thread separada para não bloquear o login
-            import threading
-            from flask import current_app
-            
-            # Capturar a instância da aplicação antes de criar a thread
-            app = current_app._get_current_object()
-            
-            def sync_with_context():
-                with app.app_context():
-                    auto_sync_service.sync_all_players()
-            
-            sync_thread = threading.Thread(
-                target=sync_with_context,
-                daemon=True
-            )
-            sync_thread.start()
-            print("[AUTH] Sincronização automática iniciada em background")
+            enabled = SystemConfig.get_value('general.auto_sync')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True or enabled is None:
+                print("[AUTH] Iniciando sincronização automática de players após login...")
+                
+                # Executar sync em thread separada para não bloquear o login
+                import threading
+                from flask import current_app
+                
+                # Capturar a instância da aplicação antes de criar a thread
+                app = current_app._get_current_object()
+                
+                def sync_with_context():
+                    with app.app_context():
+                        auto_sync_service.sync_all_players()
+                
+                sync_thread = threading.Thread(
+                    target=sync_with_context,
+                    daemon=True
+                )
+                sync_thread.start()
+                print("[AUTH] Sincronização automática iniciada em background")
+            else:
+                print("[AUTH] Auto-sync desabilitado por configuração (general.auto_sync = false)")
         except Exception as sync_error:
             print(f"[AUTH] Erro ao iniciar sincronização automática: {sync_error}")
             # Não falhar o login se a sincronização falhar

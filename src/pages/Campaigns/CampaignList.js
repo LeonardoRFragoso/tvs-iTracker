@@ -43,6 +43,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import axios from '../../config/axios';
 import PageTitle from '../../components/Common/PageTitle';
 
@@ -75,6 +76,7 @@ const parseDateTimeFlexible = (value) => {
 const CampaignList = () => {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
+  const { user } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -89,6 +91,11 @@ const CampaignList = () => {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [filterCompany, setFilterCompany] = useState('');
   const [companies, setCompanies] = useState([]);
+
+  const canDeleteCampaign = (campaign) => {
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'manager' || campaign.user_id === user.id;
+  };
 
   useEffect(() => {
     loadCampaigns();
@@ -802,6 +809,28 @@ const CampaignList = () => {
           <EditIcon sx={{ mr: 1 }} />
           Editar
         </MenuItem>
+        {selectedCampaign && canDeleteCampaign(selectedCampaign) && (
+          <MenuItem 
+            onClick={() => {
+              setDeleteDialog({ open: true, campaign: selectedCampaign });
+              handleMenuClose();
+            }}
+            sx={{
+              borderRadius: '8px',
+              mx: 1,
+              my: 0.5,
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                background: 'rgba(244, 67, 54, 0.1)',
+                transform: 'translateX(4px)',
+                color: 'error.main',
+              }
+            }}
+          >
+            <DeleteIcon sx={{ mr: 1 }} />
+            Deletar
+          </MenuItem>
+        )}
         <MenuItem 
           onClick={() => handleStatusToggle(selectedCampaign)}
           disabled={Boolean(selectedCampaign && actionLoadingId === selectedCampaign.id)}
@@ -829,26 +858,6 @@ const CampaignList = () => {
               Ativar
             </>
           )}
-        </MenuItem>
-        <MenuItem 
-          onClick={() => {
-            setDeleteDialog({ open: true, campaign: selectedCampaign });
-            handleMenuClose();
-          }}
-          sx={{
-            borderRadius: '8px',
-            mx: 1,
-            my: 0.5,
-            transition: 'all 0.3s ease',
-            '&:hover': {
-              background: 'rgba(244, 67, 54, 0.1)',
-              transform: 'translateX(4px)',
-              color: 'error.main',
-            }
-          }}
-        >
-          <DeleteIcon sx={{ mr: 1 }} />
-          Deletar
         </MenuItem>
       </Menu>
 

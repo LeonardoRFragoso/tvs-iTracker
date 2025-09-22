@@ -5,6 +5,8 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import './config/axios'; // Import axios configuration
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import App from './App';
 
 const AppWithTheme = () => {
@@ -32,9 +34,13 @@ root.render(
         v7_relativeSplatPath: true,
       }}
     >
-      <ThemeProvider>
-        <AppWithTheme />
-      </ThemeProvider>
+      <AuthProvider>
+        <SettingsProvider>
+          <ThemeProvider>
+            <AppWithTheme />
+          </ThemeProvider>
+        </SettingsProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar,
@@ -52,12 +52,14 @@ const Layout = () => {
     players: 0
   });
   const { user, logout } = useAuth();
-  const { isDarkMode, toggleTheme } = useTheme();
+  const { isDarkMode, toggleTheme, animationsEnabled, transitionDuration } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const didFetchBadgesRef = useRef(false);
 
   // Buscar dados para badges
   useEffect(() => {
+    if (didFetchBadgesRef.current) return;
     const fetchBadgeData = async () => {
       try {
         const [contentRes, locationsRes, dashboardRes] = await Promise.all([
@@ -83,6 +85,7 @@ const Layout = () => {
     };
 
     fetchBadgeData();
+    didFetchBadgesRef.current = true;
   }, []);
 
   const menuItems = [
@@ -317,7 +320,7 @@ const Layout = () => {
                   </Divider>
                 )}
                 
-                <Fade in={true} timeout={300 + index * 100}>
+                <Fade in={true} timeout={animationsEnabled ? Math.max(0, Math.min(transitionDuration + index * 100, 1500)) : 0}>
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
                       selected={isActive}

@@ -2,7 +2,8 @@ from flask import Blueprint, request, jsonify
 from database import db
 from models.campaign import Campaign, CampaignContent
 from models.content import Content
-from flask_jwt_extended import jwt_required
+from models.user import User
+from flask_jwt_extended import jwt_required, get_jwt_identity
 import uuid
 import json
 
@@ -51,6 +52,12 @@ def add_content_to_campaign(campaign_id):
         campaign = Campaign.query.get(campaign_id)
         if not campaign:
             return jsonify({'error': 'Campanha não encontrada'}), 404
+        
+        # Permissão: somente dono da campanha ou admin/manager
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if campaign.user_id != user_id and (not user or user.role not in ['admin', 'manager']):
+            return jsonify({'error': 'Sem permissão para editar esta campanha'}), 403
         
         content_id = data.get('content_id')
         if not content_id:
@@ -109,6 +116,15 @@ def add_content_to_campaign(campaign_id):
 def remove_content_from_campaign(campaign_id, content_id):
     """Remove conteúdo específico da campanha"""
     try:
+        # Verificar campanha e permissão
+        campaign = Campaign.query.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campanha não encontrada'}), 404
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if campaign.user_id != user_id and (not user or user.role not in ['admin', 'manager']):
+            return jsonify({'error': 'Sem permissão para editar esta campanha'}), 403
+        
         campaign_content = CampaignContent.query.filter_by(
             campaign_id=campaign_id,
             content_id=content_id
@@ -119,7 +135,6 @@ def remove_content_from_campaign(campaign_id, content_id):
         
         db.session.delete(campaign_content)
         try:
-            campaign = Campaign.query.get(campaign_id)
             if campaign:
                 campaign.compiled_stale = True
                 campaign.compiled_video_status = 'stale'
@@ -139,6 +154,15 @@ def update_campaign_content(campaign_id, content_id):
     """Atualiza configurações de um conteúdo na campanha"""
     try:
         data = request.get_json()
+        
+        # Verificar campanha e permissão
+        campaign = Campaign.query.get(campaign_id)
+        if not campaign:
+            return jsonify({'error': 'Campanha não encontrada'}), 404
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if campaign.user_id != user_id and (not user or user.role not in ['admin', 'manager']):
+            return jsonify({'error': 'Sem permissão para editar esta campanha'}), 403
         
         campaign_content = CampaignContent.query.filter_by(
             campaign_id=campaign_id,
@@ -169,7 +193,6 @@ def update_campaign_content(campaign_id, content_id):
         
         # Marcar compilado como stale
         try:
-            campaign = Campaign.query.get(campaign_id)
             if campaign:
                 campaign.compiled_stale = True
                 campaign.compiled_video_status = 'stale'
@@ -201,6 +224,12 @@ def reorder_campaign_contents(campaign_id):
         if not campaign:
             return jsonify({'error': 'Campanha não encontrada'}), 404
         
+        # Permissão: somente dono da campanha ou admin/manager
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if campaign.user_id != user_id and (not user or user.role not in ['admin', 'manager']):
+            return jsonify({'error': 'Sem permissão para editar esta campanha'}), 403
+        
         # Atualizar order_index para cada conteúdo
         for item in content_orders:
             content_id = item.get('content_id')
@@ -219,7 +248,6 @@ def reorder_campaign_contents(campaign_id):
         
         # Marcar compilado como stale após reordenar
         try:
-            campaign = Campaign.query.get(campaign_id)
             if campaign:
                 campaign.compiled_stale = True
                 campaign.compiled_video_status = 'stale'
@@ -247,6 +275,12 @@ def bulk_update_campaign_contents(campaign_id):
         campaign = Campaign.query.get(campaign_id)
         if not campaign:
             return jsonify({'error': 'Campanha não encontrada'}), 404
+        
+        # Permissão: somente dono da campanha ou admin/manager
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if campaign.user_id != user_id and (not user or user.role not in ['admin', 'manager']):
+            return jsonify({'error': 'Sem permissão para editar esta campanha'}), 403
         
         updated_count = 0
         

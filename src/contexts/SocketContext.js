@@ -19,6 +19,9 @@ export const SocketProvider = ({ children }) => {
   const [adminTraffic, setAdminTraffic] = useState(null);
   const { user } = useAuth();
   const switchedToSameOriginRef = useRef(false);
+  const initTimerRef = useRef(null);
+  const sockRef = useRef(null);
+  const lastInitKeyRef = useRef(null);
 
   useEffect(() => {
     const proto = window.location.protocol;
@@ -47,96 +50,123 @@ export const SocketProvider = ({ children }) => {
       targetUrl = `${proto}//${host}:5000`;
     }
 
-    console.log('[Socket] targetUrl:', targetUrl, 'pathname:', path);
-
     // Só conectar se autenticado OU em modo kiosk
     if (!user && !isKiosk) return;
 
     const token = user ? localStorage.getItem('access_token') : null;
+    const initKey = `${targetUrl}|${isKiosk ? '1' : '0'}|${user ? 'auth' : 'public'}`;
 
-    const createSocket = (baseUrl) => {
-      const socketInstance = io(baseUrl || undefined, {
-        path: '/socket.io',
-        auth: user ? { token } : { public: true, player_id: (isKiosk ? (path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null) : null) },
-        transports: ['polling'],
-        upgrade: false,
-        rememberUpgrade: false,
-        timeout: 20000,
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-      });
+    // Cancel any pending init from a previous render
+    if (initTimerRef.current) {
+      clearTimeout(initTimerRef.current);
+      initTimerRef.current = null;
+    }
 
-      socketInstance.on('connect', () => {
-        console.log('Conectado ao servidor WebSocket', baseUrl || '(same-origin)');
-        setConnected(true);
-        // Auto-join player room em modo kiosk
-        if (isKiosk) {
-          const kioskPlayerId = path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null;
-          if (kioskPlayerId) socketInstance.emit('join_player', { player_id: kioskPlayerId });
-        }
-        // Admin/Manager join admin room
-        try {
-          if (user && user.role === 'admin') {
-            socketInstance.emit('join_admin');
+    // Debounce init to avoid StrictMode double-invocation creating multiple sockets
+    initTimerRef.current = setTimeout(() => {
+      // If same context already initialized and active, skip
+      if (lastInitKeyRef.current === initKey && sockRef.current) {
+        return;
+      }
+
+      // Clean up any existing socket instance before creating a new one
+      try { sockRef.current?.removeAllListeners?.(); } catch (_) {}
+      try { sockRef.current?.disconnect?.(); } catch (_) {}
+      sockRef.current = null;
+
+      const createSocket = (baseUrl) => {
+        const socketInstance = io(baseUrl || undefined, {
+          path: '/socket.io',
+          auth: user ? { token } : { public: true, player_id: (isKiosk ? (path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null) : null) },
+          transports: ['polling'],
+          upgrade: false,
+          rememberUpgrade: false,
+          timeout: 20000,
+          reconnection: true,
+          reconnectionAttempts: Infinity,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+        });
+
+        socketInstance.on('connect', () => {
+          console.log('Conectado ao servidor WebSocket', baseUrl || '(same-origin)');
+          setConnected(true);
+          // Auto-join player room em modo kiosk
+          if (isKiosk) {
+            const kioskPlayerId = path.match(/\/kiosk\/player\/(.+)$/)?.[1]?.split('/')?.[0] || null;
+            if (kioskPlayerId) socketInstance.emit('join_player', { player_id: kioskPlayerId });
           }
-        } catch (_) {}
-      });
+          // Admin/Manager join admin room
+          try {
+            if (user && user.role === 'admin') {
+              socketInstance.emit('join_admin');
+            }
+          } catch (_) {}
+        });
 
-      socketInstance.on('disconnect', () => {
-        console.log('Desconectado do servidor WebSocket');
-        setConnected(false);
-      });
+        socketInstance.on('disconnect', () => {
+          console.log('Desconectado do servidor WebSocket');
+          setConnected(false);
+        });
 
-      socketInstance.on('connect_error', (err) => {
-        const msg = String(err?.message || err || '');
-        const isConnRefused = /ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(msg);
-        const using5000 = (baseUrl || '').includes(':5000');
-        if (isConnRefused && (!baseUrl || using5000) && !switchedToSameOriginRef.current) {
-          switchedToSameOriginRef.current = true;
-          try { socketInstance.removeAllListeners(); } catch (_) {}
-          try { socketInstance.disconnect(); } catch (_) {}
-          const fallbackUrl = sameOrigin;
-          console.warn('[Socket] Problema de conexão, alternando para same-origin:', fallbackUrl);
-          const newSock = createSocket(fallbackUrl);
-          setSocket(newSock);
-        }
-      });
+        socketInstance.on('connect_error', (err) => {
+          const msg = String(err?.message || err || '');
+          const isConnRefused = /ECONNREFUSED|ERR_CONNECTION_REFUSED/i.test(msg);
+          const using5000 = (baseUrl || '').includes(':5000');
+          if (isConnRefused && (!baseUrl || using5000) && !switchedToSameOriginRef.current) {
+            switchedToSameOriginRef.current = true;
+            try { socketInstance.removeAllListeners(); } catch (_) {}
+            try { socketInstance.disconnect(); } catch (_) {}
+            const fallbackUrl = sameOrigin;
+            console.warn('[Socket] Problema de conexão, alternando para same-origin:', fallbackUrl);
+            const newSock = createSocket(fallbackUrl);
+            setSocket(newSock);
+            sockRef.current = newSock;
+            lastInitKeyRef.current = initKey;
+          }
+        });
 
-      socketInstance.on('connected', (data) => {
-        console.log('WebSocket conectado:', data);
-      });
+        socketInstance.on('connected', (data) => {
+          console.log('WebSocket conectado:', data);
+        });
 
-      socketInstance.on('player_command', (data) => {
-        console.log('Comando recebido:', data);
-      });
+        socketInstance.on('player_command', (data) => {
+          console.log('Comando recebido:', data);
+        });
 
-      socketInstance.on('notification', (notification) => {
-        setNotifications(prev => [notification, ...prev.slice(0, 49)]);
-      });
+        socketInstance.on('notification', (notification) => {
+          setNotifications(prev => [notification, ...prev.slice(0, 49)]);
+        });
 
-      socketInstance.on('player_status_update', (data) => {
-        console.log('Status do player atualizado:', data);
-      });
+        socketInstance.on('player_status_update', (data) => {
+          console.log('Status do player atualizado:', data);
+        });
 
-      socketInstance.on('content_sync', (data) => {
-        console.log('Sincronização de conteúdo:', data);
-      });
+        // Admin traffic stats (room 'admin')
+        socketInstance.on('traffic_stats', (stats) => {
+          setAdminTraffic(stats);
+        });
 
-      // Admin traffic stats (room 'admin')
-      socketInstance.on('traffic_stats', (stats) => {
-        setAdminTraffic(stats);
-      });
+        setSocket(socketInstance);
+        sockRef.current = socketInstance;
+        lastInitKeyRef.current = initKey;
+        return socketInstance;
+      };
 
-      setSocket(socketInstance);
-      return socketInstance;
-    };
-
-    const sock = createSocket(targetUrl);
+      console.log('[Socket] targetUrl:', targetUrl, 'pathname:', path);
+      createSocket(targetUrl);
+    }, 50);
 
     return () => {
-      try { sock.disconnect(); } catch (_) {}
+      if (initTimerRef.current) {
+        clearTimeout(initTimerRef.current);
+        initTimerRef.current = null;
+      }
+      try { sockRef.current?.removeAllListeners?.(); } catch (_) {}
+      try { sockRef.current?.disconnect?.(); } catch (_) {}
+      sockRef.current = null;
+      setSocket(null);
+      setConnected(false);
     };
   }, [user]);
 

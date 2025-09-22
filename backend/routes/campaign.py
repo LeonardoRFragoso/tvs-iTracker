@@ -8,6 +8,7 @@ from models.campaign import Campaign, CampaignContent, db, PlaybackEvent
 from models.content import Content
 from models.player import Player
 from models.user import User
+from models.system_config import SystemConfig
 import os
 
 # New: video compiler
@@ -201,6 +202,20 @@ def create_campaign():
                     db.session.add(campaign_content)
         
         db.session.commit()
+
+        # Auto-compile if enabled
+        try:
+            enabled = SystemConfig.get_value('general.auto_update')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
+                # Marca como stale e dispara compilação assíncrona
+                try:
+                    campaign.compiled_stale = True
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                video_compiler.start_async_compile(campaign.id)
+        except Exception:
+            pass
         
         return jsonify({
             'message': 'Campanha criada com sucesso',
@@ -291,6 +306,15 @@ def update_campaign(campaign_id):
         
         campaign.updated_at = datetime.utcnow()
         db.session.commit()
+
+        # Auto-compile if enabled and campaign stale or playback changed
+        try:
+            enabled = SystemConfig.get_value('general.auto_update')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
+                if getattr(campaign, 'compiled_stale', False) or True:
+                    video_compiler.start_async_compile(campaign.id)
+        except Exception:
+            pass
         
         return jsonify({
             'message': 'Campanha atualizada com sucesso',
@@ -409,6 +433,14 @@ def add_content_to_campaign(campaign_id):
         except Exception:
             pass
         db.session.commit()
+
+        # Auto-compile if enabled
+        try:
+            enabled = SystemConfig.get_value('general.auto_update')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
+                video_compiler.start_async_compile(campaign.id)
+        except Exception:
+            pass
         
         return jsonify({
             'message': 'Conteúdo adicionado à campanha',
@@ -449,6 +481,14 @@ def remove_content_from_campaign(campaign_id, content_id):
         except Exception:
             pass
         db.session.commit()
+
+        # Auto-compile if enabled
+        try:
+            enabled = SystemConfig.get_value('general.auto_update')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
+                video_compiler.start_async_compile(campaign.id)
+        except Exception:
+            pass
         
         return jsonify({'message': 'Conteúdo removido da campanha'}), 200
         
@@ -491,6 +531,14 @@ def reorder_campaign_contents(campaign_id):
             db.session.commit()
         except Exception:
             db.session.rollback()
+
+        # Auto-compile if enabled
+        try:
+            enabled = SystemConfig.get_value('general.auto_update')
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
+                video_compiler.start_async_compile(campaign.id)
+        except Exception:
+            pass
         
         return jsonify({'message': 'Ordem dos conteúdos atualizada'}), 200
         

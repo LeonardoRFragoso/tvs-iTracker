@@ -53,15 +53,39 @@ const inferApiBase = () => {
 
 const baseURL = inferApiBase();
 axios.defaults.baseURL = baseURL;
-axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-// Add request interceptor to include auth token
+// Importante: não definir Content-Type global em headers.common, pois isso cria preflight em GET/HEAD
+axios.defaults.headers.post['Content-Type'] = 'application/json';
+axios.defaults.headers.put['Content-Type'] = 'application/json';
+axios.defaults.headers.patch['Content-Type'] = 'application/json';
+
+// Add request interceptor to include auth token e otimizar preflight
 axios.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const method = String(config.method || 'get').toLowerCase();
+    const urlStr = String(config.url || '');
+
+    // Remover Content-Type de GET/HEAD para evitar preflight
+    if (['get', 'head'].includes(method)) {
+      if (config.headers) {
+        delete config.headers['Content-Type'];
+      }
     }
+
+    // Pular Authorization para endpoints públicos
+    const isPublic = (
+      urlStr.includes('/settings/ui-preferences')
+      // adicionar aqui outras rotas públicas se necessário
+    );
+
+    if (!isPublic) {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+
     return config;
   },
   (error) => {

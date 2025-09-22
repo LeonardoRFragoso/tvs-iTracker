@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createTheme } from '@mui/material/styles';
+import { useSettings } from './SettingsContext';
 
 const ThemeContext = createContext();
 
@@ -247,23 +248,83 @@ const darkTheme = createTheme({
 });
 
 export const ThemeProvider = ({ children }) => {
+  const { getSetting, updateSettings, uiPreferences } = useSettings();
   const [isDarkMode, setIsDarkMode] = useState(() => {
+    // 1) LocalStorage (persistência imediata entre reloads)
     const saved = localStorage.getItem('darkMode');
-    return saved ? JSON.parse(saved) : false;
+    if (saved !== null) return JSON.parse(saved);
+    // 2) Preferências de UI vindas do backend (sem exigir admin)
+    const pref = (uiPreferences && uiPreferences['ui.dark_theme']);
+    if (typeof pref === 'boolean') return pref;
+    // 3) Fallback via getSetting
+    return getSetting('ui.dark_theme', false);
   });
 
+  // Preferências de animação globais
+  const [animationsEnabled, setAnimationsEnabled] = useState(() => {
+    const pref = uiPreferences && uiPreferences['ui.animations_enabled'];
+    if (typeof pref === 'boolean') return pref;
+    return getSetting('ui.animations_enabled', true);
+  });
+  const [transitionDuration, setTransitionDuration] = useState(() => {
+    const pref = uiPreferences && uiPreferences['ui.transition_duration'];
+    if (typeof pref === 'number') return pref;
+    return getSetting('ui.transition_duration', 300);
+  });
+
+  // Efeito para sincronizar o tema sempre que uiPreferences mudar, mas sem sobrepor a escolha local
+  useEffect(() => {
+    const darkPref = uiPreferences ? uiPreferences['ui.dark_theme'] : undefined;
+    const hasLocal = localStorage.getItem('darkMode') !== null;
+    if (!hasLocal && typeof darkPref === 'boolean' && darkPref !== isDarkMode) {
+      setIsDarkMode(darkPref);
+    }
+    const animPref = uiPreferences ? uiPreferences['ui.animations_enabled'] : undefined;
+    if (typeof animPref === 'boolean') setAnimationsEnabled(animPref);
+    const durPref = uiPreferences ? uiPreferences['ui.transition_duration'] : undefined;
+    if (typeof durPref === 'number') setTransitionDuration(durPref);
+  }, [uiPreferences]);
+
+  // Salvar no localStorage para compatibilidade com versões anteriores
   useEffect(() => {
     localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
+  const toggleTheme = async () => {
+    const newValue = !isDarkMode;
+    setIsDarkMode(newValue);
+    
+    // Atualizar a configuração no sistema (ignorar erros p/ usuários não-admin)
+    try {
+      await updateSettings({ 'ui.dark_theme': newValue });
+    } catch (error) {
+      console.error('Erro ao salvar preferência de tema:', error);
+    }
+  };
+
+  const toggleAnimations = async () => {
+    const newValue = !animationsEnabled;
+    setAnimationsEnabled(newValue);
+    try {
+      await updateSettings({ 'ui.animations_enabled': newValue });
+    } catch (error) {
+      console.error('Erro ao salvar preferência de animações:', error);
+    }
+  };
+
+  const updateTransitionDuration = async (value) => {
+    setTransitionDuration(value);
+    try {
+      await updateSettings({ 'ui.transition_duration': value });
+    } catch (error) {
+      console.error('Erro ao salvar duração de transições:', error);
+    }
   };
 
   const currentTheme = isDarkMode ? darkTheme : lightTheme;
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme: currentTheme }}>
+    <ThemeContext.Provider value={{ isDarkMode, toggleTheme, theme: currentTheme, animationsEnabled, transitionDuration, toggleAnimations, updateTransitionDuration }}>
       {children}
     </ThemeContext.Provider>
   );

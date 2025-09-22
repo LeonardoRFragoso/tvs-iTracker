@@ -11,20 +11,6 @@ export const useAuth = () => {
   return context;
 };
 
-// Configurar interceptor do axios para incluir token
-axios.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
 // 401 handling centralized in src/config/axios.js to avoid double redirects
 
 export const AuthProvider = ({ children }) => {

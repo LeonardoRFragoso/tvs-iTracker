@@ -49,6 +49,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import axios from '../../config/axios';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import PageTitle from '../../components/Common/PageTitle';
 
 // BR datetime helpers for display
@@ -109,6 +110,7 @@ const ContentCardSkeleton = ({ delay = 0 }) => (
 const ContentList = () => {
   const navigate = useNavigate();
   const { isDarkMode, theme } = useTheme();
+  const { user } = useAuth();
   const [contents, setContents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -208,6 +210,11 @@ const ContentList = () => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const canDeleteContent = (content) => {
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'manager' || content.user_id === user.id;
   };
 
   return (
@@ -770,13 +777,15 @@ const ContentList = () => {
           <DownloadIcon sx={{ mr: 1 }} />
           Download
         </MenuItem>
-        <MenuItem onClick={() => {
-          setDeleteDialog({ open: true, content: selectedContent });
-          handleMenuClose();
-        }}>
-          <DeleteIcon sx={{ mr: 1 }} />
-          Deletar
-        </MenuItem>
+        {selectedContent && canDeleteContent(selectedContent) && (
+          <MenuItem onClick={() => {
+            setDeleteDialog({ open: true, content: selectedContent });
+            handleMenuClose();
+          }}>
+            <DeleteIcon sx={{ mr: 1 }} />
+            Deletar
+          </MenuItem>
+        )}
         <MenuItem onClick={() => {
           setPreviewDialog({ open: true, content: selectedContent });
           handleMenuClose();
@@ -802,7 +811,7 @@ const ContentList = () => {
           <Button onClick={() => setDeleteDialog({ open: false, content: null })}>
             Cancelar
           </Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
+          <Button onClick={handleDelete} color="error" variant="contained" disabled={!deleteDialog.content || !canDeleteContent(deleteDialog.content)}>
             Deletar
           </Button>
         </DialogActions>
