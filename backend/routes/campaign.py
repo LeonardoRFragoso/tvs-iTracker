@@ -54,6 +54,7 @@ def parse_flexible_datetime(value, end_of_day=False):
     raise ValueError(f'Formato de data inválido: {value}')
 
 @campaign_bp.route('/', methods=['GET'])
+@campaign_bp.route('', methods=['GET'])  # evita redirect 308 em /api/campaigns
 @jwt_required()
 def list_campaigns():
     try:
@@ -131,6 +132,7 @@ def list_campaigns():
         return jsonify({'error': str(e)}), 500
 
 @campaign_bp.route('/', methods=['POST'])
+@campaign_bp.route('', methods=['POST'])  # evita redirect 308 em /api/campaigns
 @jwt_required()
 def create_campaign():
     try:

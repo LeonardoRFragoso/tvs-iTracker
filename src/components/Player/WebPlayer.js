@@ -186,6 +186,24 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     }
   }, [isConnected]);
 
+  // Prefetch via Service Worker (quando disponível)
+  const prefetchWithSW = useCallback((urls) => {
+    try {
+      if (!Array.isArray(urls) || urls.length === 0) return;
+      if (!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          try {
+            const sw = reg.active || navigator.serviceWorker.controller;
+            if (sw && typeof sw.postMessage === 'function') {
+              sw.postMessage({ type: 'prefetch', urls });
+            }
+          } catch (_) {}
+        })
+        .catch(() => {});
+    } catch (_) {}
+  }, []);
+
   const loadPlayerData = async () => {
     try {
       const now = Date.now();
@@ -254,6 +272,18 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         // Prefetch next images to smooth playback (first few items)
         try {
           prefetchUpcomingImages(dedupedItems, 0);
+        } catch (_) {}
+        
+        // Solicitar ao Service Worker que faça prefetch dos arquivos de mídia da playlist
+        try {
+          const urlsToPrefetch = Array.from(new Set(
+            dedupedItems
+              .map(it => (it?.file_url || it?.url || '').toString())
+              .filter(u => u && u.includes('/uploads/'))
+          ));
+          // Limite opcional para evitar sobrecarga em playlists muito grandes
+          const LIMIT = 30;
+          prefetchWithSW(urlsToPrefetch.slice(0, LIMIT));
         } catch (_) {}
       } else {
         console.log('[WebPlayer] Nenhum conteúdo encontrado, aguardando...');

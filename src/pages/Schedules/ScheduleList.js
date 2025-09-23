@@ -80,6 +80,8 @@ const parseDateTimeFlexible = (value) => {
 
 const ScheduleList = () => {
   const navigate = useNavigate();
+  // Use ThemeContext hook exactly once to respect Rules of Hooks
+  const { isDarkMode } = useTheme();
   
   const [schedules, setSchedules] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -314,11 +316,11 @@ const ScheduleList = () => {
               borderRadius: 2,
               px: 3,
               py: 1.5,
-              background: (theme) => theme.palette.mode === 'dark' 
+              background: isDarkMode 
                 ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
                 : 'linear-gradient(45deg, #2196F3, #21CBF3)',
               '&:hover': {
-                background: (theme) => theme.palette.mode === 'dark' 
+                background: isDarkMode 
                   ? 'linear-gradient(45deg, #ff9800, #ff7730)' 
                   : 'linear-gradient(45deg, #21CBF3, #2196F3)',
                 transform: 'translateY(-2px)',
@@ -341,7 +343,7 @@ const ScheduleList = () => {
               mb: 2,
               borderRadius: '12px',
               backdropFilter: 'blur(10px)',
-              background: useTheme().isDarkMode 
+              background: isDarkMode 
                 ? 'rgba(244, 67, 54, 0.1)' 
                 : 'rgba(244, 67, 54, 0.05)',
             }} 
@@ -359,7 +361,7 @@ const ScheduleList = () => {
               mb: 2,
               borderRadius: '12px',
               backdropFilter: 'blur(10px)',
-              background: useTheme().isDarkMode 
+              background: isDarkMode 
                 ? 'rgba(76, 175, 80, 0.1)' 
                 : 'rgba(76, 175, 80, 0.05)',
             }} 
@@ -377,11 +379,11 @@ const ScheduleList = () => {
             mb: 3,
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: useTheme().isDarkMode 
+            background: isDarkMode 
               ? 'rgba(255, 255, 255, 0.05)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-            boxShadow: useTheme().isDarkMode 
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: isDarkMode 
               ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
               : '0 8px 32px rgba(0, 0, 0, 0.1)',
           }}
@@ -492,11 +494,11 @@ const ScheduleList = () => {
           sx={{
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: useTheme().isDarkMode 
+            background: isDarkMode 
               ? 'rgba(255, 255, 255, 0.05)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-            boxShadow: useTheme().isDarkMode 
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
+            boxShadow: isDarkMode 
               ? '0 8px 32px rgba(0, 0, 0, 0.3)' 
               : '0 8px 32px rgba(0, 0, 0, 0.1)',
             overflow: 'hidden',
@@ -514,7 +516,7 @@ const ScheduleList = () => {
                 <TableHead>
                   <TableRow
                     sx={{
-                      background: useTheme().isDarkMode
+                      background: isDarkMode
                         ? 'linear-gradient(135deg, rgba(255, 119, 48, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%)'
                         : 'linear-gradient(135deg, rgba(255, 119, 48, 0.05) 0%, rgba(255, 152, 0, 0.05) 100%)',
                     }}
@@ -542,7 +544,7 @@ const ScheduleList = () => {
                           sx={{
                             transition: 'all 0.3s ease',
                             '&:hover': {
-                              background: useTheme().isDarkMode
+                              background: isDarkMode
                                 ? 'rgba(255, 119, 48, 0.05)'
                                 : 'rgba(255, 119, 48, 0.02)',
                               transform: 'scale(1.01)',
@@ -665,7 +667,7 @@ const ScheduleList = () => {
                   textAlign="center" 
                   py={8}
                   sx={{
-                    background: useTheme().isDarkMode
+                    background: isDarkMode
                       ? 'radial-gradient(circle, rgba(255, 119, 48, 0.05) 0%, transparent 70%)'
                       : 'radial-gradient(circle, rgba(255, 119, 48, 0.02) 0%, transparent 70%)',
                   }}
@@ -761,10 +763,10 @@ const ScheduleList = () => {
           sx: {
             borderRadius: '12px',
             backdropFilter: 'blur(20px)',
-            background: useTheme().isDarkMode 
+            background: isDarkMode 
               ? 'rgba(30, 30, 30, 0.9)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
           }
         }}
@@ -856,10 +858,10 @@ const ScheduleList = () => {
           sx: {
             borderRadius: '16px',
             backdropFilter: 'blur(20px)',
-            background: useTheme().isDarkMode 
+            background: isDarkMode 
               ? 'rgba(30, 30, 30, 0.9)' 
               : 'rgba(255, 255, 255, 0.9)',
-            border: `1px solid ${useTheme().isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
           }
         }}
       >

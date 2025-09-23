@@ -10,6 +10,7 @@ from models.user import User
 editorial_bp = Blueprint('editorial', __name__)
 
 @editorial_bp.route('/', methods=['GET'])
+@editorial_bp.route('', methods=['GET'])  # evita redirect 308 em /api/editorials
 @jwt_required()
 def list_editorials():
     try:
@@ -44,6 +45,7 @@ def list_editorials():
         return jsonify({'error': str(e)}), 500
 
 @editorial_bp.route('/', methods=['POST'])
+@editorial_bp.route('', methods=['POST'])  # evita redirect 308 em /api/editorials
 @jwt_required()
 def create_editorial():
     try:

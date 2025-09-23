@@ -46,8 +46,9 @@ command -v python3 >/dev/null 2>&1 || die "python3 não encontrado. sudo apt-get
 # 1) Variáveis de ambiente
 step "[1/4] Configurando variáveis de ambiente"
 export NODE_ENV=production
-# Axios usará same-origin; evitar base URL fixa
-unset REACT_APP_API_URL || true
+# Axios/Socket same-origin em produção
+export REACT_APP_API_URL=same-origin
+export REACT_APP_SOCKET_URL=same-origin
 
 # 2) Build do React
 step "[2/4] Fazendo build da aplicação React"

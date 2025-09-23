@@ -44,3 +44,24 @@ root.render(
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// Register Service Worker for offline media caching (uploads)
+// Use root scope so the SW can intercept /uploads/* even when the SPA runs under /app
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    try {
+      const swPath = '/sw.js';
+      navigator.serviceWorker
+        .register(swPath)
+        .then((reg) => {
+          console.log('[SW] Registered:', swPath, 'scope:', reg.scope);
+        })
+        .catch((err) => {
+          // Em dev (porta 3000) esse caminho pode não existir; é ok falhar silenciosamente
+          console.log('[SW] Registration failed:', err?.message || err);
+        });
+    } catch (e) {
+      // silencioso
+    }
+  });
+}

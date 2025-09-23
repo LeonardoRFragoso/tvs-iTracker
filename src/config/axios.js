@@ -103,9 +103,12 @@ axios.interceptors.response.use(
     try {
       const message = String(error?.message || '');
       const talksTo5000 = typeof axios.defaults.baseURL === 'string' && axios.defaults.baseURL.includes(':5000');
-      const isConnRefused = message.includes('ERR_CONNECTION_REFUSED') || message.includes('Network Error');
-      // Só trocar para same-origin se a base atual é :5000 e houve recusa de conexão
-      if (!switchedToSameOrigin && talksTo5000 && isConnRefused && typeof window !== 'undefined') {
+      // Treat only explicit connection refused as a backend-down signal; avoid broad 'Network Error' (often CORS)
+      const isConnRefused = /ERR_CONNECTION_REFUSED|ECONNREFUSED/i.test(message);
+      const port = (typeof window !== 'undefined' ? window.location.port : '');
+      const isCRADev = ['3000', '5173', '5174'].includes(port);
+      // Only switch to same-origin outside CRA dev, and only when truly refused
+      if (!isCRADev && !switchedToSameOrigin && talksTo5000 && isConnRefused && typeof window !== 'undefined') {
         switchedToSameOrigin = true;
         const sameOrigin = `${window.location.origin.replace(/\/$/, '')}/api`;
         console.warn('[Axios Config] Connection refused em :5000. Alternando baseURL para same-origin:', sameOrigin);

@@ -1,9 +1,10 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_socketio import emit
 from datetime import datetime, timedelta
 import secrets
 import json
+import os
 import hashlib
 from models.player import Player, db
 from models.user import User
@@ -33,6 +34,7 @@ def _generate_unique_access_code(max_attempts: int = 10) -> str:
     return _generate_access_code(8)
 
 @player_bp.route('/', methods=['GET'])
+@player_bp.route('', methods=['GET'])  # evita redirect 308 em /api/players
 @jwt_required()
 def list_players():
     try:
@@ -90,6 +92,7 @@ def list_players():
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/', methods=['POST'])
+@player_bp.route('', methods=['POST'])  # evita redirect 308 em /api/players
 @jwt_required()
 def create_player():
     try:
@@ -780,10 +783,22 @@ def get_player_playlist(player_id):
             return jsonify({'player_id': player_id, 'contents': []}), 200
 
         media_base = request.host_url.rstrip('/')
+        # Resolve absolute uploads directory for FS checks
+        upload_dir = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        if not os.path.isabs(upload_dir):
+            upload_dir = os.path.join(current_app.root_path, upload_dir)
         items = []
         # Guards to evitar itens duplicados quando múltiplos schedules ativos incluem a mesma campanha/conteúdo
         added_compiled_campaigns = set()  # campaign_id
         added_file_urls = set()  # absolute file URLs
+
+        def _file_version(abs_path: str) -> str:
+            """Gera uma versão estável baseada em tamanho+mtime para invalidar cache quando o arquivo muda."""
+            try:
+                st = os.stat(abs_path)
+                return f"{st.st_size:x}{int(st.st_mtime):x}"
+            except Exception:
+                return "0"
 
         def append_schedule_items(sch):
             # 1) Include compiled campaign video once per schedule if applicable
@@ -797,21 +812,27 @@ def get_player_playlist(player_id):
                     ):
                         compiled_rel_path = str(camp.compiled_video_path).lstrip('/').replace('\\', '/')
                         compiled_url = f"{media_base}/uploads/{compiled_rel_path}?pid={player_id}"
-                        # Evitar duplicar compilado da mesma campanha
-                        if str(camp.id) not in added_compiled_campaigns and compiled_url not in added_file_urls:
-                            items.append({
-                                'id': f"compiled-{camp.id}",
-                                'title': f"Campanha: {camp.name} (Compilado)",
-                                'description': 'Vídeo compilado a partir de imagens',
-                                'type': 'video',
-                                'file_url': compiled_url,
-                                'duration': getattr(camp, 'compiled_video_duration', None) or (camp.content_duration if getattr(camp, 'content_duration', None) else 10),
-                                'campaign_id': camp.id,
-                                'campaign_name': camp.name,
-                                'schedule_id': sch.id,
-                            })
-                            added_compiled_campaigns.add(str(camp.id))
-                            added_file_urls.add(compiled_url)
+                        compiled_abs_path = os.path.normpath(os.path.join(upload_dir, compiled_rel_path))
+                        # Somente incluir se o arquivo realmente existir
+                        if os.path.exists(compiled_abs_path):
+                            # Acrescentar versão (?v=) para cache forte e invalidação automática
+                            ver = _file_version(compiled_abs_path)
+                            compiled_url = f"{compiled_url}&v={ver}"
+                            # Evitar duplicar compilado da mesma campanha
+                            if str(camp.id) not in added_compiled_campaigns and compiled_url not in added_file_urls:
+                                items.append({
+                                    'id': f"compiled-{camp.id}",
+                                    'title': f"Campanha: {camp.name} (Compilado)",
+                                    'description': 'Vídeo compilado a partir de imagens',
+                                    'type': 'video',
+                                    'file_url': compiled_url,
+                                    'duration': getattr(camp, 'compiled_video_duration', None) or (camp.content_duration if getattr(camp, 'content_duration', None) else 10),
+                                    'campaign_id': camp.id,
+                                    'campaign_name': camp.name,
+                                    'schedule_id': sch.id,
+                                })
+                                added_compiled_campaigns.add(str(camp.id))
+                                added_file_urls.add(compiled_url)
                 except Exception:
                     pass
 
@@ -823,7 +844,14 @@ def get_player_playlist(player_id):
                     if not content or not getattr(content, 'file_path', None):
                         continue
                     filename = str(content.file_path).split('/')[-1]
+                    # Verificar existência do arquivo físico; se ausente, pular para evitar 404
+                    content_abs_path = os.path.join(upload_dir, filename)
+                    if not os.path.exists(content_abs_path):
+                        continue
                     file_url = f"{media_base}/uploads/{filename}?pid={player_id}"
+                    # Acrescentar versão (?v=)
+                    ver2 = _file_version(content_abs_path)
+                    file_url = f"{file_url}&v={ver2}"
                     ctype = (content.content_type or '').lower()
                     if ctype.startswith('img') or ctype == 'image':
                         item_type = 'image'

@@ -82,6 +82,7 @@ def parse_flexible_time(value):
 schedule_bp = Blueprint('schedule', __name__)
 
 @schedule_bp.route('/', methods=['GET'])
+@schedule_bp.route('', methods=['GET'])  # evita redirect 308 em /api/schedules
 @jwt_required()
 def list_schedules():
     try:
@@ -128,6 +129,7 @@ def list_schedules():
         return jsonify({'error': str(e)}), 500
 
 @schedule_bp.route('/', methods=['POST'])
+@schedule_bp.route('', methods=['POST'])  # evita redirect 308 em /api/schedules
 @jwt_required()
 def create_schedule():
     try:

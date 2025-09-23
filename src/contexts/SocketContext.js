@@ -17,6 +17,7 @@ export const SocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [adminTraffic, setAdminTraffic] = useState(null);
+  const [systemStats, setSystemStats] = useState(null);
   const { user } = useAuth();
   const switchedToSameOriginRef = useRef(false);
   const initTimerRef = useRef(null);
@@ -147,6 +148,11 @@ export const SocketProvider = ({ children }) => {
           setAdminTraffic(stats);
         });
 
+        // System stats for admins (room 'admin')
+        socketInstance.on('system_stats', (stats) => {
+          setSystemStats(stats);
+        });
+
         setSocket(socketInstance);
         sockRef.current = socketInstance;
         lastInitKeyRef.current = initKey;
@@ -210,6 +216,7 @@ export const SocketProvider = ({ children }) => {
     connected,
     notifications,
     adminTraffic,
+    systemStats,
     joinPlayerRoom,
     sendPlayerCommand,
     addNotification,

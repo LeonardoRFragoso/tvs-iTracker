@@ -9,6 +9,7 @@ echo ========================================
 echo    TVs iTracker - Deploy Modo TV
 echo ========================================
 echo.
+chcp 65001 >nul
 
 rem ===== Configurar logging =====
 set "ROOT_DIR=%CD%"
@@ -110,6 +111,8 @@ call venv\Scripts\activate
 python -m pip install --upgrade pip >> "%LOGFILE%" 2>&1
 python -m pip install -r ..\requirements.txt >> "%LOGFILE%" 2>&1
 set TV_MODE=true
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 python app.py >> "%LOGFILE%" 2>&1
 
 pause

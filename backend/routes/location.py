@@ -7,6 +7,7 @@ from models.user import User
 location_bp = Blueprint('location', __name__)
 
 @location_bp.route('/', methods=['GET'])
+@location_bp.route('', methods=['GET'])  # evita redirect 308 em /api/locations
 @jwt_required()
 def list_locations():
     try:
@@ -52,6 +53,7 @@ def list_locations():
         return jsonify({'error': str(e)}), 500
 
 @location_bp.route('/', methods=['POST'])
+@location_bp.route('', methods=['POST'])  # evita redirect 308 em /api/locations
 @jwt_required()
 def create_location():
     try:

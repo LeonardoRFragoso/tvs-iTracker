@@ -13,7 +13,8 @@ CONFIG_PREFIXES = {
     'ui': 'ui.',
     'display': 'display.',
     'storage': 'storage.',
-    'security': 'security.'
+    'security': 'security.',
+    'monitor': 'monitor.'
 }
 
 # Configurações padrão do sistema
@@ -42,7 +43,16 @@ DEFAULT_SETTINGS = {
     
     # Configurações de Segurança
     'security.session_timeout': {'value': 30, 'type': 'int', 'description': 'Timeout da sessão (minutos)'},
-    'security.password_policy': {'value': 'medium', 'type': 'string', 'description': 'Política de senha (low, medium, high)'}
+    'security.password_policy': {'value': 'medium', 'type': 'string', 'description': 'Política de senha (low, medium, high)'},
+
+    # Configurações de Monitoramento/Tráfego
+    'monitor.emit_interval_sec': {'value': 30, 'type': 'int', 'description': 'Intervalo (s) para emitir estatísticas em tempo real'},
+    'monitor.overuse_window_min': {'value': 1, 'type': 'int', 'description': 'Janela (min) para cálculo de bytes/min e req/min'},
+    'monitor.overuse_bpm_mb': {'value': 100, 'type': 'int', 'description': 'Limite de bytes/min em MB para alertar sobreuso'},
+    'monitor.overuse_rpm': {'value': 300, 'type': 'int', 'description': 'Limite de requisições/min para alertar sobreuso'},
+    'monitor.sample_retention_days': {'value': 30, 'type': 'int', 'description': 'Dias de retenção dos samples agregados'},
+    'monitor.enable_persist': {'value': True, 'type': 'bool', 'description': 'Persistir métricas (minute/hour/day) no banco'},
+    'monitor.enable_system_stats': {'value': True, 'type': 'bool', 'description': 'Coletar e expor métricas do servidor (CPU/RAM/NET)'}
 }
 
 def ensure_default_settings():

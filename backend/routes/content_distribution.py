@@ -11,6 +11,7 @@ from services.distribution_manager import ContentDistributionManager
 content_distribution_bp = Blueprint('content_distribution', __name__)
 
 @content_distribution_bp.route('/', methods=['GET'])
+@content_distribution_bp.route('', methods=['GET'])  # evita redirect 308
 @jwt_required()
 def list_distributions():
     try:
