@@ -79,6 +79,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import axios from '../../config/axios';
+import { useSocket } from '../../contexts/SocketContext';
 import MultiContentManager from '../../components/Campaign/MultiContentManager';
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
@@ -158,6 +159,8 @@ const CampaignForm = () => {
   const [compileInfo, setCompileInfo] = useState(null); // { url, duration, resolution, fps, updatedAt }
   const [compileError, setCompileError] = useState('');
   const compilePollRef = useRef(null);
+  const [compileProgress, setCompileProgress] = useState(0);
+  const [compileMessage, setCompileMessage] = useState('');
   // Draft campaign id to enable compile inside modal without leaving the page
   const [draftCampaignId, setDraftCampaignId] = useState(null);
   const effectiveCampaignId = id || draftCampaignId;
@@ -615,6 +618,8 @@ const CampaignForm = () => {
       return;
     }
     setCompileError('');
+    setCompileProgress(1);
+    setCompileMessage('Iniciando compilação...');
     try {
       const payload = { preset: compilePreset, fps: compileFps };
       const resp = await axios.post(`/campaigns/${effId}/compile`, payload);
@@ -625,6 +630,56 @@ const CampaignForm = () => {
       setCompileError(err?.response?.data?.error || 'Falha ao iniciar compilação');
     }
   };
+
+  // Real-time progress via Socket.IO
+  const { socket } = useSocket();
+  useEffect(() => {
+    if (!socket) return;
+    const effId = effectiveCampaignId;
+    if (!effId) return;
+
+    const onProgress = (data) => {
+      try {
+        if (!data || data.campaign_id !== effId) return;
+        setCompileStatus('processing');
+        const p = Number(data.progress);
+        if (Number.isFinite(p)) setCompileProgress(Math.max(0, Math.min(100, Math.round(p))));
+        if (data.message) setCompileMessage(String(data.message));
+      } catch (_) {}
+    };
+
+    const onComplete = (data) => {
+      try {
+        if (!data || data.campaign_id !== effId) return;
+        const s = data.status || 'ready';
+        setCompileStatus(s);
+        if (s === 'ready') {
+          setCompileInfo({
+            url: computeCompiledUrl(data.compiled_video_url),
+            duration: data.duration,
+            resolution: data.resolution,
+            fps: data.fps,
+            updatedAt: new Date().toISOString(),
+          });
+          setCompileProgress(100);
+          setCompileMessage(data.message || 'Compilação concluída');
+        } else if (s === 'failed' || s === 'error') {
+          setCompileError(data.message || 'Erro na compilação');
+        }
+        if (compilePollRef.current) {
+          clearInterval(compilePollRef.current);
+          compilePollRef.current = null;
+        }
+      } catch (_) {}
+    };
+
+    socket.on('campaign_compile_progress', onProgress);
+    socket.on('campaign_compile_complete', onComplete);
+    return () => {
+      try { socket.off('campaign_compile_progress', onProgress); } catch (_) {}
+      try { socket.off('campaign_compile_complete', onComplete); } catch (_) {}
+    };
+  }, [socket, effectiveCampaignId]);
 
   // Quick save inside modal: create draft campaign with current form fields and selected contents
   const handleQuickSaveDraft = async () => {
@@ -1554,139 +1609,108 @@ const CampaignForm = () => {
                         {compileError && (
                           <Alert severity="error" sx={{ mb: 2 }}>{compileError}</Alert>
                         )}
-                        {(() => {
-                          const selected = getSelectedContentObjects();
-                          const current = selected[previewIndex] || null;
-                          const currentDur = getContentDuration(current);
-                          const elapsedBefore = selected.slice(0, previewIndex).reduce((s, c) => s + getContentDuration(c), 0);
-                          const totalDur = selected.reduce((s, c) => s + getContentDuration(c), 0) || 0;
-                          const itemPct = currentDur ? Math.min(100, Math.round((previewElapsed / currentDur) * 100)) : 0;
-                          const totalPct = totalDur ? Math.min(100, Math.round(((elapsedBefore + previewElapsed) / totalDur) * 100)) : 0;
-                          const currentType = getTypeFor(current);
-                          const thumbUrl = getThumbUrlFor(current);
-                          const mediaUrl = getMediaUrlFor(current);
-                          return (
-                            <Box>
-                              {/* Media area */}
-                              <Box sx={{
-                                width: '100%',
-                                height: 300,
-                                mb: 2,
-                                borderRadius: 1,
-                                overflow: 'hidden',
-                                bgcolor: 'black',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                              }}>
-                                {currentType === 'video' && mediaUrl ? (
-                                  <video
-                                    key={mediaUrl}
-                                    ref={videoRef}
-                                    poster={thumbUrl || undefined}
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                    controls
-                                    muted
-                                    playsInline
-                                    preload="auto"
-                                    autoPlay={previewPlaying}
-                                    crossOrigin="anonymous"
-                                    onLoadedMetadata={(e) => {
-                                      try { e.currentTarget.currentTime = 0; } catch (_) {}
-                                      if (previewPlaying) {
-                                        try { e.currentTarget.play(); } catch (_) {}
-                                      }
-                                      setPreviewElapsed(0);
-                                    }}
-                                    onError={(e) => {
-                                      console.error('Video load error for URL:', mediaUrl, e);
-                                    }}
-                                  >
-                                    <source src={mediaUrl} type={getMimeTypeFor(current) || 'video/mp4'} />
-                                  </video>
-                                ) : thumbUrl || mediaUrl ? (
-                                  <img
-                                    src={thumbUrl || mediaUrl}
-                                    alt={current?.title || 'preview'}
-                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <Box sx={{ color: 'text.secondary' }}>Sem mídia para pré-visualizar</Box>
-                                )}
-                              </Box>
-                              {/* Filmstrip with thumbnails of the sequence */}
-                              <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, mb: 2 }}>
-                                {selected.map((c, idx) => {
-                                  const t = getThumbUrlFor(c) || getMediaUrlFor(c);
-                                  return (
-                                    <Box
-                                      key={c?.id || idx}
-                                      onClick={() => { setPreviewIndex(idx); setPreviewElapsed(0); setPreviewPlaying(true); }}
-                                      sx={{
-                                        width: 56,
-                                        height: 56,
-                                        borderRadius: 1,
-                                        overflow: 'hidden',
-                                        cursor: 'pointer',
-                                        outline: idx === previewIndex ? '2px solid #ff7730' : '1px solid',
-                                        outlineColor: (theme) => idx === previewIndex ? '#ff7730' : (theme.palette.divider),
-                                        bgcolor: 'black',
-                                        flex: '0 0 auto',
-                                      }}
-                                    >
-                                      {t ? (
-                                        <Box component="img" src={t} alt={c?.title || ''} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      ) : (
-                                        <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
-                                          <ContentIcon fontSize="small" />
-                                        </Box>
-                                      )}
-                                    </Box>
-                                  );
-                                })}
-                              </Box>
-                              <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                                <Typography variant="body2" fontWeight={600}>
-                                  {current ? `${previewIndex + 1}/${selected.length} • ${current.title}` : '—'}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {(() => {
-                                    const videoDur = (currentType === 'video' && videoRef.current && !Number.isNaN(videoRef.current.duration)) ? Math.floor(videoRef.current.duration) : currentDur;
-                                    return current ? `${previewElapsed}s / ${videoDur}s` : '';
-                                  })()}
-                                </Typography>
-                              </Box>
-                              {(() => {
-                                const effectiveDur = (currentType === 'video' && videoRef.current && !Number.isNaN(videoRef.current.duration)) ? Math.floor(videoRef.current.duration) : currentDur;
-                                const effItemPct = effectiveDur ? Math.min(100, Math.round((previewElapsed / effectiveDur) * 100)) : 0;
-                                const elapsedBefore = selected.slice(0, previewIndex).reduce((s, c) => s + getContentDuration(c), 0);
-                                const totalDur = selected.reduce((s, c) => s + getContentDuration(c), 0) || 0;
-                                const effTotalPct = totalDur ? Math.min(100, Math.round(((elapsedBefore + Math.min(previewElapsed, effectiveDur)) / totalDur) * 100)) : 0;
-                                return (
-                                  <>
-                                    <LinearProgress variant="determinate" value={effItemPct} sx={{ height: 8, borderRadius: 1, mb: 1 }} />
-                                    <LinearProgress variant="determinate" value={effTotalPct} sx={{ height: 6, borderRadius: 1, mb: 2, bgcolor: 'action.hover' }} />
-                                  </>
-                                );
-                              })()}
-                              <Box display="flex" gap={1}>
-                                {!previewPlaying ? (
-                                  <Button size="small" startIcon={<PlayIcon />} onClick={() => setPreviewPlaying(true)} disabled={selected.length === 0}>
-                                    Reproduzir
-                                  </Button>
-                                ) : (
-                                  <Button size="small" startIcon={<PauseIcon />} onClick={() => setPreviewPlaying(false)}>
-                                    Pausar
-                                  </Button>
-                                )}
-                                <Button size="small" startIcon={<StopIcon />} onClick={() => { setPreviewPlaying(false); setPreviewIndex(0); setPreviewElapsed(0); }}>
-                                  Parar
-                                </Button>
-                              </Box>
+                        {compileStatus === 'processing' && (
+                          <Box sx={{ mb: 2 }}>
+                            <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, compileProgress || 0))} sx={{ height: 10, borderRadius: 1 }} />
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary">{compileMessage || 'Processando...'}</Typography>
+                              <Typography variant="caption" color="text.secondary">{Math.max(0, Math.min(100, compileProgress || 0))}%</Typography>
                             </Box>
-                          );
-                        })()}
+                          </Box>
+                        )}
+                        {/* Media area */}
+                        <Box sx={{
+                          width: '100%',
+                          height: 300,
+                          mb: 2,
+                          borderRadius: 1,
+                          overflow: 'hidden',
+                          bgcolor: 'black',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          {selectedContents.length > 0 && (
+                            <video
+                              key={getMediaUrlFor(getSelectedContentObjects()[0])}
+                              ref={videoRef}
+                              poster={getThumbUrlFor(getSelectedContentObjects()[0]) || undefined}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              controls
+                              muted
+                              playsInline
+                              preload="auto"
+                              autoPlay={previewPlaying}
+                              crossOrigin="anonymous"
+                              onLoadedMetadata={(e) => {
+                                try { e.currentTarget.currentTime = 0; } catch (_) {}
+                                if (previewPlaying) {
+                                  try { e.currentTarget.play(); } catch (_) {}
+                                }
+                                setPreviewElapsed(0);
+                              }}
+                              onError={(e) => {
+                                console.error('Video load error for URL:', getMediaUrlFor(getSelectedContentObjects()[0]), e);
+                              }}
+                            >
+                              <source src={getMediaUrlFor(getSelectedContentObjects()[0])} type={getMimeTypeFor(getSelectedContentObjects()[0]) || 'video/mp4'} />
+                            </video>
+                          )}
+                        </Box>
+                        {/* Filmstrip with thumbnails of the sequence */}
+                        <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, mb: 2 }}>
+                          {selectedContents.map((id, idx) => {
+                            const content = availableContents.find(c => c.id === id);
+                            const t = getThumbUrlFor(content) || getMediaUrlFor(content);
+                            return (
+                              <Box
+                                key={content?.id || idx}
+                                onClick={() => { setPreviewIndex(idx); setPreviewElapsed(0); setPreviewPlaying(true); }}
+                                sx={{
+                                  width: 56,
+                                  height: 56,
+                                  borderRadius: 1,
+                                  overflow: 'hidden',
+                                  cursor: 'pointer',
+                                  outline: idx === previewIndex ? '2px solid #ff7730' : '1px solid',
+                                  outlineColor: (theme) => idx === previewIndex ? '#ff7730' : (theme.palette.divider),
+                                  bgcolor: 'black',
+                                  flex: '0 0 auto',
+                                }}
+                              >
+                                {t ? (
+                                  <Box component="img" src={t} alt={content?.title || ''} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'text.secondary' }}>
+                                    <ContentIcon fontSize="small" />
+                                  </Box>
+                                )}
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                          <Typography variant="body2" fontWeight={600}>
+                            {getSelectedContentObjects()[0] ? `${previewIndex + 1}/${selectedContents.length} • ${getSelectedContentObjects()[0].title}` : '—'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {getContentDuration(getSelectedContentObjects()[0]) ? `${previewElapsed}s / ${getContentDuration(getSelectedContentObjects()[0])}s` : ''}
+                          </Typography>
+                        </Box>
+                        <Box display="flex" gap={1}>
+                          {!previewPlaying ? (
+                            <Button size="small" startIcon={<PlayIcon />} onClick={() => setPreviewPlaying(true)} disabled={selectedContents.length === 0}>
+                              Reproduzir
+                            </Button>
+                          ) : (
+                            <Button size="small" startIcon={<PauseIcon />} onClick={() => setPreviewPlaying(false)}>
+                              Pausar
+                            </Button>
+                          )}
+                          <Button size="small" startIcon={<StopIcon />} onClick={() => { setPreviewPlaying(false); setPreviewIndex(0); setPreviewElapsed(0); }}>
+                            Parar
+                          </Button>
+                        </Box>
                       </Box>
                     )}
                   </Box>

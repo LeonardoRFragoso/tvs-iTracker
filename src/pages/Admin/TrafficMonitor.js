@@ -52,6 +52,16 @@ const formatRate = (bytesPerSec = 0) => {
   return `${mbps.toFixed(2)} MB/s`;
 };
 
+const formatPerMin = (bytesPerMin = 0) => {
+  if (bytesPerMin == null) return '--';
+  return `${formatBytes(bytesPerMin)}/min`;
+};
+
+const formatRpm = (rpm = 0) => {
+  if (rpm == null) return '--';
+  return Number(rpm).toFixed(1);
+};
+
 const TrafficMonitor = () => {
   const { user, isAdmin } = useAuth();
   const { adminTraffic, connected, systemStats } = useSocket();
@@ -292,9 +302,11 @@ const TrafficMonitor = () => {
 
   const rows = useMemo(() => {
     let arr = [];
+    const recentMap = snapshot?.recent?.players || {};
     if (accItems && accItems.length > 0) {
       arr = accItems.map((it) => {
         const info = playersInfo.find(p => String(p.id) === String(it.player_id));
+        const recent = recentMap[String(it.player_id)] || null;
         return {
           id: String(it.player_id),
           name: info?.name || '(Sem nome)'.concat(' '),
@@ -308,11 +320,15 @@ const TrafficMonitor = () => {
           image: it.image || 0,
           audio: it.audio || 0,
           other: it.other || 0,
+          bytes_per_min: recent?.bytes_per_min || 0,
+          rpm: recent?.rpm || 0,
+          status_counts: snapshot?.players?.[String(it.player_id)]?.status_counts || null,
         };
       });
     } else if (snapshot && snapshot.players) {
       arr = Object.entries(snapshot.players).map(([pid, pstats]) => {
         const info = playersInfo.find(p => String(p.id) === String(pid));
+        const recent = recentMap[String(pid)] || null;
         return {
           id: pid,
           name: info?.name || '(Sem nome)'.concat(' '),
@@ -326,6 +342,9 @@ const TrafficMonitor = () => {
           image: (pstats.by_type?.image) || 0,
           audio: (pstats.by_type?.audio) || 0,
           other: (pstats.by_type?.other) || 0,
+          bytes_per_min: recent?.bytes_per_min || 0,
+          rpm: recent?.rpm || 0,
+          status_counts: pstats?.status_counts || null,
         };
       });
     }
@@ -558,10 +577,13 @@ const TrafficMonitor = () => {
                       <TableCell>ID</TableCell>
                       <TableCell align="right">Bytes</TableCell>
                       <TableCell align="right">Req</TableCell>
+                      <TableCell align="right">B/min</TableCell>
+                      <TableCell align="right">Req/min</TableCell>
                       <TableCell align="right">Vídeo</TableCell>
                       <TableCell align="right">Imagem</TableCell>
                       <TableCell align="right">Áudio</TableCell>
                       <TableCell align="right">Outros</TableCell>
+                      <TableCell>HTTP</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Last Ping</TableCell>
                       <TableCell>Last Seen (trafego)</TableCell>
@@ -575,10 +597,19 @@ const TrafficMonitor = () => {
                         <TableCell>{r.id}</TableCell>
                         <TableCell align="right">{formatBytes(r.bytes)}</TableCell>
                         <TableCell align="right">{r.requests}</TableCell>
+                        <TableCell align="right">{formatPerMin(r.bytes_per_min)}</TableCell>
+                        <TableCell align="right">{formatRpm(r.rpm)}</TableCell>
                         <TableCell align="right">{formatBytes(r.video)}</TableCell>
                         <TableCell align="right">{formatBytes(r.image)}</TableCell>
                         <TableCell align="right">{formatBytes(r.audio)}</TableCell>
                         <TableCell align="right">{formatBytes(r.other)}</TableCell>
+                        <TableCell>
+                          {r.status_counts ? (
+                            <Tooltip title="200 / 206 / 304">
+                              <span>{(r.status_counts?.['200'] || 0)} / {(r.status_counts?.['206'] || 0)} / {(r.status_counts?.['304'] || 0)}</span>
+                            </Tooltip>
+                          ) : '-'}
+                        </TableCell>
                         <TableCell>
                           <Chip size="small" label={r.status} color={r.status === 'online' ? 'success' : 'default'} />
                         </TableCell>
@@ -595,7 +626,7 @@ const TrafficMonitor = () => {
                     ))}
                     {rows.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={12}>
+                        <TableCell colSpan={15}>
                           <Typography variant="body2" color="text.secondary">
                             Nenhum dado disponível ainda.
                           </Typography>

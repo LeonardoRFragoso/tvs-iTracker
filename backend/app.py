@@ -344,6 +344,7 @@ def _track_upload_traffic(response):
                     'bytes': 0,
                     'requests': 0,
                     'by_type': {'video': 0, 'image': 0, 'audio': 0, 'other': 0},
+                    'status_counts': {'200': 0, '206': 0, '304': 0, '4xx': 0, '5xx': 0},
                     'last_seen': None
                 })
                 pstats['bytes'] += bytes_sent
@@ -366,16 +367,30 @@ def _track_upload_traffic(response):
             # Medir latência e classificar status HTTP
             try:
                 status = getattr(response, 'status_code', 200)
+                # Incremento global
                 if status == 200:
                     UPLOAD_METRICS['status_counts']['200'] += 1
+                    sc_key = '200'
                 elif status == 206:
                     UPLOAD_METRICS['status_counts']['206'] += 1
+                    sc_key = '206'
                 elif status == 304:
                     UPLOAD_METRICS['status_counts']['304'] += 1
+                    sc_key = '304'
                 elif 400 <= status < 500:
                     UPLOAD_METRICS['status_counts']['4xx'] += 1
+                    sc_key = '4xx'
                 elif status >= 500:
                     UPLOAD_METRICS['status_counts']['5xx'] += 1
+                    sc_key = '5xx'
+                else:
+                    sc_key = None
+                # Incremento por player
+                if sc_key:
+                    with TRAFFIC_LOCK:
+                        p = TRAFFIC_STATS['players'].setdefault(pid, {})
+                        pc = p.setdefault('status_counts', {'200': 0, '206': 0, '304': 0, '4xx': 0, '5xx': 0})
+                        pc[sc_key] = pc.get(sc_key, 0) + 1
             except Exception:
                 status = None
 
@@ -739,10 +754,16 @@ def service_worker_js():
         const cache = await caches.open(CACHE_NAME);
         let full = await cache.match(url);
         if (!full) {
-          // Sem cópia completa no cache: atender via rede (mantendo funcional)
-          // e iniciar download completo em background para futuros acessos offline
+          // Sem cópia completa no cache: atender via rede.
+          // Evitar prefetch completo para vídeos grandes; manter prefetch apenas para imagens/arquivos pequenos.
           const netResp = await fetch(req);
-          fetch(url).then(r => { if (r && r.ok) cache.put(url, r.clone()); }).catch(() => {});
+          try {
+            const u = new URL(url);
+            const isVideo = /\.(mp4|mkv|mov|avi|wmv)$/i.test(u.pathname);
+            if (!isVideo) {
+              fetch(url).then(r => { if (r && r.ok) cache.put(url, r.clone()); }).catch(() => {});
+            }
+          } catch (e) { /* ignore */ }
           return netResp;
         }
 
@@ -1365,8 +1386,8 @@ def monitor_traffic_top():
         company = request.args.get('company')
         location_id = request.args.get('location_id')
 
-        # HR scoping: força filtro por company do usuário
-        if getattr(user, 'role', None) == 'hr' and getattr(user, 'company', None):
+        # HR: restringe à própria empresa
+        if user.role == 'hr' and getattr(user, 'company', None):
             company = user.company
 
         now = datetime.now(timezone.utc)

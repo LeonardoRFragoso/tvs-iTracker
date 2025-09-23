@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 from datetime import datetime
 from typing import List, Optional
 
@@ -82,6 +83,9 @@ class VideoCompiler:
                 width, height = self._parse_resolution(resolution)
 
                 total = len(contents)
+                # Estimate total duration for better progress mapping
+                estimated_total_duration = 0.0
+
                 # Preparation done
                 self._emit(app, 'campaign_compile_progress', {
                     'campaign_id': campaign_id,
@@ -105,28 +109,49 @@ class VideoCompiler:
                             raise FileNotFoundError(f'Content file not found: {content.file_path}')
 
                     seg_out = os.path.join(work_dir, f'seg_{idx:04d}.mp4')
+
+                    # Allocate a slice of the global progress for this segment within 5..80%
+                    start_pct = 5 + int((idx / total) * 75)
+                    end_pct = 5 + int(((idx + 1) / total) * 75)
+
                     if (content.content_type or '').lower() == 'image':
                         duration = int(cc.get_effective_duration() or campaign.content_duration or 10)
-                        self._build_image_segment(src, seg_out, width, height, fps, duration)
+                        estimated_total_duration += max(1, duration)
+                        # Build with progress
+                        self._build_image_segment(
+                            src, seg_out, width, height, fps, duration,
+                            app=app, campaign_id=campaign_id,
+                            start_pct=start_pct, end_pct=end_pct
+                        )
                         step = 'image'
                     else:
-                        self._transcode_video_segment(src, seg_out, width, height, fps)
+                        # Probe input duration to map FFmpeg out_time
+                        src_dur = self._probe_duration(src) or max(1.0, float(cc.get_effective_duration() or 0) or 1)
+                        estimated_total_duration += max(1.0, float(src_dur))
+                        self._transcode_video_segment(
+                            src, seg_out, width, height, fps,
+                            app=app, campaign_id=campaign_id,
+                            start_pct=start_pct, end_pct=end_pct,
+                            input_duration=float(src_dur)
+                        )
                         step = 'video'
                     seg_paths.append(seg_out)
 
-                    # Emit per-segment progress (up to 80%)
-                    pct = 5 + int(((idx + 1) / total) * 75)
-                    self._emit(app, 'campaign_compile_progress', {
-                        'campaign_id': campaign_id,
-                        'status': 'processing',
-                        'progress': pct,
-                        'message': f'Segmento {idx + 1}/{total} ({step}) gerado'
-                    })
+                    # Finalize this segment slice at end_pct to avoid visual gaps
+                    try:
+                        self._emit(app, 'campaign_compile_progress', {
+                            'campaign_id': campaign_id,
+                            'status': 'processing',
+                            'progress': end_pct,
+                            'message': f'Segmento {idx + 1}/{total} ({step}) gerado'
+                        })
+                    except Exception:
+                        pass
 
                 if not seg_paths:
                     raise RuntimeError('No valid segments were generated')
 
-                # Concat segments
+                # Concat segments with progress mapped to 85..92%
                 self._emit(app, 'campaign_compile_progress', {
                     'campaign_id': campaign_id,
                     'status': 'processing',
@@ -140,7 +165,10 @@ class VideoCompiler:
 
                 out_name = f"campaign_{campaign_id}_{ts}.mp4"
                 out_full = os.path.join(self.compiled_dir, out_name)
-                self._concat_segments(list_path, out_full)
+                self._concat_segments(list_path, out_full,
+                                      app=app, campaign_id=campaign_id,
+                                      start_pct=85, end_pct=92,
+                                      total_duration=max(1.0, estimated_total_duration))
 
                 # Probe duration
                 self._emit(app, 'campaign_compile_progress', {
@@ -221,7 +249,7 @@ class VideoCompiler:
         except Exception:
             return 1920, 1080
 
-    def _build_image_segment(self, src: str, out: str, width: int, height: int, fps: int, duration: int):
+    def _build_image_segment(self, src: str, out: str, width: int, height: int, fps: int, duration: int, app=None, campaign_id: Optional[str]=None, start_pct: Optional[int]=None, end_pct: Optional[int]=None):
         # Scale with aspect ratio preserved and pad to target
         vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
         dur = str(max(1, duration))
@@ -246,9 +274,12 @@ class VideoCompiler:
             '-shortest',
             out
         ]
-        self._run(cmd, 'image-segment')
+        if app and campaign_id and start_pct is not None and end_pct is not None:
+            self._run_with_progress(cmd, max(1.0, float(duration)), app, campaign_id, start_pct, end_pct, 'Segmento (imagem)')
+        else:
+            self._run(cmd, 'image-segment')
 
-    def _transcode_video_segment(self, src: str, out: str, width: int, height: int, fps: int):
+    def _transcode_video_segment(self, src: str, out: str, width: int, height: int, fps: int, app=None, campaign_id: Optional[str]=None, start_pct: Optional[int]=None, end_pct: Optional[int]=None, input_duration: Optional[float]=None):
         vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
         cmd = [
             'ffmpeg', '-y',
@@ -262,9 +293,12 @@ class VideoCompiler:
             '-ar', '44100', '-ac', '2',
             out
         ]
-        self._run(cmd, 'video-segment')
+        if app and campaign_id and start_pct is not None and end_pct is not None and input_duration:
+            self._run_with_progress(cmd, max(1.0, float(input_duration)), app, campaign_id, start_pct, end_pct, 'Segmento (vídeo)')
+        else:
+            self._run(cmd, 'video-segment')
 
-    def _concat_segments(self, list_file: str, out_path: str):
+    def _concat_segments(self, list_file: str, out_path: str, app=None, campaign_id: Optional[str]=None, start_pct: Optional[int]=None, end_pct: Optional[int]=None, total_duration: Optional[float]=None):
         cmd = [
             'ffmpeg', '-y',
             '-f', 'concat', '-safe', '0',
@@ -274,7 +308,10 @@ class VideoCompiler:
             '-movflags', '+faststart',
             out_path
         ]
-        self._run(cmd, 'concat')
+        if app and campaign_id and start_pct is not None and end_pct is not None and total_duration:
+            self._run_with_progress(cmd, max(1.0, float(total_duration)), app, campaign_id, start_pct, end_pct, 'Concatenação')
+        else:
+            self._run(cmd, 'concat')
 
     def _probe_duration(self, file_path: str) -> Optional[float]:
         try:
@@ -289,6 +326,82 @@ class VideoCompiler:
             return float(s) if s else None
         except Exception:
             return None
+
+    def _run_with_progress(self, cmd: List[str], total_duration: float, app, campaign_id: str, start_pct: int, end_pct: int, stage_label: str):
+        """Execute FFmpeg and emit progress between start_pct..end_pct using -progress pipe:1 output.
+        total_duration is in seconds for the current step. Emits 'campaign_compile_progress'.
+        """
+        # Insert progress flags for streaming updates
+        cmd_prog = list(cmd)
+        # Prefer minimal log noise and structured progress on stdout
+        cmd_prog.insert(1, '-loglevel')
+        cmd_prog.insert(2, 'error')
+        cmd_prog.extend(['-progress', 'pipe:1', '-nostats'])
+
+        proc = subprocess.Popen(cmd_prog, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True)
+        last_emit_ts = 0.0
+        last_pct = -1
+        try:
+            if proc.stdout:
+                for raw in proc.stdout:
+                    line = (raw or '').strip()
+                    # Look for out_time_ms or out_time in the -progress output
+                    prog_sec = None
+                    if line.startswith('out_time_ms='):
+                        try:
+                            ms = float(line.split('=', 1)[1].strip())
+                            prog_sec = ms / 1_000_000.0
+                        except Exception:
+                            prog_sec = None
+                    elif line.startswith('out_time='):
+                        # Format HH:MM:SS.micro
+                        try:
+                            t = line.split('=', 1)[1].strip()
+                            hh, mm, ss = t.split(':')
+                            prog_sec = int(hh) * 3600 + int(mm) * 60 + float(ss)
+                        except Exception:
+                            prog_sec = None
+                    elif line.startswith('progress=') and line.endswith('end'):
+                        # Force final emit at end of step
+                        pct = end_pct
+                        now = time.time()
+                        if pct != last_pct or (now - last_emit_ts) > 0.25:
+                            self._emit(app, 'campaign_compile_progress', {
+                                'campaign_id': campaign_id,
+                                'status': 'processing',
+                                'progress': int(pct),
+                                'message': f'{stage_label}: finalizando'
+                            })
+                            last_pct = pct
+                            last_emit_ts = now
+                        continue
+
+                    if prog_sec is not None and total_duration > 0:
+                        frac = max(0.0, min(1.0, prog_sec / float(total_duration)))
+                        pct = int(round(start_pct + frac * (end_pct - start_pct)))
+                        now = time.time()
+                        if pct != last_pct and (now - last_emit_ts) > 0.25:
+                            self._emit(app, 'campaign_compile_progress', {
+                                'campaign_id': campaign_id,
+                                'status': 'processing',
+                                'progress': pct,
+                                'message': f'{stage_label}: {pct}%'
+                            })
+                            last_pct = pct
+                            last_emit_ts = now
+            proc.wait()
+            if proc.returncode != 0:
+                try:
+                    out = proc.stdout.read() if proc.stdout else ''
+                except Exception:
+                    out = ''
+                raise RuntimeError(f"FFmpeg step '{stage_label}' failed with code {proc.returncode}. Output tail: {out[-500:]}")
+        finally:
+            try:
+                if proc and proc.stdout:
+                    proc.stdout.close()
+            except Exception:
+                pass
 
     def _run(self, cmd: List[str], step: str):
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

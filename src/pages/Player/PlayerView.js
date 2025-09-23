@@ -99,36 +99,82 @@ const PlayerView = () => {
     }
   };
 
+  // Helper: detect if the document is actually in native fullscreen
+  const isNativeFullscreenActive = () => !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
+
+  useEffect(() => {
+    const syncFs = () => setIsFullscreen(!!isNativeFullscreenActive());
+    document.addEventListener('fullscreenchange', syncFs);
+    document.addEventListener('webkitfullscreenchange', syncFs);
+    document.addEventListener('mozfullscreenchange', syncFs);
+    document.addEventListener('MSFullscreenChange', syncFs);
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFs);
+      document.removeEventListener('webkitfullscreenchange', syncFs);
+      document.removeEventListener('mozfullscreenchange', syncFs);
+      document.removeEventListener('MSFullscreenChange', syncFs);
+    };
+  }, []);
+
   const enterFullscreen = () => {
+    if (isNativeFullscreenActive()) {
+      // Already in fullscreen; just sync state
+      setIsFullscreen(true);
+      return;
+    }
     console.log('[PlayerView] Entering fullscreen mode');
     setIsFullscreen(true);
-    
     // Try multiple fullscreen methods for better compatibility
     const element = document.documentElement;
-    
-    if (element.requestFullscreen) {
-      element.requestFullscreen().catch(console.warn);
-    } else if (element.webkitRequestFullscreen) {
-      element.webkitRequestFullscreen().catch(console.warn);
-    } else if (element.mozRequestFullScreen) {
-      element.mozRequestFullScreen().catch(console.warn);
-    } else if (element.msRequestFullscreen) {
-      element.msRequestFullscreen().catch(console.warn);
+    try {
+      if (element.requestFullscreen) {
+        const p = element.requestFullscreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      } else if (element.webkitRequestFullscreen) {
+        const p = element.webkitRequestFullscreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      } else if (element.mozRequestFullScreen) {
+        const p = element.mozRequestFullScreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      } else if (element.msRequestFullscreen) {
+        const p = element.msRequestFullscreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      }
+    } catch (e) {
+      console.warn(e);
     }
   };
 
   const exitFullscreen = () => {
+    // Only try to exit if the browser is actually in fullscreen to avoid errors
+    const active = isNativeFullscreenActive();
+    if (!active) {
+      setIsFullscreen(false);
+      return;
+    }
     console.log('[PlayerView] Exiting fullscreen mode');
     setIsFullscreen(false);
-    
-    if (document.exitFullscreen) {
-      document.exitFullscreen().catch(console.warn);
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen().catch(console.warn);
-    } else if (document.mozCancelFullScreen) {
-      document.mozCancelFullScreen().catch(console.warn);
-    } else if (document.msExitFullscreen) {
-      document.msExitFullscreen().catch(console.warn);
+    try {
+      if (document.exitFullscreen) {
+        const p = document.exitFullscreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      } else if (document.webkitExitFullscreen) {
+        const p = document.webkitExitFullscreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      } else if (document.mozCancelFullScreen) {
+        const p = document.mozCancelFullScreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      } else if (document.msExitFullscreen) {
+        const p = document.msExitFullscreen();
+        if (p && typeof p.catch === 'function') p.catch(console.warn);
+      }
+    } catch (e) {
+      console.warn(e);
     }
   };
 

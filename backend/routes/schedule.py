@@ -287,6 +287,24 @@ def update_schedule(schedule_id):
                 return jsonify({'error': 'Acesso negado a agendamento de outra empresa'}), 403
         
         data = request.get_json()
+
+        # Atualização de campanha e player (com validações)
+        if 'campaign_id' in data and data['campaign_id']:
+            new_campaign = Campaign.query.get(data['campaign_id'])
+            if not new_campaign:
+                return jsonify({'error': 'Campanha não encontrada'}), 404
+            schedule.campaign_id = data['campaign_id']
+
+        if 'player_id' in data and data['player_id']:
+            new_player = Player.query.get(data['player_id'])
+            if not new_player:
+                return jsonify({'error': 'Player não encontrado'}), 404
+            # Escopo RH: validar que o novo player pertence à mesma empresa do usuário
+            if user.role == 'hr':
+                loc = Location.query.get(new_player.location_id) if new_player else None
+                if not loc or loc.company != user.company:
+                    return jsonify({'error': 'RH só pode agendar para players da sua empresa'}), 403
+            schedule.player_id = data['player_id']
         
         if 'name' in data:
             schedule.name = data['name']
