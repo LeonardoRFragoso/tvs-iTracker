@@ -47,12 +47,12 @@ root.render(
 
 // Register Service Worker for offline media caching (uploads)
 // Use root scope so the SW can intercept /uploads/* even when the SPA runs under /app
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
   window.addEventListener('load', () => {
     try {
       const swPath = '/sw.js';
       navigator.serviceWorker
-        .register(swPath)
+        .register(swPath, { scope: '/' })
         .then((reg) => {
           console.log('[SW] Registered:', swPath, 'scope:', reg.scope);
         })

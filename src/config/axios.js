@@ -14,8 +14,24 @@ let initialBaseURL = '';
 const envBase = process.env.REACT_APP_API_URL && normalizeBase(process.env.REACT_APP_API_URL);
 
 if (envBase) {
-  // Permite override explícito via REACT_APP_API_URL (ex.: build:tv)
-  initialBaseURL = envBase;
+  // Tratar "same-origin" como um alias para origin + /api
+  const isSameOriginAlias = /^(same[-_]?origin)$/i.test(envBase);
+  if (isSameOriginAlias) {
+    if (isBrowser) {
+      if (isCRADev) {
+        // Em DEV, falar com o backend Flask em :5000
+        const host = window.location.hostname || 'localhost';
+        initialBaseURL = `http://${host}:5000/api`;
+      } else {
+        // Em produção/LAN, usar same-origin
+        initialBaseURL = `${normalizeBase(window.location.origin)}/api`;
+      }
+    } else {
+      initialBaseURL = '/api';
+    }
+  } else {
+    initialBaseURL = envBase;
+  }
 } else if (isBrowser && isCRADev) {
   // Em DEV (CRA/Vite), apontar para o backend Flask local em :5000
   const host = window.location.hostname || 'localhost';
@@ -119,7 +135,9 @@ axios.interceptors.response.use(
 
         const isKioskPath = (
           isBrowser && (
-            currentPath.startsWith('/kiosk') || currentPath.startsWith('/k/') || currentPath.startsWith('/tv')
+            currentPath.startsWith('/kiosk') ||
+            currentPath.startsWith('/k/') ||
+            currentPath.startsWith('/tv')
           )
         );
         if (isKioskPath) {
