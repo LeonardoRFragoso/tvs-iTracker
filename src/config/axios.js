@@ -1,121 +1,99 @@
 import axios from 'axios';
 
-// Configure axios defaults
-const inferApiBase = () => {
-  const proto = (typeof window !== 'undefined' ? window.location.protocol : 'http:');
-  const host = (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
-  const port = (typeof window !== 'undefined' ? window.location.port : '');
-  const origin = (typeof window !== 'undefined' ? window.location.origin : `${proto}//${host}${port ? ':' + port : ''}`);
-  const path = (typeof window !== 'undefined' ? window.location.pathname : '/');
-  const isLocalHost = host === 'localhost' || host === '127.0.0.1';
-  const isCRADev = ['3000', '5173', '5174'].includes(port); // suportar CRA/Vite
-  const isProdLike = path.startsWith('/app') || port === '' || port === '80' || port === '443';
+// Define baseURL de forma dinâmica para DEV/PROD e builds de TV
+const isBrowser = typeof window !== 'undefined';
+const currentPort = isBrowser ? window.location.port : '';
+const isCRADev = ['3000', '5173', '5174'].includes(currentPort);
 
-  // 1) Respeitar override por variável de ambiente (fora de dev)
-  const env = process.env.REACT_APP_API_URL;
-  if (!isCRADev && env) {
-    if (env === 'same-origin') {
-      console.log(`[Axios Config] Forçando same-origin por REACT_APP_API_URL: ${origin}/api`);
-      return `${origin}/api`;
-    }
-    const url = env.replace(/\/$/, '');
-    console.log(`[Axios Config] Usando REACT_APP_API_URL: ${url}`);
-    return url;
-  } else if (isCRADev && env) {
-    console.log(`[Axios Config] Ignorando REACT_APP_API_URL em dev (porta ${port}): ${env}`);
-  }
+function normalizeBase(url) {
+  if (!url) return '';
+  return String(url).replace(/\/+$/, '');
+}
 
-  // 2) Ambiente de desenvolvimento (CRA/Vite) → falar com :5000, mesmo quando acessado via IP
-  if (isCRADev) {
-    const base = `${proto}//${host}:5000/api`;
-    console.log(`[Axios Config] Dev (porta ${port}). Base URL → ${base}`);
-    return base;
-  }
+let initialBaseURL = '';
+const envBase = process.env.REACT_APP_API_URL && normalizeBase(process.env.REACT_APP_API_URL);
 
-  // 3) Localhost sem porta típica de dev → ainda preferir :5000
-  if (isLocalHost) {
-    const base = `${proto}//${host}:5000/api`;
-    console.log(`[Axios Config] Localhost. Base URL → ${base}`);
-    return base;
-  }
+if (envBase) {
+  // Permite override explícito via REACT_APP_API_URL (ex.: build:tv)
+  initialBaseURL = envBase;
+} else if (isBrowser && isCRADev) {
+  // Em DEV (CRA/Vite), apontar para o backend Flask local em :5000
+  const host = window.location.hostname || 'localhost';
+  initialBaseURL = `http://${host}:5000/api`;
+} else if (isBrowser) {
+  // Produção: mesmo domínio (nginx proxy -> /api)
+  initialBaseURL = `${normalizeBase(window.location.origin)}/api`;
+} else {
+  // SSR/tests: fallback simples
+  initialBaseURL = '/api';
+}
 
-  // 4) Produção/LAN servida pelo backend (porta 80/443 ou /app) → same-origin
-  if (isProdLike) {
-    console.log(`[Axios Config] Produção/LAN (${origin}). Base URL → ${origin}/api`);
-    return `${origin}/api`;
-  }
+axios.defaults.baseURL = initialBaseURL;
 
-  // 5) Padrão: tentar :5000
-  const localBase = `${proto}//${host}:5000/api`;
-  console.log(`[Axios Config] Padrão (fallback) Base URL → ${localBase}`);
-  return localBase;
-};
-
-const baseURL = inferApiBase();
-axios.defaults.baseURL = baseURL;
-
-// Importante: não definir Content-Type global em headers.common, pois isso cria preflight em GET/HEAD
-axios.defaults.headers.post['Content-Type'] = 'application/json';
-axios.defaults.headers.put['Content-Type'] = 'application/json';
-axios.defaults.headers.patch['Content-Type'] = 'application/json';
-
-// Add request interceptor to include auth token e otimizar preflight
+// Interceptor de request: adiciona Authorization quando necessário
 axios.interceptors.request.use(
   (config) => {
-    const method = String(config.method || 'get').toLowerCase();
-    const urlStr = String(config.url || '');
-
-    // Remover Content-Type de GET/HEAD para evitar preflight
-    if (['get', 'head'].includes(method)) {
-      if (config.headers) {
-        delete config.headers['Content-Type'];
-      }
-    }
+    const cfg = config || {};
+    const urlStr = typeof cfg.url === 'string' ? cfg.url : '';
 
     // Pular Authorization para endpoints públicos
     const isPublic = (
-      urlStr.includes('/settings/ui-preferences')
-      // adicionar aqui outras rotas públicas se necessário
+      urlStr.includes('/settings/ui-preferences') ||
+      urlStr.includes('/settings/player-preferences') ||
+      urlStr.includes('/players/resolve-code/') ||
+      /\/players\/[^/]+\/playlist/.test(urlStr) ||
+      /\/players\/[^/]+\/info/.test(urlStr) ||
+      urlStr.startsWith('/uploads/')
     );
 
-    if (!isPublic) {
-      const token = localStorage.getItem('access_token');
+    // Em modo Kiosk/TV, não enviar Authorization em nenhuma rota
+    const currentPath = isBrowser ? window.location.pathname : '';
+    const isKioskPath = (
+      isBrowser && (
+        currentPath.startsWith('/kiosk') ||
+        currentPath.startsWith('/k/') ||
+        currentPath.startsWith('/tv')
+      )
+    );
+
+    if (!isPublic && !isKioskPath) {
+      const token = isBrowser ? localStorage.getItem('access_token') : null;
       if (token) {
-        config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
+        cfg.headers = cfg.headers || {};
+        cfg.headers.Authorization = `Bearer ${token}`;
       }
+    } else if (cfg.headers && 'Authorization' in cfg.headers) {
+      // garantir remoção caso axios tenha herdado headers
+      delete cfg.headers.Authorization;
     }
 
-    return config;
+    return cfg;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
 // Add response interceptor to handle auth errors and connection-refused fallback
 let switchedToSameOrigin = false;
 axios.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     try {
       const message = String(error?.message || '');
       const talksTo5000 = typeof axios.defaults.baseURL === 'string' && axios.defaults.baseURL.includes(':5000');
       // Treat only explicit connection refused as a backend-down signal; avoid broad 'Network Error' (often CORS)
       const isConnRefused = /ERR_CONNECTION_REFUSED|ECONNREFUSED/i.test(message);
-      const port = (typeof window !== 'undefined' ? window.location.port : '');
-      const isCRADev = ['3000', '5173', '5174'].includes(port);
+      const port = isBrowser ? window.location.port : '';
+      const isDev = ['3000', '5173', '5174'].includes(port);
       // Only switch to same-origin outside CRA dev, and only when truly refused
-      if (!isCRADev && !switchedToSameOrigin && talksTo5000 && isConnRefused && typeof window !== 'undefined') {
+      if (!isDev && !switchedToSameOrigin && talksTo5000 && isConnRefused && isBrowser) {
         switchedToSameOrigin = true;
-        const sameOrigin = `${window.location.origin.replace(/\/$/, '')}/api`;
+        const sameOrigin = `${normalizeBase(window.location.origin)}/api`;
+        // eslint-disable-next-line no-console
         console.warn('[Axios Config] Connection refused em :5000. Alternando baseURL para same-origin:', sameOrigin);
         axios.defaults.baseURL = sameOrigin;
 
         // Reescrever a requisição que falhou, se necessário
-        const cfg = { ...error.config };
+        const cfg = { ...(error.config || {}) };
         if (typeof cfg.url === 'string') {
           try {
             const u = new URL(cfg.url, window.location.origin);
@@ -130,18 +108,29 @@ axios.interceptors.response.use(
         return axios(cfg);
       }
 
-      // Centralized 401 handling com exceção para a rota de login
+      // Centralized 401 handling com exceção para o modo Kiosk/TV
       if (error.response?.status === 401) {
         const cfg = error.config || {};
         const reqUrl = typeof cfg.url === 'string' ? cfg.url : '';
         const method = String(cfg.method || '').toLowerCase();
         const isLoginAttempt = method === 'post' && reqUrl.includes('/auth/login');
-        const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+        const currentPath = isBrowser ? window.location.pathname : '';
         const atLogin = currentPath.endsWith('/login') || currentPath.endsWith('/app/login');
-        if (!isLoginAttempt && !atLogin) {
+
+        const isKioskPath = (
+          isBrowser && (
+            currentPath.startsWith('/kiosk') || currentPath.startsWith('/k/') || currentPath.startsWith('/tv')
+          )
+        );
+        if (isKioskPath) {
+          // não redirecionar no Kiosk; apenas propagar o erro
+          return Promise.reject(error);
+        }
+
+        if (!isLoginAttempt && !atLogin && isBrowser) {
           localStorage.removeItem('access_token');
           localStorage.removeItem('user');
-          const base = (typeof window !== 'undefined' && window.location.pathname.startsWith('/app')) ? '/app' : '';
+          const base = window.location.pathname.startsWith('/app') ? '/app' : '';
           window.location.href = `${base}/login`;
         }
       }
