@@ -129,7 +129,6 @@ const CampaignForm = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    status: 'inactive',
     is_active: false,
     start_date: null,
     end_date: null,
@@ -1002,29 +1001,6 @@ const CampaignForm = () => {
                           />
                         </Grid>
 
-                        <Grid item xs={12}>
-                          <FormControl fullWidth>
-                            <InputLabel>Status</InputLabel>
-                            <Select
-                              name="status"
-                              value={formData.status}
-                              onChange={handleInputChange}
-                              label="Status"
-                              sx={{
-                                borderRadius: 2,
-                                '&:hover': {
-                                  transform: 'translateY(-2px)',
-                                  transition: 'transform 0.2s ease-in-out',
-                                },
-                              }}
-                            >
-                              <MenuItem value="inactive">Inativa</MenuItem>
-                              <MenuItem value="active">Ativa</MenuItem>
-                              <MenuItem value="scheduled">Agendada</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
-
                         <Grid item xs={12} md={6}>
                           <DateTimePicker
                             label="Data de Início"
@@ -1829,18 +1805,7 @@ const CampaignForm = () => {
                           }}
                         />
                       </Grid>
-                      <Grid item xs={12} md={6}>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={formData.is_active}
-                              onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                              disabled={loading}
-                            />
-                          }
-                          label="Campanha Ativa"
-                        />
-                      </Grid>
+
                       <Grid item xs={12}>
                         <TextField
                           fullWidth
