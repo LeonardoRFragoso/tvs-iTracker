@@ -646,11 +646,15 @@ def handle_content_download_request(data):
 def handle_playback_event(data):
     """Recebe eventos de telemetria de reprodução dos players"""
     try:
+        print(f"[Playback] Evento recebido: {data}")
         event_type = data.get('type')
         event_data = data.get('data', {})
         player_id = event_data.get('player_id')
         
+        print(f"[Playback] Processando evento: {event_type} para player {player_id}")
+        
         if not player_id or not event_type:
+            print(f"[Playback] Erro: player_id ou type ausente")
             emit('error', {'message': 'player_id e type são obrigatórios'})
             return
         
