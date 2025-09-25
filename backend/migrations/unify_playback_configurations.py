@@ -12,12 +12,21 @@ import sys
 def run_migration():
     """Executa a migração para unificar configurações de reprodução"""
     
-    # Caminho para o banco de dados
+    # Caminho para o banco de dados (Windows e Linux)
     db_paths = [
+        # Caminhos relativos ao diretório raiz do projeto
+        '../instance/tvs_platform.db',
+        '../tvs_platform.db',
+        'instance/tvs_platform.db',
+        'tvs_platform.db',
+        # Caminhos absolutos a partir do diretório migrations
         'backend/instance/tvs_platform.db',
         'backend/tvs_platform.db',
-        'instance/tvs_platform.db',
-        'tvs_platform.db'
+        # Caminhos para execução a partir do diretório raiz
+        './backend/instance/tvs_platform.db',
+        './backend/tvs_platform.db',
+        './instance/tvs_platform.db',
+        './tvs_platform.db'
     ]
     
     db_path = None
@@ -28,6 +37,12 @@ def run_migration():
     
     if not db_path:
         print("❌ Banco de dados não encontrado!")
+        print("🔍 Caminhos verificados:")
+        for path in db_paths:
+            exists = "✅" if os.path.exists(path) else "❌"
+            abs_path = os.path.abspath(path)
+            print(f"  {exists} {path} -> {abs_path}")
+        print(f"📁 Diretório atual: {os.getcwd()}")
         return False
     
     print(f"🔄 Executando migração no banco: {db_path}")
