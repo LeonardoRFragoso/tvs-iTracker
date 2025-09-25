@@ -432,6 +432,7 @@ def debug_players():
 def get_playback_status():
     """Retorna KPIs de reprodução em tempo real dos players"""
     try:
+        print(f"[DASHBOARD] Endpoint playback-status chamado")
         from app import PLAYER_PLAYBACK_STATUS, CONNECTED_PLAYERS
         from datetime import datetime, timezone, timedelta
         
@@ -532,7 +533,7 @@ def get_playback_status():
                 except:
                     pass
         
-        return jsonify({
+        result = {
             'summary': {
                 'total_players': total_players,
                 'online_players': online_players,
@@ -545,7 +546,10 @@ def get_playback_status():
             'players': player_details,
             'ghost_players': ghost_players,
             'timestamp': current_time.isoformat()
-        }), 200
+        }
+        
+        print(f"[DASHBOARD] Retornando playback status: {result['summary']}")
+        return jsonify(result), 200
         
     except Exception as e:
         print(f"[DASHBOARD] Erro ao obter status de reprodução: {e}")

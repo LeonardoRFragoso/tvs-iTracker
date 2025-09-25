@@ -420,7 +420,13 @@ const Dashboard = () => {
       if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
       if (performanceRes.status === 'fulfilled') setPerformance(performanceRes.value.data);
       if (healthRes.status === 'fulfilled') setHealth(healthRes.value.data);
-      if (playbackRes.status === 'fulfilled') setPlaybackStatus(playbackRes.value.data);
+      
+      if (playbackRes.status === 'fulfilled') {
+        console.log('[Dashboard] Playback status loaded:', playbackRes.value.data);
+        setPlaybackStatus(playbackRes.value.data);
+      } else {
+        console.error('[Dashboard] Failed to load playback status:', playbackRes.reason);
+      }
 
       if (includeTraffic) {
         if (trafficRes?.status === 'fulfilled') {
