@@ -181,11 +181,7 @@ def create_campaign():
             time_slots=json.dumps(data.get('time_slots', [])),
             days_of_week=json.dumps(data.get('days_of_week', [])),
             user_id=user_id,
-            # Novos campos de reprodução
-            playback_mode=data.get('playback_mode', 'sequential'),
-            content_duration=to_int(data.get('content_duration', 10), default=10),
-            loop_enabled=to_bool(data.get('loop_enabled', False), default=False),
-            shuffle_enabled=to_bool(data.get('shuffle_enabled', False), default=False),
+            # REMOVIDO: Configurações de reprodução movidas para Schedule
         )
         
         db.session.add(campaign)
