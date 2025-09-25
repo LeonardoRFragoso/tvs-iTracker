@@ -127,7 +127,8 @@ SOCKET_SID_TO_PLAYER = {}
 SOCKET_SID_TO_USER = {}
 
 # Mapa para rastrear reprodução ativa dos players
-PLAYER_PLAYBACK_STATUS = {}
+if 'PLAYER_PLAYBACK_STATUS' not in globals():
+    PLAYER_PLAYBACK_STATUS = {}
 
 # Métricas de uploads (latência e contadores HTTP)
 UPLOAD_METRICS = {
