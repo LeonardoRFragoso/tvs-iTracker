@@ -476,6 +476,7 @@ class ScheduleExecutor:
         try:
             if not self.socketio:
                 logger.warning("WebSocket não disponível para player web")
+                print(f"[ERROR] WebSocket não disponível para player {player.name}")
                 return
             
             # Buscar conteúdo da campanha através do relacionamento CampaignContent
@@ -494,6 +495,8 @@ class ScheduleExecutor:
             if not content:
                 logger.warning(f"Nenhum conteúdo ativo encontrado na campanha {campaign.name}")
                 return
+            
+            print(f"[DEBUG] Tentando enviar conteúdo via WebSocket: {content.title}")
             
             # Enviar comando via WebSocket
             self.socketio.emit('play_schedule', {
