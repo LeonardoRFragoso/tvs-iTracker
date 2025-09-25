@@ -58,7 +58,7 @@ import {
   Visibility as VisibilityIcon,
   MoreVert as MoreVertIcon,
   Close as CloseIcon,
-  Remove,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -105,8 +105,17 @@ const StatCardSkeleton = ({ delay = 0 }) => (
 );
 
 // Enhanced StatCard component with animations and gradients
-const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previousValue }) => {
+const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previousValue, onClick, navigateTo }) => {
   const { isDarkMode } = useTheme();
+  const navigate = useNavigate();
+  
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (navigateTo) {
+      navigate(navigateTo);
+    }
+  };
   
   const gradients = {
     primary: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
@@ -140,17 +149,20 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
   return (
     <Grow in={true} timeout={1000 + delay * 200}>
       <Card
+        onClick={handleClick}
         sx={{
           height: '100%',
           background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : (gradients[color] || gradients.primary),
+          cursor: (onClick || navigateTo) ? 'pointer' : 'default',
           color: (theme) => theme.palette.mode === 'dark' ? theme.palette.text.primary : 'white',
           position: 'relative',
           overflow: 'hidden',
-          cursor: 'pointer',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
-            transform: 'translateY(-4px) scale(1.02)',
-            boxShadow: (theme) => theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(0, 0, 0, 0.25)',
+            transform: (onClick || navigateTo) ? 'translateY(-4px) scale(1.02)' : 'none',
+            boxShadow: (onClick || navigateTo) ? 
+              ((theme) => theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(0, 0, 0, 0.25)') : 
+              'none',
           },
           '&::before': {
             content: '""',
@@ -188,14 +200,31 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
             <Avatar
               sx={{
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
+                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)',
+                color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : 'white',
                 width: 56,
                 height: 56,
-                transition: 'all 0.3s ease',
+                border: (theme) => theme.palette.mode === 'dark' ? '2px solid rgba(255, 152, 0, 0.3)' : '2px solid rgba(255, 255, 255, 0.3)',
               }}
             >
               {icon}
             </Avatar>
+            
+            {/* Indicador de navegação */}
+            {(onClick || navigateTo) && (
+              <ChevronRightIcon 
+                sx={{ 
+                  color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+                  fontSize: 20,
+                  opacity: 0.8,
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    opacity: 1,
+                    transform: 'translateX(2px)',
+                  }
+                }} 
+              />
+            )}
             {trend && (
               <Box 
                 display="flex" 
@@ -716,6 +745,7 @@ const Dashboard = () => {
             color="primary"
             trend="+12%"
             delay={0}
+            navigateTo="/content"
           />
         </Grid>
 
@@ -728,6 +758,7 @@ const Dashboard = () => {
             color="success"
             trend="+8%"
             delay={1}
+            navigateTo="/campaigns"
           />
         </Grid>
 
@@ -740,6 +771,7 @@ const Dashboard = () => {
             color="success"
             trend={playbackStatus?.summary.ghost_players > 0 ? `⚠ ${playbackStatus?.summary.ghost_players} fantasma` : "✓ Normal"}
             delay={2}
+            navigateTo="/players"
           />
         </Grid>
 
@@ -752,6 +784,7 @@ const Dashboard = () => {
             color="warning"
             trend="Normal"
             delay={3}
+            navigateTo="/content"
           />
         </Grid>
 
@@ -765,6 +798,7 @@ const Dashboard = () => {
             color="info"
             trend={`${((playbackStatus?.summary.online_players || 0) / Math.max(playbackStatus?.summary.total_players || 1, 1) * 100).toFixed(0)}% online`}
             delay={3}
+            navigateTo="/players"
           />
         </Grid>
 
@@ -787,6 +821,7 @@ const Dashboard = () => {
                 color={overuseCount > 0 ? 'warning' : 'info'}
                 trend={overuseCount > 0 ? `↑ ${overuseCount}` : 'OK'}
                 delay={4}
+                navigateTo="/admin/traffic-monitor"
               />
             );
           })()}
