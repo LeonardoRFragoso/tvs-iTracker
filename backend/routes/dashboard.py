@@ -440,6 +440,9 @@ def get_playback_status():
         
         # Calcular estatísticas de reprodução
         total_players = Player.query.count()
+        print(f"[DASHBOARD] Total players no banco: {total_players}")
+        print(f"[DASHBOARD] PLAYER_PLAYBACK_STATUS: {PLAYER_PLAYBACK_STATUS}")
+        print(f"[DASHBOARD] CONNECTED_PLAYERS: {CONNECTED_PLAYERS}")
         online_players = 0
         playing_players = 0
         idle_players = 0
@@ -452,8 +455,15 @@ def get_playback_status():
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
         online_player_ids = set()
         
-        for player in Player.query.all():
+        all_players = Player.query.all()
+        print(f"[DASHBOARD] Players encontrados: {len(all_players)}")
+        
+        for player in all_players:
+            print(f"[DASHBOARD] Processando player: {player.name} (ID: {player.id})")
+            print(f"[DASHBOARD] Last ping: {player.last_ping}")
             is_online = player.last_ping and player.last_ping >= five_minutes_ago
+            print(f"[DASHBOARD] Player {player.name} online: {is_online}")
+            
             if is_online:
                 online_players += 1
                 online_player_ids.add(player.id)
