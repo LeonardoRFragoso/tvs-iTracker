@@ -498,7 +498,7 @@ def get_playback_status():
                 'id': player.id,
                 'name': player.name,
                 'platform': player.platform,
-                'location_name': player.location.name if player.location else 'N/A',
+                'location_name': player.location_name,
                 'is_online': is_online,
                 'status': status,
                 'current_content': {
