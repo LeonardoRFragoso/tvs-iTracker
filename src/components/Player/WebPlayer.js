@@ -62,6 +62,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     if (!playerId) return;
 
     console.log('[WebPlayer] Inicializando player:', playerId);
+    console.log('[WebPlayer] Socket disponível na inicialização:', !!socket);
     
     // Clear previous timeouts
     clearAllTimeouts();
@@ -79,15 +80,36 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     
     // Join player room if socket available
     if (socket && joinPlayerRoom) {
+      console.log('[WebPlayer] Entrando na sala do player:', playerId);
       joinPlayerRoom(playerId);
+      
+      // TESTE: Enviar evento de teste para verificar se Socket.IO está funcionando
+      setTimeout(() => {
+        console.log('[WebPlayer] TESTE: Enviando evento de teste...');
+        sendPlaybackEvent('test_event', {
+          message: 'Teste de conectividade Socket.IO',
+          player_test: true
+        });
+      }, 2000);
+    } else {
+      console.log('[WebPlayer] Socket ou joinPlayerRoom não disponível');
     }
     
     // Cleanup on unmount
     return () => {
       console.log('[WebPlayer] Limpando recursos...');
       clearAllTimeouts();
+      // Enviar evento de fim de reprodução
+      if (socket && currentContent) {
+        sendPlaybackEvent('playback_end', {
+          content_id: currentContent.id,
+          content_title: currentContent.title,
+          content_type: currentContent.type,
+          duration_actual: Date.now() - (playbackStartTimeRef.current || Date.now())
+        });
+      }
     };
-  }, [playerId]);
+  }, [playerId, socket]);
 
   const clearAllTimeouts = () => {
     if (timeoutRef.current) {
@@ -109,6 +131,10 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     if (loadTimeoutRef.current) {
       clearTimeout(loadTimeoutRef.current);
       loadTimeoutRef.current = null;
+    }
+    if (playbackHeartbeatRef.current) {
+      clearInterval(playbackHeartbeatRef.current);
+      playbackHeartbeatRef.current = null;
     }
     
     // Reset flags
@@ -222,6 +248,220 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       connectingRef.current = false;
     }
   };
+
+  // Função para enviar eventos de telemetria de reprodução
+  const sendPlaybackEvent = useCallback((eventType, eventData) => {
+    console.log('[WebPlayer] sendPlaybackEvent chamado:', eventType);
+    console.log('[WebPlayer] Socket:', !!socket, 'Player ID:', playerId);
+    
+    if (!socket || !playerId) {
+      console.log('[WebPlayer] ERRO: Socket ou playerId não disponível para telemetria');
+      console.log('[WebPlayer] Socket disponível:', !!socket);
+      console.log('[WebPlayer] Player ID disponível:', !!playerId);
+      return;
+    }
+
+    const telemetryData = {
+      type: eventType,
+      data: {
+        player_id: playerId,
+        timestamp: new Date().toISOString(),
+        ...eventData
+      }
+    };
+
+    console.log('[WebPlayer] Enviando evento de telemetria:', telemetryData);
+    console.log('[WebPlayer] Socket.emit chamado com evento: playback_event');
+    socket.emit('playback_event', telemetryData);
+    console.log('[WebPlayer] Socket.emit executado');
+  }, [socket, playerId]);
+
+  // Função para iniciar heartbeat de reprodução
+  const startPlaybackHeartbeat = useCallback(() => {
+    if (playbackHeartbeatRef.current) {
+      clearInterval(playbackHeartbeatRef.current);
+    }
+
+    playbackHeartbeatRef.current = setInterval(() => {
+      if (currentContent && isPlaying) {
+        sendPlaybackEvent('playback_heartbeat', {
+          content_id: currentContent.id,
+          content_title: currentContent.title,
+          content_type: currentContent.type,
+          is_playing: true,
+          playlist_index: currentIndex,
+          playlist_total: playlist.length
+        });
+      }
+    }, 30000); // Heartbeat a cada 30 segundos
+  }, [sendPlaybackEvent, currentContent, isPlaying, currentIndex, playlist.length]);
+
+  // Função para parar heartbeat de reprodução
+  const stopPlaybackHeartbeat = useCallback(() => {
+    if (playbackHeartbeatRef.current) {
+      clearInterval(playbackHeartbeatRef.current);
+      playbackHeartbeatRef.current = null;
+    }
+  }, []);
+
+  // Effect para configurar event listeners de mídia
+  useEffect(() => {
+    if (!currentContent) {
+      console.log('[WebPlayer] useEffect: Sem currentContent');
+      return;
+    }
+
+    console.log('[WebPlayer] useEffect: Configurando listeners para:', currentContent.title, 'tipo:', currentContent.type);
+
+    // Para vídeos, usar mediaRef
+    const mediaElement = currentContent.type === 'video' ? mediaRef.current : null;
+    
+    if (currentContent.type === 'video' && !mediaElement) {
+      console.log('[WebPlayer] useEffect: mediaRef.current não disponível ainda, reagendando...');
+      // Se o elemento de mídia não estiver pronto, reagendar
+      const timer = setTimeout(() => {
+        console.log('[WebPlayer] useEffect: Tentando novamente após timeout');
+        // Forçar re-render do useEffect
+        setCurrentContent(prev => ({ ...prev }));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    
+    const handleLoadStart = () => {
+      console.log('[WebPlayer] Mídia começou a carregar');
+    };
+
+    const handleCanPlay = () => {
+      console.log('[WebPlayer] Mídia pronta para reproduzir');
+      console.log('[WebPlayer] Socket disponível:', !!socket);
+      console.log('[WebPlayer] Player ID:', playerId);
+      setIsPlaying(true);
+      playbackStartTimeRef.current = Date.now();
+      
+      // Enviar evento de início de reprodução
+      console.log('[WebPlayer] Enviando playback_start...');
+      sendPlaybackEvent('playback_start', {
+        content_id: currentContent.id,
+        content_title: currentContent.title,
+        content_type: currentContent.type,
+        campaign_id: currentContent.campaign_id,
+        campaign_name: currentContent.campaign_name,
+        playlist_index: currentIndex,
+        playlist_total: playlist.length,
+        duration_expected: currentContent.duration || 0
+      });
+
+      // Iniciar heartbeat
+      console.log('[WebPlayer] Iniciando heartbeat...');
+      startPlaybackHeartbeat();
+    };
+
+    const handlePlay = () => {
+      console.log('[WebPlayer] Reprodução iniciada');
+      setIsPlaying(true);
+    };
+
+    const handlePause = () => {
+      console.log('[WebPlayer] Reprodução pausada');
+      setIsPlaying(false);
+    };
+
+    const handleEnded = () => {
+      console.log('[WebPlayer] Reprodução finalizada');
+      setIsPlaying(false);
+      
+      // Enviar evento de fim de reprodução
+      sendPlaybackEvent('playback_end', {
+        content_id: currentContent.id,
+        content_title: currentContent.title,
+        content_type: currentContent.type,
+        duration_actual: Date.now() - (playbackStartTimeRef.current || Date.now())
+      });
+
+      // Parar heartbeat
+      stopPlaybackHeartbeat();
+
+      // Avançar para próximo conteúdo se houver
+      if (playlist.length > 1 && currentIndex < playlist.length - 1) {
+        setTimeout(() => {
+          const nextIndex = currentIndex + 1;
+          const nextContent = playlist[nextIndex];
+          
+          setCurrentIndex(nextIndex);
+          setCurrentContent(nextContent);
+          
+          // Enviar evento de mudança de conteúdo
+          sendPlaybackEvent('content_change', {
+            previous_content_id: currentContent.id,
+            next_content_id: nextContent.id,
+            next_content_title: nextContent.title,
+            next_content_type: nextContent.type,
+            playlist_index: nextIndex
+          });
+        }, 1000);
+      } else if (playlist.length > 1) {
+        // Voltar ao início da playlist
+        setTimeout(() => {
+          const nextContent = playlist[0];
+          
+          setCurrentIndex(0);
+          setCurrentContent(nextContent);
+          
+          sendPlaybackEvent('content_change', {
+            previous_content_id: currentContent.id,
+            next_content_id: nextContent.id,
+            next_content_title: nextContent.title,
+            next_content_type: nextContent.type,
+            playlist_index: 0
+          });
+        }, 1000);
+      }
+    };
+
+    const handleError = (e) => {
+      console.error('[WebPlayer] Erro na mídia:', e);
+      setIsPlaying(false);
+      stopPlaybackHeartbeat();
+    };
+
+    // Adicionar event listeners apenas para vídeos
+    if (currentContent.type === 'video' && mediaElement) {
+      console.log('[WebPlayer] Adicionando event listeners ao elemento de vídeo');
+      mediaElement.addEventListener('loadstart', handleLoadStart);
+      mediaElement.addEventListener('canplay', handleCanPlay);
+      mediaElement.addEventListener('play', handlePlay);
+      mediaElement.addEventListener('pause', handlePause);
+      mediaElement.addEventListener('ended', handleEnded);
+      mediaElement.addEventListener('error', handleError);
+      console.log('[WebPlayer] Event listeners adicionados com sucesso');
+    } else if (currentContent.type === 'image') {
+      console.log('[WebPlayer] Simulando eventos para imagem');
+      // Para imagens, simular eventos de reprodução
+      setTimeout(() => {
+        handleCanPlay();
+        handlePlay();
+      }, 100);
+
+      // Simular duração da imagem (padrão 10 segundos)
+      const imageDuration = currentContent.duration || 10000;
+      setTimeout(() => {
+        handleEnded();
+      }, imageDuration);
+    }
+
+    // Cleanup
+    return () => {
+      if (currentContent.type === 'video' && mediaElement) {
+        mediaElement.removeEventListener('loadstart', handleLoadStart);
+        mediaElement.removeEventListener('canplay', handleCanPlay);
+        mediaElement.removeEventListener('play', handlePlay);
+        mediaElement.removeEventListener('pause', handlePause);
+        mediaElement.removeEventListener('ended', handleEnded);
+        mediaElement.removeEventListener('error', handleError);
+      }
+      stopPlaybackHeartbeat();
+    };
+  }, [currentContent, currentIndex, playlist, sendPlaybackEvent, startPlaybackHeartbeat, stopPlaybackHeartbeat]);
 
   const renderContent = () => {
     if (!currentContent) return null;
