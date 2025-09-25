@@ -41,6 +41,8 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const loadTimeoutRef = useRef(null);
   const connectTimeoutRef = useRef(null);
   const debounceRef = useRef(null);
+  const playbackHeartbeatRef = useRef(null);
+  const playbackStartTimeRef = useRef(null);
 
   // Preferências globais de player vindas do backend (público)
   const [playerPrefs, setPlayerPrefs] = useState({
@@ -156,7 +158,52 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
     if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (playbackHeartbeatRef.current) clearInterval(playbackHeartbeatRef.current);
   };
+
+  // Telemetria de reprodução
+  const sendPlaybackEvent = useCallback((eventType, additionalData = {}) => {
+    if (!socket || !playerId || !currentContent) return;
+
+    const eventData = {
+      player_id: playerId,
+      content_id: currentContent.id,
+      content_title: currentContent.title,
+      content_type: currentContent.type,
+      campaign_id: currentSegmentIdx >= 0 && segments[currentSegmentIdx] ? segments[currentSegmentIdx].campaign_id : null,
+      campaign_name: currentSegmentIdx >= 0 && segments[currentSegmentIdx] ? segments[currentSegmentIdx].campaign_name : null,
+      timestamp: new Date().toISOString(),
+      playlist_index: currentIndex,
+      playlist_total: playlist.length,
+      ...additionalData
+    };
+
+    console.log(`[WebPlayer] Enviando evento de reprodução: ${eventType}`, eventData);
+    socket.emit('playback_event', { type: eventType, data: eventData });
+  }, [socket, playerId, currentContent, currentSegmentIdx, segments, currentIndex, playlist.length]);
+
+  const startPlaybackHeartbeat = useCallback(() => {
+    if (playbackHeartbeatRef.current) clearInterval(playbackHeartbeatRef.current);
+    
+    playbackHeartbeatRef.current = setInterval(() => {
+      if (isPlaying && currentContent) {
+        const currentTime = Date.now();
+        const duration = currentTime - (playbackStartTimeRef.current || currentTime);
+        
+        sendPlaybackEvent('playback_heartbeat', {
+          duration_seconds: Math.floor(duration / 1000),
+          is_playing: isPlaying
+        });
+      }
+    }, 30000); // Heartbeat a cada 30 segundos
+  }, [isPlaying, currentContent, sendPlaybackEvent]);
+
+  const stopPlaybackHeartbeat = useCallback(() => {
+    if (playbackHeartbeatRef.current) {
+      clearInterval(playbackHeartbeatRef.current);
+      playbackHeartbeatRef.current = null;
+    }
+  }, []);
 
   // Debounced loading para prevenir chamadas excessivas
   const debouncedLoadPlayerData = useCallback(() => {
@@ -417,8 +464,21 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const nextContent = () => {
     if (playlist.length > 0) {
       const nextIndex = (currentIndex + 1) % playlist.length;
+      const nextContentItem = playlist[nextIndex];
+      
+      // Telemetria: mudança de conteúdo
+      if (nextContentItem) {
+        sendPlaybackEvent('content_change', {
+          previous_content_id: currentContent?.id,
+          previous_content_title: currentContent?.title,
+          next_content_id: nextContentItem.id,
+          next_content_title: nextContentItem.title,
+          next_content_type: nextContentItem.type
+        });
+      }
+      
       setCurrentIndex(nextIndex);
-      setCurrentContent(playlist[nextIndex]);
+      setCurrentContent(nextContentItem);
       setProgress(0);
 
       // Update current segment and show banner when campaign changes
@@ -511,10 +571,26 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       } catch (_) {}
       setIsPlaying(true);
       startProgressTracking();
+      
+      // Telemetria: início da reprodução
+      playbackStartTimeRef.current = Date.now();
+      sendPlaybackEvent('playback_start', {
+        duration_expected: currentContent?.duration || 0
+      });
+      startPlaybackHeartbeat();
     }
   };
 
   const handleMediaEnd = () => {
+    // Telemetria: fim da reprodução
+    const currentTime = Date.now();
+    const duration = currentTime - (playbackStartTimeRef.current || currentTime);
+    sendPlaybackEvent('playback_end', {
+      duration_actual: Math.floor(duration / 1000)
+    });
+    stopPlaybackHeartbeat();
+    setIsPlaying(false);
+    
     if (playlist.length === 1) {
       // Single item: loop seamlessly
       if (mediaRef.current) {
@@ -555,7 +631,24 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
     
+    // Telemetria: início da exibição da imagem
+    setIsPlaying(true);
+    playbackStartTimeRef.current = Date.now();
+    sendPlaybackEvent('playback_start', {
+      duration_expected: duration / 1000
+    });
+    startPlaybackHeartbeat();
+    
     timeoutRef.current = setTimeout(() => {
+      // Telemetria: fim da exibição da imagem
+      const currentTime = Date.now();
+      const actualDuration = currentTime - (playbackStartTimeRef.current || currentTime);
+      sendPlaybackEvent('playback_end', {
+        duration_actual: Math.floor(actualDuration / 1000)
+      });
+      stopPlaybackHeartbeat();
+      setIsPlaying(false);
+      
       nextContent();
     }, duration);
 

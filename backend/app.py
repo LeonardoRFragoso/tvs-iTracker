@@ -126,6 +126,9 @@ CONNECTED_PLAYERS = {}
 SOCKET_SID_TO_PLAYER = {}
 SOCKET_SID_TO_USER = {}
 
+# Mapa para rastrear reprodução ativa dos players
+PLAYER_PLAYBACK_STATUS = {}
+
 # Métricas de uploads (latência e contadores HTTP)
 UPLOAD_METRICS = {
     'status_counts': {'200': 0, '206': 0, '304': 0, '4xx': 0, '5xx': 0},
@@ -637,6 +640,69 @@ def handle_content_download_request(data):
         })
         
     except Exception as e:
+        emit('error', {'message': str(e)})
+
+@socketio.on('playback_event')
+def handle_playback_event(data):
+    """Recebe eventos de telemetria de reprodução dos players"""
+    try:
+        event_type = data.get('type')
+        event_data = data.get('data', {})
+        player_id = event_data.get('player_id')
+        
+        if not player_id or not event_type:
+            emit('error', {'message': 'player_id e type são obrigatórios'})
+            return
+        
+        # Atualizar status de reprodução do player
+        current_time = datetime.now(timezone.utc)
+        
+        if event_type == 'playback_start':
+            PLAYER_PLAYBACK_STATUS[player_id] = {
+                'is_playing': True,
+                'content_id': event_data.get('content_id'),
+                'content_title': event_data.get('content_title'),
+                'content_type': event_data.get('content_type'),
+                'campaign_id': event_data.get('campaign_id'),
+                'campaign_name': event_data.get('campaign_name'),
+                'start_time': current_time.isoformat(),
+                'last_heartbeat': current_time.isoformat(),
+                'playlist_index': event_data.get('playlist_index', 0),
+                'playlist_total': event_data.get('playlist_total', 1),
+                'duration_expected': event_data.get('duration_expected', 0)
+            }
+            print(f"[Playback] Player {player_id} iniciou reprodução: {event_data.get('content_title')}")
+            
+        elif event_type == 'playback_end':
+            if player_id in PLAYER_PLAYBACK_STATUS:
+                PLAYER_PLAYBACK_STATUS[player_id]['is_playing'] = False
+                PLAYER_PLAYBACK_STATUS[player_id]['end_time'] = current_time.isoformat()
+                PLAYER_PLAYBACK_STATUS[player_id]['duration_actual'] = event_data.get('duration_actual', 0)
+            print(f"[Playback] Player {player_id} finalizou reprodução")
+            
+        elif event_type == 'playback_heartbeat':
+            if player_id in PLAYER_PLAYBACK_STATUS:
+                PLAYER_PLAYBACK_STATUS[player_id]['last_heartbeat'] = current_time.isoformat()
+                PLAYER_PLAYBACK_STATUS[player_id]['is_playing'] = event_data.get('is_playing', True)
+            
+        elif event_type == 'content_change':
+            if player_id in PLAYER_PLAYBACK_STATUS:
+                PLAYER_PLAYBACK_STATUS[player_id]['content_id'] = event_data.get('next_content_id')
+                PLAYER_PLAYBACK_STATUS[player_id]['content_title'] = event_data.get('next_content_title')
+                PLAYER_PLAYBACK_STATUS[player_id]['content_type'] = event_data.get('next_content_type')
+                PLAYER_PLAYBACK_STATUS[player_id]['playlist_index'] = event_data.get('playlist_index', 0)
+            print(f"[Playback] Player {player_id} mudou conteúdo para: {event_data.get('next_content_title')}")
+        
+        # Emitir atualização para admins
+        socketio.emit('playback_status_update', {
+            'player_id': player_id,
+            'event_type': event_type,
+            'status': PLAYER_PLAYBACK_STATUS.get(player_id, {}),
+            'timestamp': current_time.isoformat()
+        }, room='admin')
+        
+    except Exception as e:
+        print(f"[Playback] Erro ao processar evento: {e}")
         emit('error', {'message': str(e)})
 
 # =========================

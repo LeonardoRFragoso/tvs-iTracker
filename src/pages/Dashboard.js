@@ -250,6 +250,7 @@ const Dashboard = () => {
   const [performance, setPerformance] = useState(null);
   const [health, setHealth] = useState(null);
   const [traffic, setTraffic] = useState(null);
+  const [playbackStatus, setPlaybackStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -404,6 +405,7 @@ const Dashboard = () => {
         axios.get('/dashboard/alerts'),
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
+        axios.get('/dashboard/playback-status'),
       ];
 
       const includeTraffic = user?.role === 'admin';
@@ -412,12 +414,13 @@ const Dashboard = () => {
       }
 
       const results = await Promise.allSettled(requests);
-      const [statsRes, alertsRes, performanceRes, healthRes, trafficRes] = results;
+      const [statsRes, alertsRes, performanceRes, healthRes, playbackRes, trafficRes] = results;
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
       if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
       if (performanceRes.status === 'fulfilled') setPerformance(performanceRes.value.data);
       if (healthRes.status === 'fulfilled') setHealth(healthRes.value.data);
+      if (playbackRes.status === 'fulfilled') setPlaybackStatus(playbackRes.value.data);
 
       if (includeTraffic) {
         if (trafficRes?.status === 'fulfilled') {
@@ -724,12 +727,12 @@ const Dashboard = () => {
 
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
-            icon={<PlayerIcon />}
-            title="Players Online"
-            value={`${stats?.overview.online_players || 0}/${stats?.overview.total_players || 0}`}
-            subtitle="Dispositivos conectados"
-            color="info"
-            trend="98%"
+            icon={<PlayIcon />}
+            title="Players Reproduzindo"
+            value={`${playbackStatus?.summary.playing_players || 0}/${playbackStatus?.summary.online_players || 0}`}
+            subtitle={`Taxa: ${playbackStatus?.summary.playback_rate || 0}%`}
+            color="success"
+            trend={playbackStatus?.summary.ghost_players > 0 ? `⚠ ${playbackStatus?.summary.ghost_players} fantasma` : "✓ Normal"}
             delay={2}
           />
         </Grid>
@@ -742,6 +745,19 @@ const Dashboard = () => {
             subtitle="Espaço utilizado"
             color="warning"
             trend="Normal"
+            delay={3}
+          />
+        </Grid>
+
+        {/* KPI: Status dos Players */}
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            icon={<PlayerIcon />}
+            title="Status dos Players"
+            value={`${playbackStatus?.summary.online_players || 0}/${playbackStatus?.summary.total_players || 0}`}
+            subtitle={`${playbackStatus?.summary.idle_players || 0} parados, ${playbackStatus?.summary.offline_players || 0} offline`}
+            color="info"
+            trend={`${((playbackStatus?.summary.online_players || 0) / Math.max(playbackStatus?.summary.total_players || 1, 1) * 100).toFixed(0)}% online`}
             delay={3}
           />
         </Grid>
@@ -908,6 +924,138 @@ const Dashboard = () => {
             </Paper>
           </Fade>
         </Grid>
+
+        {/* Detalhes dos Players Reproduzindo */}
+        {playbackStatus && playbackStatus.summary.playing_players > 0 && (
+          <Grid item xs={12}>
+            <Fade in={true} timeout={1600}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                  border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
+                }}
+              >
+                <Box display="flex" alignItems="center" gap={2} mb={3}>
+                  <Avatar sx={{ bgcolor: 'success.main' }}>
+                    <PlayIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h6" fontWeight="bold">
+                      Players Ativos ({playbackStatus.summary.playing_players})
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Conteúdo sendo reproduzido em tempo real
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  {playbackStatus.players
+                    .filter(player => player.status === 'playing')
+                    .slice(0, 6) // Mostrar apenas os primeiros 6 para não sobrecarregar
+                    .map((player, index) => (
+                      <Grid item xs={12} sm={6} md={4} key={player.id}>
+                        <Grow in={true} timeout={1000 + index * 100}>
+                          <Card
+                            sx={{
+                              borderRadius: 2,
+                              bgcolor: isDarkMode ? '#2a2a2a' : '#f8f9fa',
+                              border: `1px solid ${isDarkMode ? '#444' : '#e0e0e0'}`,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                boxShadow: 3,
+                              },
+                              transition: 'all 0.2s ease',
+                            }}
+                          >
+                            <CardContent sx={{ p: 2 }}>
+                              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                <Avatar sx={{ width: 24, height: 24, bgcolor: 'success.main' }}>
+                                  <PlayIcon fontSize="small" />
+                                </Avatar>
+                                <Typography variant="subtitle2" fontWeight="bold" noWrap>
+                                  {player.name}
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" color="text.secondary" noWrap mb={1}>
+                                📍 {player.location_name}
+                              </Typography>
+                              {player.current_content && (
+                                <>
+                                  <Typography variant="body2" fontWeight="bold" noWrap mb={0.5}>
+                                    🎬 {player.current_content.title}
+                                  </Typography>
+                                  {player.current_content.campaign_name && (
+                                    <Typography variant="caption" color="primary" noWrap mb={0.5}>
+                                      📋 {player.current_content.campaign_name}
+                                    </Typography>
+                                  )}
+                                  <Typography variant="caption" color="text.secondary">
+                                    {player.current_content.playlist_position} • {player.current_content.type}
+                                  </Typography>
+                                </>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </Grow>
+                      </Grid>
+                    ))}
+                </Grid>
+                {playbackStatus.summary.playing_players > 6 && (
+                  <Box textAlign="center" mt={2}>
+                    <Typography variant="body2" color="text.secondary">
+                      ... e mais {playbackStatus.summary.playing_players - 6} players reproduzindo
+                    </Typography>
+                  </Box>
+                )}
+              </Paper>
+            </Fade>
+          </Grid>
+        )}
+
+        {/* Alertas de Players Fantasma */}
+        {playbackStatus && playbackStatus.ghost_players.length > 0 && (
+          <Grid item xs={12}>
+            <Fade in={true} timeout={1800}>
+              <Alert 
+                severity="warning" 
+                sx={{ 
+                  borderRadius: 3,
+                  '& .MuiAlert-message': { width: '100%' }
+                }}
+              >
+                <AlertTitle>⚠️ Players Fantasma Detectados ({playbackStatus.ghost_players.length})</AlertTitle>
+                <Typography variant="body2" mb={2}>
+                  Os seguintes players estão online mas não estão reproduzindo conteúdo:
+                </Typography>
+                <Grid container spacing={1}>
+                  {playbackStatus.ghost_players.map((ghost, index) => (
+                    <Grid item xs={12} sm={6} md={4} key={ghost.id}>
+                      <Box 
+                        sx={{ 
+                          p: 1, 
+                          bgcolor: 'rgba(255, 152, 0, 0.1)', 
+                          borderRadius: 1,
+                          border: '1px solid rgba(255, 152, 0, 0.3)'
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {ghost.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {ghost.reason}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Alert>
+            </Fade>
+          </Grid>
+        )}
       </Grid>
 
       {/* Speed Dial for Quick Actions */}

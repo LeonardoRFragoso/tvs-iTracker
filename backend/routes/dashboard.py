@@ -426,3 +426,127 @@ def debug_players():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@dashboard_bp.route('/playback-status', methods=['GET'])
+@jwt_required()
+def get_playback_status():
+    """Retorna KPIs de reprodução em tempo real dos players"""
+    try:
+        from app import PLAYER_PLAYBACK_STATUS, CONNECTED_PLAYERS
+        from datetime import datetime, timezone, timedelta
+        
+        current_time = datetime.now(timezone.utc)
+        
+        # Calcular estatísticas de reprodução
+        total_players = Player.query.count()
+        online_players = 0
+        playing_players = 0
+        idle_players = 0
+        offline_players = 0
+        
+        # Detalhes dos players
+        player_details = []
+        
+        # Verificar players online (baseado em last_ping)
+        five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+        online_player_ids = set()
+        
+        for player in Player.query.all():
+            is_online = player.last_ping and player.last_ping >= five_minutes_ago
+            if is_online:
+                online_players += 1
+                online_player_ids.add(player.id)
+            else:
+                offline_players += 1
+            
+            # Status de reprodução
+            playback_status = PLAYER_PLAYBACK_STATUS.get(player.id, {})
+            is_playing = playback_status.get('is_playing', False)
+            
+            # Verificar se heartbeat está atualizado (últimos 2 minutos)
+            last_heartbeat = playback_status.get('last_heartbeat')
+            heartbeat_fresh = False
+            if last_heartbeat:
+                try:
+                    heartbeat_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
+                    heartbeat_fresh = (current_time - heartbeat_time).total_seconds() < 120
+                except:
+                    pass
+            
+            # Determinar status final
+            if not is_online:
+                status = 'offline'
+            elif is_playing and heartbeat_fresh:
+                status = 'playing'
+                playing_players += 1
+            else:
+                status = 'idle'
+                idle_players += 1
+            
+            player_details.append({
+                'id': player.id,
+                'name': player.name,
+                'platform': player.platform,
+                'location_name': player.location.name if player.location else 'N/A',
+                'is_online': is_online,
+                'status': status,
+                'current_content': {
+                    'id': playback_status.get('content_id'),
+                    'title': playback_status.get('content_title'),
+                    'type': playback_status.get('content_type'),
+                    'campaign_name': playback_status.get('campaign_name'),
+                    'playlist_position': f"{playback_status.get('playlist_index', 0) + 1}/{playback_status.get('playlist_total', 1)}"
+                } if is_playing and heartbeat_fresh else None,
+                'last_heartbeat': last_heartbeat,
+                'start_time': playback_status.get('start_time')
+            })
+        
+        # Detectar players "fantasma" (online mas sem reprodução há mais de 10 minutos)
+        ghost_players = []
+        ten_minutes_ago = current_time - timedelta(minutes=10)
+        
+        for player_id in online_player_ids:
+            playback_status = PLAYER_PLAYBACK_STATUS.get(player_id, {})
+            last_heartbeat = playback_status.get('last_heartbeat')
+            
+            if not last_heartbeat:
+                # Player online mas nunca enviou heartbeat de reprodução
+                player = Player.query.get(player_id)
+                if player:
+                    ghost_players.append({
+                        'id': player.id,
+                        'name': player.name,
+                        'reason': 'Nunca iniciou reprodução'
+                    })
+            else:
+                try:
+                    heartbeat_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
+                    if heartbeat_time < ten_minutes_ago:
+                        player = Player.query.get(player_id)
+                        if player:
+                            ghost_players.append({
+                                'id': player.id,
+                                'name': player.name,
+                                'reason': f'Sem reprodução há {int((current_time - heartbeat_time).total_seconds() / 60)} minutos'
+                            })
+                except:
+                    pass
+        
+        return jsonify({
+            'summary': {
+                'total_players': total_players,
+                'online_players': online_players,
+                'playing_players': playing_players,
+                'idle_players': idle_players,
+                'offline_players': offline_players,
+                'ghost_players': len(ghost_players),
+                'playback_rate': round((playing_players / max(online_players, 1)) * 100, 1)
+            },
+            'players': player_details,
+            'ghost_players': ghost_players,
+            'timestamp': current_time.isoformat()
+        }), 200
+        
+    except Exception as e:
+        print(f"[DASHBOARD] Erro ao obter status de reprodução: {e}")
+        return jsonify({'error': str(e)}), 500
