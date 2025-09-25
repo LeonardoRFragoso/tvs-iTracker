@@ -40,6 +40,8 @@ import {
   Campaign as CampaignIcon,
   Visibility as VisibilityIcon,
   Assessment as AnalyticsIcon,
+  AccessTime as AccessTimeIcon,
+  Videocam as VideocamIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -240,6 +242,20 @@ const CampaignList = () => {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+  
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0:00';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const remainingMinutes = minutes % 60;
+      return `${hours}h${remainingMinutes.toString().padStart(2, '0')}m${remainingSeconds.toString().padStart(2, '0')}s`;
+    }
+    
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   const CampaignCardSkeleton = ({ delay = 0 }) => (
@@ -555,6 +571,25 @@ const CampaignList = () => {
                           fontSize: '0.7rem',
                         }}
                       />
+                      {campaign.total_video_duration > 0 && (
+                        <Chip 
+                          icon={<VideocamIcon style={{ color: 'white', fontSize: '0.9rem' }} />}
+                          label={formatDuration(campaign.total_video_duration)}
+                          size="small"
+                          sx={{
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #ff5722 0%, #ff9800 100%)',
+                            color: 'white',
+                            fontWeight: 600,
+                            fontSize: '0.7rem',
+                            '& .MuiChip-icon': {
+                              color: 'white !important',
+                              marginLeft: '4px',
+                            }
+                          }}
+                          title="Duração total dos vídeos"
+                        />
+                      )}
                       <Chip 
                         label={formatDate(campaign.created_at)}
                         size="small"

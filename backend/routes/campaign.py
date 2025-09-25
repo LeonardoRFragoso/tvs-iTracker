@@ -115,6 +115,15 @@ def list_campaigns():
                     is_active=True
                 ).order_by(CampaignContent.order_index).all()
                 cdict['contents'] = [{'id': cc.content_id} for cc in active_cc_list]
+                
+                # Calcular duração total dos vídeos na campanha
+                total_duration = 0
+                for cc in active_cc_list:
+                    if cc.content and cc.content.content_type == 'video':
+                        # Usar duração personalizada se disponível, senão usar duração do conteúdo
+                        duration = cc.duration_override or cc.content.duration or 0
+                        total_duration += duration
+                cdict['total_video_duration'] = total_duration
             except Exception:
                 cdict['thumbnail'] = None
                 cdict['contents'] = []
