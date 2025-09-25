@@ -676,6 +676,8 @@ def handle_playback_event(data):
                 'duration_expected': event_data.get('duration_expected', 0)
             }
             print(f"[Playback] Player {player_id} iniciou reprodução: {event_data.get('content_title')}")
+            print(f"[Playback] Status salvo: {PLAYER_PLAYBACK_STATUS[player_id]}")
+            print(f"[Playback] PLAYER_PLAYBACK_STATUS completo: {PLAYER_PLAYBACK_STATUS}")
             
         elif event_type == 'playback_end':
             if player_id in PLAYER_PLAYBACK_STATUS:
