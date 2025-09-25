@@ -109,7 +109,7 @@ def main():
             return 0
 
         print('Empresas existentes:', ', '.join(sorted(existing)) or '—')
-        print('Empresas alvo     :', ', '.join(sorted(target)))
+        print('Empresas alvo     :', ', '.join(sorted(targets)))
         print('Empresas ausentes :', ', '.join(missing))
 
         for company in missing:
