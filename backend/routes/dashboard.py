@@ -512,8 +512,18 @@ def get_playback_status():
         ghost_players = []
         
         for player_id in online_player_ids:
-            playback_status = PLAYER_PLAYBACK_STATUS.get(player_id, {})
-            last_heartbeat = playback_status.get('last_heartbeat')
+            player = Player.query.get(player_id)
+            if not player:
+                continue
+                
+            # Se o player está reproduzindo atualmente, não é fantasma
+            if player.is_playing and player.last_playback_heartbeat:
+                heartbeat_age = (datetime.utcnow() - player.last_playback_heartbeat).total_seconds()
+                if heartbeat_age < 120:  # Heartbeat recente (2 minutos)
+                    continue
+            
+            # Verificar se nunca enviou heartbeat ou há muito tempo
+            last_heartbeat = player.last_playback_heartbeat
             
             if not last_heartbeat:
                 # Player online mas nunca enviou heartbeat de reprodução
