@@ -14,6 +14,8 @@ import axios from '../../config/axios';
 
 const WebPlayer = ({ playerId, fullscreen = false }) => {
   const { socket, joinPlayerRoom } = useSocket();
+  
+  // States
   const [currentContent, setCurrentContent] = useState(null);
   const [playlist, setPlaylist] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -25,16 +27,21 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [lastLoadTime, setLastLoadTime] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
-  const [muted, setMuted] = useState(true); // start muted to allow autoplay
-  const [segments, setSegments] = useState([]); // [{campaign_id, campaign_name, startIndex, endIndex, length}]
+  const [muted, setMuted] = useState(true);
+  const [segments, setSegments] = useState([]);
   const [currentSegmentIdx, setCurrentSegmentIdx] = useState(-1);
   const [showCampaignBanner, setShowCampaignBanner] = useState(false);
   const [playlistEtag, setPlaylistEtag] = useState(null);
   const [circuitBreakerOpen, setCircuitBreakerOpen] = useState(false);
+  const [playerPrefs, setPlayerPrefs] = useState({
+    orientation: 'landscape',
+    volume: 50,
+  });
+
+  // Refs
   const attemptCountRef = useRef(0);
-  const lastAttemptRef = useRef(0);
   const connectTimeoutRef = useRef(null);
-  const connectingRef = useRef(false); // Prevenir múltiplas conexões simultâneas
+  const connectingRef = useRef(false);
   const timeoutRef = useRef(null);
   const intervalRef = useRef(null);
   const mediaRef = useRef(null);
@@ -42,16 +49,45 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const playbackStartTimeRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
   const playbackHeartbeatRef = useRef(null);
+  const loadTimeoutRef = useRef(null);
+  const preloadCacheRef = useRef({});
 
-  // Preferências globais de player vindas do backend (público)
-  const [playerPrefs, setPlayerPrefs] = useState({
-    orientation: 'landscape',
-    volume: 50,
-  });
+  // Constantes
+  const RECONNECT_DELAY = 15000;
+  const MAX_ATTEMPTS = 5;
+  const CIRCUIT_BREAKER_TIMEOUT = 30000;
 
+  // Main initialization effect
   useEffect(() => {
-    mediaErrorCountRef.current = 0;
-  }, [currentIndex, currentContent?.id]);
+    if (!playerId) return;
+
+    console.log('[WebPlayer] Inicializando player:', playerId);
+    
+    // Clear previous timeouts
+    clearAllTimeouts();
+    
+    // Reset states
+    setLoading(true);
+    setError('');
+    attemptCountRef.current = 0;
+    
+    // Load initial data
+    loadPlayerData();
+    
+    // Connect to player
+    connectToPlayer();
+    
+    // Join player room if socket available
+    if (socket && joinPlayerRoom) {
+      joinPlayerRoom(playerId);
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      console.log('[WebPlayer] Limpando recursos...');
+      clearAllTimeouts();
+    };
+  }, [playerId]);
 
   const clearAllTimeouts = () => {
     if (timeoutRef.current) {
@@ -70,108 +106,15 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = null;
     }
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
+    }
     
-    // Resetar flags de controle
+    // Reset flags
     connectingRef.current = false;
     mediaErrorCountRef.current = 0;
   };
-
-  const sendPlaybackEvent = useCallback((eventType, additionalData = {}) => {
-    console.log(`[WebPlayer] sendPlaybackEvent chamado: ${eventType}`);
-    console.log(`[WebPlayer] socket:`, !!socket);
-    console.log(`[WebPlayer] playerId:`, playerId);
-    console.log(`[WebPlayer] currentContent:`, !!currentContent);
-    
-    if (!socket || !playerId || !currentContent) {
-      console.log(`[WebPlayer] Evento não enviado - socket: ${!!socket}, playerId: ${!!playerId}, currentContent: ${!!currentContent}`);
-      return;
-    }
-
-    const eventData = {
-      player_id: playerId,
-      content_id: currentContent.id,
-      content_title: currentContent.title,
-      content_type: currentContent.type,
-      campaign_id: currentSegmentIdx >= 0 && segments[currentSegmentIdx] ? segments[currentSegmentIdx].campaign_id : null,
-      campaign_name: currentSegmentIdx >= 0 && segments[currentSegmentIdx] ? segments[currentSegmentIdx].campaign_name : null,
-      timestamp: new Date().toISOString(),
-      playlist_index: currentIndex,
-      playlist_total: playlist.length,
-      ...additionalData
-    };
-
-    console.log(`[WebPlayer] Enviando evento de reprodução: ${eventType}`, eventData);
-    socket.emit('playback_event', { type: eventType, data: eventData });
-  }, [socket, playerId, currentContent, currentSegmentIdx, segments, currentIndex, playlist.length]);
-
-  const startPlaybackHeartbeat = useCallback(() => {
-    if (playbackHeartbeatRef.current) clearInterval(playbackHeartbeatRef.current);
-    
-    playbackHeartbeatRef.current = setInterval(() => {
-      if (isPlaying && currentContent) {
-        const currentTime = Date.now();
-        const duration = currentTime - (playbackStartTimeRef.current || currentTime);
-        
-        sendPlaybackEvent('playback_heartbeat', {
-          duration_seconds: Math.floor(duration / 1000),
-          is_playing: isPlaying
-        });
-      }
-    }, 30000); // Heartbeat a cada 30 segundos
-  }, [isPlaying, currentContent, sendPlaybackEvent]);
-
-  const stopPlaybackHeartbeat = useCallback(() => {
-    if (playbackHeartbeatRef.current) {
-      clearInterval(playbackHeartbeatRef.current);
-      playbackHeartbeatRef.current = null;
-    }
-  }, []);
-
-  // Debounced loading para prevenir chamadas excessivas
-  const debouncedLoadPlayerData = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    
-    const now = Date.now();
-    const timeSinceLastLoad = now - lastLoadTime;
-    
-    if (timeSinceLastLoad < DEBOUNCE_DELAY) {
-      console.log('[WebPlayer] Debouncing load request');
-      debounceRef.current = setTimeout(() => {
-        loadPlayerData();
-      }, DEBOUNCE_DELAY - timeSinceLastLoad);
-      return;
-    }
-    
-    loadPlayerData();
-  }, [lastLoadTime]);
-
-  const debouncedConnectToPlayer = useCallback(() => {
-    if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
-    
-    if (!isConnected) {
-      connectTimeoutRef.current = setTimeout(() => {
-        connectToPlayer();
-      }, 1000);
-    }
-  }, [isConnected]);
-
-  // Prefetch via Service Worker (quando disponível)
-  const prefetchWithSW = useCallback((urls) => {
-    try {
-      if (!Array.isArray(urls) || urls.length === 0) return;
-      if (!('serviceWorker' in navigator)) return;
-      navigator.serviceWorker.ready
-        .then((reg) => {
-          try {
-            const sw = reg.active || navigator.serviceWorker.controller;
-            if (sw && typeof sw.postMessage === 'function') {
-              sw.postMessage({ type: 'prefetch', urls });
-            }
-          } catch (_) {}
-        })
-        .catch(() => {});
-    } catch (_) {}
-  }, []);
 
   const loadPlayerData = async () => {
     try {
@@ -182,112 +125,54 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       setLoading(true);
       setLoadAttempts(prev => prev + 1);
       
-      // Circuit Breaker: Prevenir loops infinitos
+      // Circuit Breaker
       if (loadAttempts >= MAX_ATTEMPTS) {
-        console.error('[WebPlayer] Circuit breaker ativado - muitas tentativas');
+        console.error('[WebPlayer] Circuit breaker ativado');
         setCircuitBreakerOpen(true);
         setError('Sistema temporariamente indisponível. Tentando reconectar...');
         setLoading(false);
-        
-        // Reset circuit breaker após timeout
-        setTimeout(() => {
-          console.log('[WebPlayer] Resetando circuit breaker');
-          setCircuitBreakerOpen(false);
-          setLoadAttempts(0);
-          setError('');
-        }, CIRCUIT_BREAKER_TIMEOUT);
         return;
       }
       
-      // 1) Always load playlist (public endpoint)
-      const playlistRes = await axios.get(`/players/${playerId}/playlist`, {
-        headers: playlistEtag ? { 'If-None-Match': playlistEtag } : undefined,
-        validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
-      });
+      // Load playlist
+      const playlistRes = await axios.get(`/players/${playerId}/playlist`);
       console.log('[WebPlayer] Playlist carregada:', playlistRes.data);
       
-      // Handle 304 Not Modified
-      if (playlistRes.status === 304) {
-        console.log('[WebPlayer] Playlist não modificada (304), mantendo cache atual');
-        setLoading(false);
-        return;
-      }
-      // Save new ETag if present
-      try {
-        if (playlistRes.headers && (playlistRes.headers.etag || playlistRes.headers.ETag)) {
-          setPlaylistEtag(playlistRes.headers.etag || playlistRes.headers.ETag);
-        }
-      } catch (_) {}
-      
       const rawItems = playlistRes.data.contents || [];
-      const dedupedItems = deduplicatePlaylist(rawItems);
-      if (rawItems.length !== dedupedItems.length) {
-        console.log(`[WebPlayer] Dedup: ${rawItems.length} -> ${dedupedItems.length} itens`);
-      }
-      setPlaylist(dedupedItems);
+      setPlaylist(rawItems);
 
-      if (dedupedItems && dedupedItems.length > 0) {
-        console.log('[WebPlayer] Conteúdo encontrado:', dedupedItems[0]);
-        setCurrentContent(dedupedItems[0]);
+      if (rawItems && rawItems.length > 0) {
+        console.log('[WebPlayer] Conteúdo encontrado:', rawItems[0]);
+        setCurrentContent(rawItems[0]);
         setCurrentIndex(0);
-        setLoadAttempts(0); // Reset counter on success
-        setError(''); // Clear any previous errors
-        
-        // Compute campaign segments
-        const segs = buildSegments(dedupedItems);
-        setSegments(segs);
-        setCurrentSegmentIdx(segs.length ? 0 : -1);
-        
-        // Prefetch next images to smooth playback (first few items)
-        try {
-          prefetchUpcomingImages(dedupedItems, 0);
-        } catch (_) {}
-        
-        // Solicitar ao Service Worker que faça prefetch dos arquivos de mídia da playlist
-        try {
-          const urlsToPrefetch = Array.from(new Set(
-            dedupedItems
-              .map(it => (it?.file_url || it?.url || '').toString())
-              .filter(u => u && u.includes('/uploads/'))
-          ));
-          // Limite opcional para evitar sobrecarga em playlists muito grandes
-          const LIMIT = 30;
-          prefetchWithSW(urlsToPrefetch.slice(0, LIMIT));
-        } catch (_) {}
+        setLoadAttempts(0);
+        setError('');
       } else {
         console.log('[WebPlayer] Nenhum conteúdo encontrado, aguardando...');
         setCurrentContent(null);
         setCurrentIndex(0);
         
-        // Reagendar carregamento após delay maior se não há conteúdo
+        // Reagendar carregamento
         if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
         loadTimeoutRef.current = setTimeout(() => {
           console.log('[WebPlayer] Recarregando após timeout...');
           if (!circuitBreakerOpen) {
-            debouncedLoadPlayerData();
+            loadPlayerData();
           }
         }, RECONNECT_DELAY);
       }
 
-      // 2) Try to load player info using public endpoint for kiosk mode
+      // Load player info
       try {
         const playerRes = await axios.get(`/players/${playerId}/info`);
         setPlayerInfo(playerRes.data);
         console.log('[WebPlayer] Info do player carregada:', playerRes.data);
       } catch (e) {
-        // Fallback: try authenticated endpoint if available
-        try {
-          const playerRes = await axios.get(`/players/${playerId}`);
-          setPlayerInfo(playerRes.data);
-          console.log('[WebPlayer] Info do player carregada (auth):', playerRes.data);
-        } catch (authError) {
-          console.log('[WebPlayer] Info do player não disponível (modo kiosk)');
-        }
+        console.log('[WebPlayer] Info do player não disponível (modo kiosk)');
       }
     } catch (err) {
       console.error('[WebPlayer] Erro ao carregar dados:', err);
       
-      // Não definir erro para problemas de rede temporários
       if (err.code === 'NETWORK_ERROR' || err.response?.status >= 500) {
         console.log('[WebPlayer] Erro temporário de rede, tentando novamente...');
       } else {
@@ -299,7 +184,6 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   };
 
   const connectToPlayer = async () => {
-    // Evitar múltiplas conexões simultâneas
     if (connectingRef.current) {
       console.log('[WebPlayer] Conexão já em andamento, ignorando...');
       return;
@@ -313,394 +197,29 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       console.log('[WebPlayer] Conectado com sucesso');
       setIsConnected(true);
       
-      // Reagendar reconexão periódica (heartbeat) - menos frequente
+      // Reagendar reconexão
       if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = setTimeout(() => {
         setIsConnected(false);
         connectingRef.current = false;
         if (!circuitBreakerOpen) {
-          debouncedConnectToPlayer();
+          connectToPlayer();
         }
-      }, RECONNECT_DELAY * 2); // Dobrar o delay para reduzir frequência
+      }, RECONNECT_DELAY * 2);
       
     } catch (err) {
       console.error('[WebPlayer] Erro ao conectar:', err);
       setIsConnected(false);
       
-      // Retry connection com delay maior em caso de erro
       if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = setTimeout(() => {
         connectingRef.current = false;
         if (!circuitBreakerOpen) {
-          debouncedConnectToPlayer();
+          connectToPlayer();
         }
-      }, RECONNECT_DELAY * 3); // Delay maior após erro
+      }, RECONNECT_DELAY * 3);
     } finally {
       connectingRef.current = false;
-    }
-  };
-
-  const handlePlayerCommand = (payload) => {
-    const cmd = (payload && (payload.type || payload.command)) || '';
-    switch (cmd) {
-      case 'play':
-      case 'start':
-        playContent();
-        break;
-      case 'pause':
-      case 'stop':
-        pauseContent();
-        break;
-      case 'next':
-        nextContent();
-        break;
-      case 'previous':
-        previousContent();
-        break;
-      case 'restart':
-        restartPlayer();
-        break;
-      case 'sync':
-      case 'update_playlist':
-        loadPlayerData();
-        break;
-      default:
-        console.log('Unknown command:', payload);
-    }
-  };
-
-  const handlePlaySchedule = async (data) => {
-    console.log('[WebPlayer] Atualizando playlist por comando do servidor');
-    try {
-      // Use debounced version para evitar múltiplas chamadas
-      debouncedLoadPlayerData();
-    } catch (e) {
-      console.warn('Failed to refresh playlist on play_schedule', e);
-    }
-  };
-
-  const playContent = () => {
-    if (mediaRef.current) {
-      mediaRef.current.play();
-      setIsPlaying(true);
-      startProgressTracking();
-    }
-  };
-
-  const pauseContent = () => {
-    if (mediaRef.current) {
-      mediaRef.current.pause();
-      setIsPlaying(false);
-      stopProgressTracking();
-    }
-  };
-
-  const nextContent = () => {
-    if (playlist.length > 0) {
-      const nextIndex = (currentIndex + 1) % playlist.length;
-      const nextContentItem = playlist[nextIndex];
-      
-      // Telemetria: mudança de conteúdo
-      if (nextContentItem) {
-        sendPlaybackEvent('content_change', {
-          previous_content_id: currentContent?.id,
-          previous_content_title: currentContent?.title,
-          next_content_id: nextContentItem.id,
-          next_content_title: nextContentItem.title,
-          next_content_type: nextContentItem.type
-        });
-      }
-      
-      setCurrentIndex(nextIndex);
-      setCurrentContent(nextContentItem);
-      setProgress(0);
-
-      // Update current segment and show banner when campaign changes
-      if (segments.length > 0) {
-        const segIdx = segments.findIndex(seg => nextIndex >= seg.startIndex && nextIndex <= seg.endIndex);
-        if (segIdx !== -1 && segIdx !== currentSegmentIdx) {
-          setCurrentSegmentIdx(segIdx);
-          setShowCampaignBanner(true);
-          setTimeout(() => setShowCampaignBanner(false), 2000);
-        }
-      }
-
-      // Single-item playlist handling without remounting
-      if (playlist.length === 1) {
-        const onlyItem = playlist[0];
-        if (mediaRef.current && onlyItem?.type === 'video') {
-          try {
-            mediaRef.current.pause();
-            mediaRef.current.currentTime = 0;
-            mediaRef.current.play().catch(() => {});
-          } catch (_) {}
-        } else if (onlyItem?.type === 'image') {
-          // Re-arm image timers explicitly since onLoad won't fire again
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          handleImageDisplay();
-        }
-      }
-
-      // If we wrapped to the first item, refresh playlist to capture any new schedules
-      if (nextIndex === 0) {
-        try {
-          debouncedLoadPlayerData();
-          // Recompute segments after refresh will be handled within loadPlayerData
-        } catch (_) {}
-      }
-      
-      // Prefetch following images ahead of time
-      try { prefetchUpcomingImages(playlist, nextIndex); } catch (_) {}
-    }
-  };
-
-  const previousContent = () => {
-    if (playlist.length > 0) {
-      const prevIndex = currentIndex === 0 ? playlist.length - 1 : currentIndex - 1;
-      setCurrentIndex(prevIndex);
-      setCurrentContent(playlist[prevIndex]);
-      setProgress(0);
-    }
-  };
-
-  const restartPlayer = () => {
-    window.location.reload();
-  };
-
-  const startProgressTracking = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    
-    intervalRef.current = setInterval(() => {
-      if (mediaRef.current && currentContent) {
-        const duration = currentContent.duration || mediaRef.current.duration || 0;
-        const currentTime = mediaRef.current.currentTime || 0;
-        
-        if (duration > 0) {
-          const progressPercent = (currentTime / duration) * 100;
-          setProgress(progressPercent);
-          
-          if (progressPercent >= 99) {
-            nextContent();
-          }
-        }
-      }
-    }, 1000);
-  };
-
-  const stopProgressTracking = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
-
-  const handleMediaLoad = () => {
-    if (mediaRef.current) {
-      try {
-        // Resetar contador de erros quando carrega com sucesso
-        mediaErrorCountRef.current = 0;
-        
-        mediaRef.current.muted = muted;
-        // Se não estiver mudo, usar o volume padrão das preferências
-        mediaRef.current.volume = muted ? 0 : Math.max(0, Math.min(1, (playerPrefs.volume || 100) / 100));
-        mediaRef.current.play().catch((err) => {
-          console.error('[WebPlayer] Erro no play:', err);
-          // Se falhar no play, tentar próximo conteúdo
-          setTimeout(() => nextContent(), 2000);
-        });
-      } catch (err) {
-        console.error('[WebPlayer] Erro no handleMediaLoad:', err);
-        return;
-      }
-      
-      setIsPlaying(true);
-      startProgressTracking();
-      
-      // Telemetria: início da reprodução
-      playbackStartTimeRef.current = Date.now();
-      sendPlaybackEvent('playback_start', {
-        duration_expected: currentContent?.duration || 0
-      });
-      startPlaybackHeartbeat();
-    }
-  };
-
-  const handleMediaEnd = () => {
-    // Telemetria: fim da reprodução
-    const currentTime = Date.now();
-    const duration = currentTime - (playbackStartTimeRef.current || currentTime);
-    sendPlaybackEvent('playback_end', {
-      duration_actual: Math.floor(duration / 1000)
-    });
-    stopPlaybackHeartbeat();
-    setIsPlaying(false);
-    
-    if (playlist.length === 1) {
-      // Single item: loop seamlessly
-      if (mediaRef.current) {
-        try {
-          mediaRef.current.currentTime = 0;
-          mediaRef.current.play().catch(() => {});
-        } catch (_) {}
-      }
-    } else {
-      nextContent();
-    }
-  };
-
-  const handleMediaError = (e) => {
-    console.error('[WebPlayer] Erro ao carregar mídia:', e);
-    
-    // Parar telemetria se estiver ativa
-    stopPlaybackHeartbeat();
-    setIsPlaying(false);
-    
-    // Incrementar contador de erros para este conteúdo
-    mediaErrorCountRef.current = (mediaErrorCountRef.current || 0) + 1;
-    
-    const el = mediaRef.current;
-    
-    // Tentar reload apenas uma vez por conteúdo
-    if (el && mediaErrorCountRef.current === 1) {
-      console.log('[WebPlayer] Tentando recarregar mídia...');
-      try {
-        // Limpar completamente o elemento
-        el.pause();
-        el.removeAttribute('src');
-        el.load();
-        
-        // Aguardar um pouco antes de definir nova src
-        setTimeout(() => {
-          if (el && currentContent) {
-            const mediaUrl = `${axios.defaults.baseURL}/content/${currentContent.id}?pid=${playerId}&v=${Date.now()}`;
-            el.src = mediaUrl;
-            el.load();
-            el.play().catch(() => {
-              console.log('[WebPlayer] Falha no play após reload, pulando para próximo');
-              nextContent();
-            });
-          }
-        }, 1000);
-        return;
-      } catch (err) {
-        console.error('[WebPlayer] Erro no reload:', err);
-      }
-    }
-    
-    // Após falha ou múltiplas tentativas, pular para próximo conteúdo
-    console.log('[WebPlayer] Pulando para próximo conteúdo após erro');
-    mediaErrorCountRef.current = 0;
-    
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      nextContent();
-    }, 2000);
-  };
-
-  const handleImageDisplay = () => {
-    const duration = (currentContent.duration || 10) * 1000;
-    
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    
-    // Telemetria: início da exibição da imagem
-    setIsPlaying(true);
-    playbackStartTimeRef.current = Date.now();
-    sendPlaybackEvent('playback_start', {
-      duration_expected: duration / 1000
-    });
-    startPlaybackHeartbeat();
-    
-    timeoutRef.current = setTimeout(() => {
-      // Telemetria: fim da exibição da imagem
-      const currentTime = Date.now();
-      const actualDuration = currentTime - (playbackStartTimeRef.current || currentTime);
-      sendPlaybackEvent('playback_end', {
-        duration_actual: Math.floor(actualDuration / 1000)
-      });
-      stopPlaybackHeartbeat();
-      setIsPlaying(false);
-      
-      nextContent();
-    }, duration);
-
-    intervalRef.current = setInterval(() => {
-      setProgress(prev => {
-        const step = 100 / (duration / 1000);
-        const newProgress = prev + step;
-        if (newProgress >= 100) {
-          clearInterval(intervalRef.current);
-          return 100;
-        }
-        return newProgress;
-      });
-    }, 1000);
-  };
-
-  const buildSegments = useCallback((items) => {
-    if (!Array.isArray(items) || items.length === 0) return [];
-    const segs = [];
-    let i = 0;
-    while (i < items.length) {
-      const first = items[i] || {};
-      const cid = first.campaign_id || `unknown-${i}`;
-      const cname = first.campaign_name || 'Campanha';
-      let start = i;
-      let end = i;
-      while (end + 1 < items.length) {
-        const next = items[end + 1] || {};
-        const nextCid = next.campaign_id || `unknown-${end + 1}`;
-        if (nextCid !== cid) break;
-        end += 1;
-      }
-      segs.push({ campaign_id: cid, campaign_name: cname, startIndex: start, endIndex: end, length: end - start + 1 });
-      i = end + 1;
-    }
-    return segs;
-  }, []);
-
-  const deduplicatePlaylist = useCallback((items) => {
-    try {
-      if (!Array.isArray(items)) return [];
-      const seenByUrl = new Set();
-      const seenById = new Set();
-      const out = [];
-      for (const it of items) {
-        const urlKey = `${it?.file_url || it?.url || ''}|${it?.type || ''}`;
-        const idKey = it?.id != null ? String(it.id) : null;
-        if ((urlKey && seenByUrl.has(urlKey)) || (idKey && seenById.has(idKey))) {
-          continue;
-        }
-        if (urlKey) seenByUrl.add(urlKey);
-        if (idKey) seenById.add(idKey);
-        out.push(it);
-      }
-      return out;
-    } catch (e) {
-      console.warn('[WebPlayer] Dedup falhou, usando lista original', e);
-      return Array.isArray(items) ? items : [];
-    }
-  }, []);
-
-  const prefetchImage = (url) => {
-    if (!url) return;
-    if (preloadCacheRef.current[url]) return;
-    const img = new Image();
-    img.src = url;
-    preloadCacheRef.current[url] = img;
-  };
-
-  const prefetchUpcomingImages = (items, startIdx, count = 3) => {
-    if (!Array.isArray(items) || items.length === 0) return;
-    let fetched = 0;
-    for (let i = 0; i < items.length && fetched < count; i++) {
-      const idx = (startIdx + 1 + i) % items.length;
-      const it = items[idx];
-      if (it && it.type === 'image') {
-        prefetchImage(it.file_url || it.url);
-        fetched += 1;
-      }
     }
   };
 
@@ -722,9 +241,6 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
             key="video-player"
             src={currentContent.file_url || currentContent.url}
             style={commonStyle}
-            onLoadedData={handleMediaLoad}
-            onEnded={handleMediaEnd}
-            onError={handleMediaError}
             muted={muted}
             playsInline
             autoPlay
@@ -740,39 +256,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
             src={currentContent.file_url || currentContent.url}
             alt={currentContent.title}
             style={commonStyle}
-            onLoad={handleImageDisplay}
-            onError={handleMediaError}
           />
-        );
-      
-      case 'audio':
-        return (
-          <Box
-            sx={{
-              ...commonStyle,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'linear-gradient(45deg, #1976d2, #42a5f5)'
-            }}
-          >
-            <audio
-              ref={mediaRef}
-              key="audio-player"
-              src={currentContent.file_url || currentContent.url}
-              onLoadedData={handleMediaLoad}
-              onEnded={handleMediaEnd}
-              onError={handleMediaError}
-              style={{ display: 'none' }}
-            />
-            <Typography variant="h3" color="white" textAlign="center" mb={2}>
-              {currentContent.title}
-            </Typography>
-            <Typography variant="h6" color="white" textAlign="center">
-              {currentContent.description}
-            </Typography>
-          </Box>
         );
       
       default:
@@ -879,53 +363,9 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         height: fullscreen ? '100vh' : '400px',
         backgroundColor: '#000',
         overflow: 'hidden',
-        // Aplicar orientação: em portrait, rotacionar o container interno para ocupar a tela
-        transform: playerPrefs.orientation === 'portrait' ? 'rotate(90deg)' : 'none',
-        transformOrigin: 'center center',
       }}
     >
       {renderContent()}
-      
-      {/* Campaign change banner */}
-      {showCampaignBanner && currentSegmentIdx >= 0 && segments[currentSegmentIdx] && (
-        <Box
-          sx={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            color: 'white',
-            px: 3,
-            py: 1.5,
-            borderRadius: 1,
-            zIndex: 10000,
-          }}
-        >
-          <Typography variant="h5" fontWeight={600}>
-            Campanha: {segments[currentSegmentIdx].campaign_name}
-          </Typography>
-        </Box>
-      )}
-      
-      {/* Campaign mini progress bar (item-based) */}
-      {currentSegmentIdx >= 0 && segments[currentSegmentIdx] && (
-        <LinearProgress
-          variant="determinate"
-          value={((currentIndex - segments[currentSegmentIdx].startIndex + 1) / segments[currentSegmentIdx].length) * 100}
-          sx={{
-            position: 'absolute',
-            bottom: 6,
-            left: 0,
-            right: 0,
-            height: 3,
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            '& .MuiLinearProgress-bar': {
-              backgroundColor: '#66bb6a',
-            },
-          }}
-        />
-      )}
       
       {/* Progress Bar */}
       <LinearProgress
@@ -944,36 +384,8 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         }}
       />
       
-      {/* Enable-sound button shown while muted */}
-      {currentContent?.type === 'video' && muted && (
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: 16,
-            right: 16,
-            zIndex: 10000,
-          }}
-        >
-          <Button
-            variant="contained"
-            onClick={() => {
-              setMuted(playerPrefs.volume <= 0);
-              if (mediaRef.current) {
-                try {
-                  mediaRef.current.muted = playerPrefs.volume <= 0;
-                  mediaRef.current.volume = Math.max(0, Math.min(1, (playerPrefs.volume || 0) / 100));
-                  mediaRef.current.play().catch(() => {});
-                } catch (_) {}
-              }
-            }}
-          >
-            Ativar áudio
-          </Button>
-        </Box>
-      )}
-      
       {/* Content Info Overlay */}
-      {!fullscreen && (
+      {!fullscreen && currentContent && (
         <Box
           sx={{
             position: 'absolute',
@@ -990,11 +402,6 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
           <Typography variant="body2" noWrap>
             {currentIndex + 1} de {playlist.length}
           </Typography>
-          {currentSegmentIdx >= 0 && segments[currentSegmentIdx] && (
-            <Typography variant="body2" noWrap>
-              Campanha: {segments[currentSegmentIdx].campaign_name} — {currentIndex - segments[currentSegmentIdx].startIndex + 1} de {segments[currentSegmentIdx].length}
-            </Typography>
-          )}
         </Box>
       )}
     </Box>
