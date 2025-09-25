@@ -1816,68 +1816,7 @@ const CampaignForm = () => {
                 </Card>
               </Grid>
 
-              {/* Configurações de Reprodução */}
-              <Grid item xs={12}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Configurações de Reprodução
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          select
-                          label="Modo de Reprodução"
-                          value={formData.playback_mode}
-                          onChange={(e) => handleInputChange('playback_mode', e.target.value)}
-                          disabled={loading}
-                        >
-                          <MenuItem value="sequential">Sequencial</MenuItem>
-                          <MenuItem value="random">Aleatório</MenuItem>
-                          <MenuItem value="single">Único</MenuItem>
-                          <MenuItem value="loop">Loop</MenuItem>
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Duração Padrão (segundos)"
-                          value={formData.content_duration}
-                          onChange={(e) => handleInputChange('content_duration', parseInt(e.target.value) || 10)}
-                          disabled={loading}
-                          inputProps={{ min: 1, max: 3600 }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={formData.loop_enabled}
-                              onChange={(e) => handleInputChange('loop_enabled', e.target.checked)}
-                              disabled={loading}
-                            />
-                          }
-                          label="Loop Habilitado"
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={6}>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={formData.shuffle_enabled}
-                              onChange={(e) => handleInputChange('shuffle_enabled', e.target.checked)}
-                              disabled={loading}
-                            />
-                          }
-                          label="Embaralhar Conteúdos"
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
+              {/* REMOVIDO: Configurações de Reprodução movidas para Agendamentos */}
 
               {/* Actions */}
               <Grid item xs={12}>

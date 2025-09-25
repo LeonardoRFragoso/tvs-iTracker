@@ -122,6 +122,7 @@ const ScheduleForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
+  const isEdit = Boolean(id);
   const [formData, setFormData] = useState({
     name: '',
     campaign_id: '',
