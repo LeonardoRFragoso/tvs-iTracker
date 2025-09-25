@@ -527,13 +527,11 @@ def get_playback_status():
             
             if not last_heartbeat:
                 # Player online mas nunca enviou heartbeat de reprodução
-                player = Player.query.get(player_id)
-                if player:
-                    ghost_players.append({
-                        'id': player.id,
-                        'name': player.name,
-                        'reason': 'Nunca iniciou reprodução'
-                    })
+                ghost_players.append({
+                    'id': player.id,
+                    'name': player.name,
+                    'reason': 'Nunca iniciou reprodução'
+                })
             else:
                 try:
                     heartbeat_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
