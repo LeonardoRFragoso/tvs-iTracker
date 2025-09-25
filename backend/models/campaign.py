@@ -28,11 +28,8 @@ class Campaign(db.Model):
     # Chave estrangeira para usuário
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=True)
     
-    # Novos campos para múltiplos conteúdos
-    playback_mode = db.Column(db.String(50), default='sequential')  # sequential, random, single, loop
-    content_duration = db.Column(db.Integer, default=10)  # duração padrão em segundos
-    loop_enabled = db.Column(db.Boolean, default=False)
-    shuffle_enabled = db.Column(db.Boolean, default=False)
+    # REMOVIDO: Configurações de reprodução movidas para Schedule
+    # Campanha agora é apenas um container de conteúdos
     
     # Compiled video metadata
     compiled_video_path = db.Column(db.String(500))
@@ -64,10 +61,7 @@ class Campaign(db.Model):
             'regions': json.loads(self.regions) if self.regions else [],
             'time_slots': json.loads(self.time_slots) if self.time_slots else [],
             'days_of_week': json.loads(self.days_of_week) if self.days_of_week else [],
-            'playback_mode': self.playback_mode,
-            'content_duration': self.content_duration,
-            'loop_enabled': self.loop_enabled,
-            'shuffle_enabled': self.shuffle_enabled,
+            # Configurações de reprodução removidas - agora estão no Schedule
             'created_at': fmt_br_datetime(self.created_at),
             'updated_at': fmt_br_datetime(self.updated_at),
             'content_count': len([c for c in self.contents if c.is_active]),
@@ -123,11 +117,7 @@ class Campaign(db.Model):
                     filtered_contents.append(c)  # Se sem filtro, incluir
             contents = filtered_contents
         
-        # Aplicar modo de reprodução
-        if self.shuffle_enabled and self.playback_mode == 'random':
-            import random
-            contents = contents.copy()
-            random.shuffle(contents)
+        # Modo de reprodução agora é controlado pelo Schedule
         
         return contents
     
@@ -225,7 +215,7 @@ class CampaignContent(db.Model):
         elif self.content and self.content.duration:
             return self.content.duration
         else:
-            return self.campaign.content_duration if self.campaign else 10
+            return 10  # Duração padrão - será sobrescrita pelo Schedule
     
     def is_available_for_location(self, location):
         """Verifica se o conteúdo está disponível para uma localização"""

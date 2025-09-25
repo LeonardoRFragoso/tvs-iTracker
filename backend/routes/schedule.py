@@ -222,7 +222,16 @@ def create_schedule():
             priority=data.get('priority', 1),
             is_persistent=data.get('is_persistent', False),
             content_type=data.get('content_type', 'main'),
-            is_active=data.get('is_active', True)
+            is_active=data.get('is_active', True),
+            # CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+            playback_mode=data.get('playback_mode', 'sequential'),
+            content_duration=data.get('content_duration', 10),
+            transition_duration=data.get('transition_duration', 1),
+            loop_behavior=data.get('loop_behavior', 'until_next'),
+            loop_duration_minutes=data.get('loop_duration_minutes'),
+            content_selection=data.get('content_selection', 'all'),
+            shuffle_enabled=data.get('shuffle_enabled', False),
+            auto_skip_errors=data.get('auto_skip_errors', True)
         )
         
         print(f"[DEBUG] Schedule object created, adding to session...")
@@ -299,12 +308,32 @@ def update_schedule(schedule_id):
             new_player = Player.query.get(data['player_id'])
             if not new_player:
                 return jsonify({'error': 'Player não encontrado'}), 404
-            # Escopo RH: validar que o novo player pertence à mesma empresa do usuário
+            
+            # HR scoping for new player
             if user.role == 'hr':
-                loc = Location.query.get(new_player.location_id) if new_player else None
+                loc = Location.query.get(new_player.location_id)
                 if not loc or loc.company != user.company:
                     return jsonify({'error': 'RH só pode agendar para players da sua empresa'}), 403
+            
             schedule.player_id = data['player_id']
+        
+        # ATUALIZAR CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+        if 'playback_mode' in data:
+            schedule.playback_mode = data['playback_mode']
+        if 'content_duration' in data:
+            schedule.content_duration = int(data['content_duration']) if data['content_duration'] else 10
+        if 'transition_duration' in data:
+            schedule.transition_duration = int(data['transition_duration']) if data['transition_duration'] else 1
+        if 'loop_behavior' in data:
+            schedule.loop_behavior = data['loop_behavior']
+        if 'loop_duration_minutes' in data:
+            schedule.loop_duration_minutes = int(data['loop_duration_minutes']) if data['loop_duration_minutes'] else None
+        if 'content_selection' in data:
+            schedule.content_selection = data['content_selection']
+        if 'shuffle_enabled' in data:
+            schedule.shuffle_enabled = bool(data['shuffle_enabled'])
+        if 'auto_skip_errors' in data:
+            schedule.auto_skip_errors = bool(data['auto_skip_errors'])
         
         if 'name' in data:
             schedule.name = data['name']

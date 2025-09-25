@@ -25,24 +25,23 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [lastLoadTime, setLastLoadTime] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
-  const [circuitBreakerOpen, setCircuitBreakerOpen] = useState(false);
   const [muted, setMuted] = useState(true); // start muted to allow autoplay
   const [segments, setSegments] = useState([]); // [{campaign_id, campaign_name, startIndex, endIndex, length}]
   const [currentSegmentIdx, setCurrentSegmentIdx] = useState(-1);
   const [showCampaignBanner, setShowCampaignBanner] = useState(false);
   const [playlistEtag, setPlaylistEtag] = useState(null);
-  const userInteractedRef = useRef(false);
-  const mediaErrorCountRef = useRef(0); // retry guard for media errors
-  const preloadCacheRef = useRef({});
-
-  const mediaRef = useRef(null);
-  const intervalRef = useRef(null);
-  const timeoutRef = useRef(null);
-  const loadTimeoutRef = useRef(null);
+  const [circuitBreakerOpen, setCircuitBreakerOpen] = useState(false);
+  const attemptCountRef = useRef(0);
+  const lastAttemptRef = useRef(0);
   const connectTimeoutRef = useRef(null);
-  const debounceRef = useRef(null);
-  const playbackHeartbeatRef = useRef(null);
+  const connectingRef = useRef(false); // Prevenir múltiplas conexões simultâneas
+  const timeoutRef = useRef(null);
+  const intervalRef = useRef(null);
+  const mediaRef = useRef(null);
+  const mediaErrorCountRef = useRef(0);
   const playbackStartTimeRef = useRef(null);
+  const heartbeatIntervalRef = useRef(null);
+  const playbackHeartbeatRef = useRef(null);
 
   // Preferências globais de player vindas do backend (público)
   const [playerPrefs, setPlayerPrefs] = useState({
@@ -50,118 +49,33 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     volume: 50,
   });
 
-  // Carregar preferências públicas do player (sem exigir autenticação)
-  useEffect(() => {
-    const loadPrefs = async () => {
-      try {
-        const res = await axios.get('/settings/player-preferences');
-        const prefs = res.data?.preferences || {};
-        const orientation = prefs['display.default_orientation'] || 'landscape';
-        const volume = typeof prefs['display.default_volume'] === 'number' ? prefs['display.default_volume'] : 50;
-        setPlayerPrefs({ orientation, volume });
-      } catch (e) {
-        // Defaults já definidos
-      }
-    };
-    loadPrefs();
-  }, []);
-
-  // Circuit Breaker: Previne loops infinitos
-  const MAX_ATTEMPTS = 5;
-  const CIRCUIT_BREAKER_TIMEOUT = 30000; // 30 segundos
-  const DEBOUNCE_DELAY = 2000; // 2 segundos entre carregamentos
-  const RECONNECT_DELAY = 30000; // 30 segundos entre reconexões/heartbeats
-
-  useEffect(() => {
-    console.log('[WebPlayer] Iniciando para playerId:', playerId);
-    if (playerId && !circuitBreakerOpen) {
-      debouncedLoadPlayerData();
-      debouncedConnectToPlayer();
-      try { 
-        joinPlayerRoom(playerId); 
-        console.log('[WebPlayer] Joined room:', playerId);
-      } catch (e) { 
-        console.warn('Join room failed:', e); 
-      }
-    }
-
-    return () => {
-      console.log('[WebPlayer] Cleanup');
-      clearAllTimeouts();
-      const el = mediaRef.current;
-      if (el) {
-        try {
-          if (el.pause) el.pause();
-          if (el.removeAttribute) el.removeAttribute('src');
-          if (el.load) el.load();
-        } catch (_) {}
-      }
-    };
-  }, [playerId, circuitBreakerOpen]);
-
-  useEffect(() => {
-    if (socket && playerId) {
-      const onPlayerCommand = (payload) => {
-        console.log('[WebPlayer] Comando recebido:', payload);
-        handlePlayerCommand(payload);
-      };
-      const onPlaySchedule = (payload) => {
-        console.log('[WebPlayer] Play schedule recebido:', payload);
-        handlePlaySchedule(payload);
-      };
-
-      socket.on('player_command', onPlayerCommand);
-      socket.on('play_schedule', onPlaySchedule);
-
-      return () => {
-        socket.off('player_command', onPlayerCommand);
-        socket.off('play_schedule', onPlaySchedule);
-      };
-    }
-  }, [socket, playerId]);
-
-  useEffect(() => {
-    const onUserInteract = () => {
-      if (userInteractedRef.current) return;
-      userInteractedRef.current = true;
-      setMuted(playerPrefs.volume <= 0);
-      if (mediaRef.current) {
-        try {
-          mediaRef.current.muted = playerPrefs.volume <= 0;
-          mediaRef.current.volume = Math.max(0, Math.min(1, (playerPrefs.volume || 0) / 100));
-          mediaRef.current.play().catch(() => {});
-        } catch (_) {}
-      }
-      document.removeEventListener('click', onUserInteract);
-      document.removeEventListener('keydown', onUserInteract);
-      document.removeEventListener('touchstart', onUserInteract);
-    };
-
-    document.addEventListener('click', onUserInteract);
-    document.addEventListener('keydown', onUserInteract);
-    document.addEventListener('touchstart', onUserInteract, { passive: true });
-
-    return () => {
-      document.removeEventListener('click', onUserInteract);
-      document.removeEventListener('keydown', onUserInteract);
-      document.removeEventListener('touchstart', onUserInteract);
-    };
-  }, [playerPrefs.volume]);
-
   useEffect(() => {
     mediaErrorCountRef.current = 0;
   }, [currentIndex, currentContent?.id]);
 
   const clearAllTimeouts = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-    if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (playbackHeartbeatRef.current) clearInterval(playbackHeartbeatRef.current);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    
+    // Resetar flags de controle
+    connectingRef.current = false;
+    mediaErrorCountRef.current = 0;
   };
 
-  // Telemetria de reprodução
   const sendPlaybackEvent = useCallback((eventType, additionalData = {}) => {
     console.log(`[WebPlayer] sendPlaybackEvent chamado: ${eventType}`);
     console.log(`[WebPlayer] socket:`, !!socket);
@@ -385,32 +299,44 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   };
 
   const connectToPlayer = async () => {
+    // Evitar múltiplas conexões simultâneas
+    if (connectingRef.current) {
+      console.log('[WebPlayer] Conexão já em andamento, ignorando...');
+      return;
+    }
+    
+    connectingRef.current = true;
+    
     try {
       console.log('[WebPlayer] Conectando ao player...');
       await axios.post(`/players/${playerId}/connect`);
       console.log('[WebPlayer] Conectado com sucesso');
       setIsConnected(true);
       
-      // Reagendar reconexão periódica (heartbeat)
+      // Reagendar reconexão periódica (heartbeat) - menos frequente
       if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = setTimeout(() => {
         setIsConnected(false);
+        connectingRef.current = false;
         if (!circuitBreakerOpen) {
           debouncedConnectToPlayer();
         }
-      }, RECONNECT_DELAY);
+      }, RECONNECT_DELAY * 2); // Dobrar o delay para reduzir frequência
       
     } catch (err) {
       console.error('[WebPlayer] Erro ao conectar:', err);
       setIsConnected(false);
       
-      // Retry connection com delay
+      // Retry connection com delay maior em caso de erro
       if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
       connectTimeoutRef.current = setTimeout(() => {
+        connectingRef.current = false;
         if (!circuitBreakerOpen) {
           debouncedConnectToPlayer();
         }
-      }, RECONNECT_DELAY);
+      }, RECONNECT_DELAY * 3); // Delay maior após erro
+    } finally {
+      connectingRef.current = false;
     }
   };
 
@@ -572,11 +498,22 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const handleMediaLoad = () => {
     if (mediaRef.current) {
       try {
+        // Resetar contador de erros quando carrega com sucesso
+        mediaErrorCountRef.current = 0;
+        
         mediaRef.current.muted = muted;
         // Se não estiver mudo, usar o volume padrão das preferências
         mediaRef.current.volume = muted ? 0 : Math.max(0, Math.min(1, (playerPrefs.volume || 100) / 100));
-        mediaRef.current.play().catch(() => {});
-      } catch (_) {}
+        mediaRef.current.play().catch((err) => {
+          console.error('[WebPlayer] Erro no play:', err);
+          // Se falhar no play, tentar próximo conteúdo
+          setTimeout(() => nextContent(), 2000);
+        });
+      } catch (err) {
+        console.error('[WebPlayer] Erro no handleMediaLoad:', err);
+        return;
+      }
+      
       setIsPlaying(true);
       startProgressTracking();
       
@@ -614,19 +551,47 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
 
   const handleMediaError = (e) => {
     console.error('[WebPlayer] Erro ao carregar mídia:', e);
-    // Try a single in-place reload without remounting
+    
+    // Parar telemetria se estiver ativa
+    stopPlaybackHeartbeat();
+    setIsPlaying(false);
+    
+    // Incrementar contador de erros para este conteúdo
     mediaErrorCountRef.current = (mediaErrorCountRef.current || 0) + 1;
+    
     const el = mediaRef.current;
-    if (el && mediaErrorCountRef.current <= 1) {
+    
+    // Tentar reload apenas uma vez por conteúdo
+    if (el && mediaErrorCountRef.current === 1) {
+      console.log('[WebPlayer] Tentando recarregar mídia...');
       try {
-        el.pause?.();
-        el.load?.();
-        el.play?.().catch(() => {});
+        // Limpar completamente o elemento
+        el.pause();
+        el.removeAttribute('src');
+        el.load();
+        
+        // Aguardar um pouco antes de definir nova src
+        setTimeout(() => {
+          if (el && currentContent) {
+            const mediaUrl = `${axios.defaults.baseURL}/content/${currentContent.id}?pid=${playerId}&v=${Date.now()}`;
+            el.src = mediaUrl;
+            el.load();
+            el.play().catch(() => {
+              console.log('[WebPlayer] Falha no play após reload, pulando para próximo');
+              nextContent();
+            });
+          }
+        }, 1000);
         return;
-      } catch (_) {}
+      } catch (err) {
+        console.error('[WebPlayer] Erro no reload:', err);
+      }
     }
-    // Fallback to next content after short delay to avoid stall
+    
+    // Após falha ou múltiplas tentativas, pular para próximo conteúdo
+    console.log('[WebPlayer] Pulando para próximo conteúdo após erro');
     mediaErrorCountRef.current = 0;
+    
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       nextContent();

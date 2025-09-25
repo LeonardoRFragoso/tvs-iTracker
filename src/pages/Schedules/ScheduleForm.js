@@ -122,16 +122,14 @@ const ScheduleForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
-  const isEdit = Boolean(id);
-
   const [formData, setFormData] = useState({
     name: '',
     campaign_id: '',
     player_id: '',
-    start_date: '',
-    end_date: '',
-    start_time: '',
-    end_time: '',
+    start_date: new Date(),
+    end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+    start_time: new Date(new Date().setHours(9, 0, 0, 0)),
+    end_time: new Date(new Date().setHours(18, 0, 0, 0)),
     days_of_week: [1, 2, 3, 4, 5], // Monday to Friday
     repeat_type: 'daily',
     repeat_interval: 1,
@@ -140,6 +138,15 @@ const ScheduleForm = () => {
     content_type: 'main',
     is_active: true,
     is_all_day: false,
+    // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+    playback_mode: 'sequential',
+    content_duration: 10,
+    transition_duration: 1,
+    loop_behavior: 'until_next',
+    loop_duration_minutes: null,
+    content_selection: 'all',
+    shuffle_enabled: false,
+    auto_skip_errors: true,
   });
 
   const [campaigns, setCampaigns] = useState([]);
@@ -219,6 +226,15 @@ const ScheduleForm = () => {
         content_type: schedule.content_type || 'main',
         is_active: schedule.is_active !== false,
         is_all_day: isAllDayDetected,
+        // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+        playback_mode: schedule.playback_mode || 'sequential',
+        content_duration: schedule.content_duration || 10,
+        transition_duration: schedule.transition_duration || 1,
+        loop_behavior: schedule.loop_behavior || 'until_next',
+        loop_duration_minutes: schedule.loop_duration_minutes || null,
+        content_selection: schedule.content_selection || 'all',
+        shuffle_enabled: schedule.shuffle_enabled || false,
+        auto_skip_errors: schedule.auto_skip_errors !== false,
       });
     } catch (err) {
       setError('Erro ao carregar agendamento');
@@ -331,6 +347,15 @@ const ScheduleForm = () => {
         content_type: formData.content_type,
         is_active: formData.is_active,
         is_all_day: formData.is_all_day,
+        // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+        playback_mode: formData.playback_mode,
+        content_duration: parseInt(formData.content_duration, 10) || 10,
+        transition_duration: parseInt(formData.transition_duration, 10) || 1,
+        loop_behavior: formData.loop_behavior,
+        loop_duration_minutes: formData.loop_duration_minutes ? parseInt(formData.loop_duration_minutes, 10) : null,
+        content_selection: formData.content_selection,
+        shuffle_enabled: formData.shuffle_enabled,
+        auto_skip_errors: formData.auto_skip_errors,
       };
 
       // Include times only if set, to avoid sending empty strings
@@ -981,6 +1006,202 @@ const ScheduleForm = () => {
                         <FormHelperText>
                           Conteúdo fica fixo na tela até ser substituído por outro agendamento
                         </FormHelperText>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Paper>
+              </Grow>
+            </Grid>
+
+            {/* Configurações de Reprodução */}
+            <Grid item xs={12}>
+              <Grow in timeout={1800}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 3,
+                    backgroundColor: (theme) => theme.palette.background.paper,
+                    backdropFilter: 'blur(10px)',
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: '4px',
+                      background: 'linear-gradient(45deg, #ff7730, #ff9800)',
+                    },
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" alignItems="center" mb={3}>
+                      <Avatar
+                        sx={{
+                          background: 'linear-gradient(45deg, #ff7730, #ff9800)',
+                          color: '#000',
+                          mr: 2,
+                        }}
+                      >
+                        <RepeatIcon />
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                          Configurações de Reprodução
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Configure como o conteúdo será reproduzido neste agendamento
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Modo de Reprodução</InputLabel>
+                          <Select
+                            value={formData.playback_mode}
+                            onChange={(e) => handleInputChange('playback_mode', e.target.value)}
+                            label="Modo de Reprodução"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            }}
+                          >
+                            <MenuItem value="sequential">Sequencial</MenuItem>
+                            <MenuItem value="random">Aleatório</MenuItem>
+                            <MenuItem value="single">Único (primeiro conteúdo)</MenuItem>
+                            <MenuItem value="loop_infinite">Loop Infinito</MenuItem>
+                          </Select>
+                          <FormHelperText>
+                            Como os conteúdos da campanha serão reproduzidos
+                          </FormHelperText>
+                        </FormControl>
+                      </Grid>
+
+                      <Grid item xs={12} md={6}>
+                        <FormControl fullWidth>
+                          <InputLabel>Comportamento do Loop</InputLabel>
+                          <Select
+                            value={formData.loop_behavior}
+                            onChange={(e) => handleInputChange('loop_behavior', e.target.value)}
+                            label="Comportamento do Loop"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            }}
+                          >
+                            <MenuItem value="until_next">Até próximo agendamento</MenuItem>
+                            <MenuItem value="time_limited">Por tempo limitado</MenuItem>
+                            <MenuItem value="infinite">Infinito</MenuItem>
+                          </Select>
+                          <FormHelperText>
+                            Quando parar de reproduzir o conteúdo
+                          </FormHelperText>
+                        </FormControl>
+                      </Grid>
+
+                      <Grid item xs={12} md={4}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Duração por Conteúdo (segundos)"
+                          value={formData.content_duration}
+                          onChange={(e) => handleInputChange('content_duration', parseInt(e.target.value) || 10)}
+                          inputProps={{ min: 1, max: 3600 }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
+                          }}
+                        />
+                        <FormHelperText>
+                          Tempo padrão de exibição para cada conteúdo
+                        </FormHelperText>
+                      </Grid>
+
+                      <Grid item xs={12} md={4}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Transição entre Conteúdos (segundos)"
+                          value={formData.transition_duration}
+                          onChange={(e) => handleInputChange('transition_duration', parseInt(e.target.value) || 1)}
+                          inputProps={{ min: 0, max: 60 }}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
+                          }}
+                        />
+                        <FormHelperText>
+                          Pausa entre um conteúdo e outro
+                        </FormHelperText>
+                      </Grid>
+
+                      {formData.loop_behavior === 'time_limited' && (
+                        <Grid item xs={12} md={4}>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            label="Duração do Loop (minutos)"
+                            value={formData.loop_duration_minutes || ''}
+                            onChange={(e) => handleInputChange('loop_duration_minutes', parseInt(e.target.value) || null)}
+                            inputProps={{ min: 1, max: 1440 }}
+                            required={formData.loop_behavior === 'time_limited'}
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                borderRadius: 2,
+                                '&:hover': {
+                                  transform: 'translateY(-2px)',
+                                  transition: 'transform 0.2s ease-in-out',
+                                },
+                              },
+                            }}
+                          />
+                          <FormHelperText>
+                            Por quanto tempo o loop deve durar
+                          </FormHelperText>
+                        </Grid>
+                      )}
+
+                      <Grid item xs={12}>
+                        <Box display="flex" gap={4} flexWrap="wrap">
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.shuffle_enabled}
+                                onChange={(e) => handleInputChange('shuffle_enabled', e.target.checked)}
+                              />
+                            }
+                            label="Embaralhar Conteúdos"
+                          />
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.auto_skip_errors}
+                                onChange={(e) => handleInputChange('auto_skip_errors', e.target.checked)}
+                              />
+                            }
+                            label="Pular Conteúdos com Erro"
+                          />
+                        </Box>
                       </Grid>
                     </Grid>
                   </CardContent>

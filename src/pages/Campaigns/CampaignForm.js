@@ -466,10 +466,7 @@ const CampaignForm = () => {
         start_date: toBRDateTime(sd),
         end_date: toBRDateTime(ed),
         is_active: !!formData.is_active,
-        playback_mode: formData.playback_mode || 'sequential',
-        content_duration: parseInt(formData.content_duration, 10) || 10,
-        loop_enabled: !!formData.loop_enabled,
-        shuffle_enabled: !!formData.shuffle_enabled,
+        // REMOVIDO: Configurações de reprodução movidas para Schedule
       };
 
       // Include content_ids only for creation flow (no id and no draft yet)
@@ -523,10 +520,7 @@ const CampaignForm = () => {
           is_active: !!c.is_active,
           start_date: parseDateTimeFlexible(c.start_date),
           end_date: parseDateTimeFlexible(c.end_date),
-          playback_mode: c.playback_mode || 'sequential',
-          content_duration: parseInt(c.content_duration, 10) || 10,
-          loop_enabled: !!c.loop_enabled,
-          shuffle_enabled: !!c.shuffle_enabled,
+          // REMOVIDO: Configurações de reprodução movidas para Schedule
         }));
         // Map existing contents for inline list visualization (optional)
         const cc = Array.isArray(c.contents) ? c.contents : [];

@@ -35,10 +35,25 @@ class Schedule(db.Model):
     content_type = db.Column(db.String(20), default='main')  # main, overlay
     is_active = db.Column(db.Boolean, default=True)
     
-    # Novos campos para múltiplos conteúdos
+    # CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO (movidas da Campaign)
+    # Modo de reprodução
+    playback_mode = db.Column(db.String(50), default='sequential')  # sequential, random, single, loop_infinite
+    
+    # Duração e temporização
+    content_duration = db.Column(db.Integer, default=10)  # duração padrão por conteúdo (segundos)
+    transition_duration = db.Column(db.Integer, default=1)  # tempo entre conteúdos (segundos)
+    
+    # Comportamento de loop e persistência
+    loop_behavior = db.Column(db.String(20), default='until_next')  # until_next, time_limited, infinite
+    loop_duration_minutes = db.Column(db.Integer)  # para time_limited
+    
+    # Filtros e seleção de conteúdo
     content_filter = db.Column(db.Text)  # JSON com filtros de conteúdo
-    playback_mode_override = db.Column(db.String(50))  # override do modo de reprodução da campanha
     content_selection = db.Column(db.String(20), default='all')  # all, specific, filtered
+    
+    # Configurações avançadas
+    shuffle_enabled = db.Column(db.Boolean, default=False)  # embaralhar conteúdos
+    auto_skip_errors = db.Column(db.Boolean, default=True)  # pular conteúdos com erro
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -64,9 +79,16 @@ class Schedule(db.Model):
             'is_persistent': self.is_persistent,
             'content_type': self.content_type,
             'is_active': self.is_active,
+            # Configurações unificadas de reprodução
+            'playback_mode': self.playback_mode,
+            'content_duration': self.content_duration,
+            'transition_duration': self.transition_duration,
+            'loop_behavior': self.loop_behavior,
+            'loop_duration_minutes': self.loop_duration_minutes,
             'content_filter': json.loads(self.content_filter) if self.content_filter else None,
-            'playback_mode_override': self.playback_mode_override,
             'content_selection': self.content_selection,
+            'shuffle_enabled': self.shuffle_enabled,
+            'auto_skip_errors': self.auto_skip_errors,
             'created_at': fmt_br_datetime(self.created_at),
             'updated_at': fmt_br_datetime(self.updated_at),
             'player': self.player.to_dict() if self.player else None,
@@ -122,13 +144,8 @@ class Schedule(db.Model):
         return filtered_contents
     
     def get_effective_playback_mode(self):
-        """Retorna o modo de reprodução efetivo (override ou da campanha)"""
-        if self.playback_mode_override:
-            return self.playback_mode_override
-        elif self.campaign:
-            return self.campaign.playback_mode
-        else:
-            return 'sequential'
+        """Retorna o modo de reprodução configurado no agendamento"""
+        return self.playback_mode or 'sequential'
     
     def is_active_now(self):
         """Verifica se o agendamento deve estar ativo agora"""
@@ -202,7 +219,8 @@ class Schedule(db.Model):
         
         playback_mode = self.get_effective_playback_mode()
         
-        if playback_mode == 'random':
+        # Aplicar shuffle se habilitado
+        if self.shuffle_enabled and playback_mode == 'random':
             import random
             return random.choice(contents)
         
@@ -210,7 +228,7 @@ class Schedule(db.Model):
             # Sempre retorna o primeiro conteúdo
             return contents[0]
         
-        elif playback_mode in ['sequential', 'loop']:
+        elif playback_mode in ['sequential', 'loop_infinite']:
             if not current_content_id:
                 return contents[0]
             
@@ -225,7 +243,7 @@ class Schedule(db.Model):
             next_index = current_index + 1
             
             if next_index >= len(contents):
-                if playback_mode == 'loop' or (self.campaign and self.campaign.loop_enabled):
+                if playback_mode == 'loop_infinite' or self.loop_behavior in ['infinite', 'until_next']:
                     next_index = 0  # Volta ao início
                 else:
                     return None  # Fim da sequência
@@ -236,10 +254,13 @@ class Schedule(db.Model):
     
     def get_content_duration(self, content):
         """Retorna a duração efetiva de um conteúdo no contexto deste agendamento"""
-        if hasattr(content, 'get_effective_duration'):
-            return content.get_effective_duration()
-        elif self.campaign:
-            return self.campaign.content_duration
+        # Prioridade: duration_override do conteúdo > duração do Schedule > duração do conteúdo > padrão
+        if hasattr(content, 'duration_override') and content.duration_override:
+            return content.duration_override
+        elif self.content_duration:
+            return self.content_duration
+        elif hasattr(content, 'content') and content.content and content.content.duration:
+            return content.content.duration
         else:
             return 10  # Duração padrão
     
@@ -267,5 +288,12 @@ class Schedule(db.Model):
             active_contents = self.campaign.get_active_contents()
             if not active_contents:
                 errors.append("A campanha selecionada não possui conteúdos ativos")
+        
+        # Validar configurações de loop
+        if self.loop_behavior == 'time_limited' and not self.loop_duration_minutes:
+            errors.append("Duração do loop é obrigatória quando comportamento é 'time_limited'")
+        
+        if self.content_duration and self.content_duration < 1:
+            errors.append("Duração do conteúdo deve ser maior que 0")
         
         return errors
