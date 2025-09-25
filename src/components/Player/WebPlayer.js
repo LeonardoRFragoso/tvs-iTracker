@@ -163,7 +163,15 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
 
   // Telemetria de reprodução
   const sendPlaybackEvent = useCallback((eventType, additionalData = {}) => {
-    if (!socket || !playerId || !currentContent) return;
+    console.log(`[WebPlayer] sendPlaybackEvent chamado: ${eventType}`);
+    console.log(`[WebPlayer] socket:`, !!socket);
+    console.log(`[WebPlayer] playerId:`, playerId);
+    console.log(`[WebPlayer] currentContent:`, !!currentContent);
+    
+    if (!socket || !playerId || !currentContent) {
+      console.log(`[WebPlayer] Evento não enviado - socket: ${!!socket}, playerId: ${!!playerId}, currentContent: ${!!currentContent}`);
+      return;
+    }
 
     const eventData = {
       player_id: playerId,
