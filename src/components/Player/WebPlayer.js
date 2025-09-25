@@ -33,6 +33,18 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const [showCampaignBanner, setShowCampaignBanner] = useState(false);
   const [playlistEtag, setPlaylistEtag] = useState(null);
   const [circuitBreakerOpen, setCircuitBreakerOpen] = useState(false);
+  // Configurações de reprodução recebidas do backend
+  const [playbackConfig, setPlaybackConfig] = useState({
+    playback_mode: 'sequential',
+    loop_behavior: 'until_next',
+    loop_duration_minutes: null,
+    content_duration: 10,
+    transition_duration: 1,
+    shuffle_enabled: false,
+    auto_skip_errors: true,
+    is_persistent: false,
+    content_type: 'main',
+  });
   const [playerPrefs, setPlayerPrefs] = useState({
     orientation: 'landscape',
     volume: 50,
@@ -166,6 +178,12 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       
       const rawItems = playlistRes.data.contents || [];
       setPlaylist(rawItems);
+      
+      // Carregar configurações de reprodução
+      if (playlistRes.data.playback_config) {
+        console.log('[WebPlayer] Configurações de reprodução recebidas:', playlistRes.data.playback_config);
+        setPlaybackConfig(playlistRes.data.playback_config);
+      }
 
       if (rawItems && rawItems.length > 0) {
         console.log('[WebPlayer] Conteúdo encontrado:', rawItems[0]);
@@ -381,41 +399,64 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       // Parar heartbeat
       stopPlaybackHeartbeat();
 
-      // Avançar para próximo conteúdo se houver
-      if (playlist.length > 1 && currentIndex < playlist.length - 1) {
-        setTimeout(() => {
-          const nextIndex = currentIndex + 1;
-          const nextContent = playlist[nextIndex];
-          
-          setCurrentIndex(nextIndex);
-          setCurrentContent(nextContent);
-          
-          // Enviar evento de mudança de conteúdo
-          sendPlaybackEvent('content_change', {
-            previous_content_id: currentContent.id,
-            next_content_id: nextContent.id,
-            next_content_title: nextContent.title,
-            next_content_type: nextContent.type,
-            playlist_index: nextIndex
-          });
-        }, 1000);
-      } else if (playlist.length > 1) {
-        // Voltar ao início da playlist
-        setTimeout(() => {
-          const nextContent = playlist[0];
-          
-          setCurrentIndex(0);
-          setCurrentContent(nextContent);
-          
-          sendPlaybackEvent('content_change', {
-            previous_content_id: currentContent.id,
-            next_content_id: nextContent.id,
-            next_content_title: nextContent.title,
-            next_content_type: nextContent.type,
-            playlist_index: 0
-          });
-        }, 1000);
+      // Determinar o próximo conteúdo com base nas configurações de reprodução
+      const { playback_mode, loop_behavior, shuffle_enabled } = playbackConfig;
+      console.log(`[WebPlayer] Determinando próximo conteúdo: modo=${playback_mode}, loop=${loop_behavior}, shuffle=${shuffle_enabled}`);
+      
+      // Não avançar se for modo single e não for loop infinito
+      if (playback_mode === 'single' && loop_behavior !== 'infinite') {
+        console.log('[WebPlayer] Modo single sem loop, parando após reprodução');
+        return;
       }
+      
+      let nextIndex = 0;
+      let nextContent = null;
+      
+      // Determinar o próximo índice com base no modo de reprodução
+      if (playback_mode === 'random' || shuffle_enabled) {
+        // Modo aleatório
+        nextIndex = Math.floor(Math.random() * playlist.length);
+        console.log(`[WebPlayer] Modo aleatório: próximo índice = ${nextIndex}`);
+      } else if (playback_mode === 'sequential' || playback_mode === 'loop_infinite') {
+        // Modo sequencial
+        if (currentIndex < playlist.length - 1) {
+          // Ainda há próximos itens
+          nextIndex = currentIndex + 1;
+          console.log(`[WebPlayer] Modo sequencial: próximo índice = ${nextIndex}`);
+        } else {
+          // Chegou ao fim da playlist
+          if (playback_mode === 'loop_infinite' || loop_behavior === 'infinite' || loop_behavior === 'until_next') {
+            // Voltar ao início
+            nextIndex = 0;
+            console.log('[WebPlayer] Fim da playlist: voltando ao início (loop)');
+          } else {
+            // Parar reprodução
+            console.log('[WebPlayer] Fim da playlist: parando reprodução');
+            return;
+          }
+        }
+      }
+      
+      // Obter o próximo conteúdo
+      nextContent = playlist[nextIndex];
+      
+      // Aplicar transição
+      const transitionTime = playbackConfig.transition_duration * 1000 || 1000;
+      console.log(`[WebPlayer] Aplicando transição de ${transitionTime}ms`);
+      
+      setTimeout(() => {
+        setCurrentIndex(nextIndex);
+        setCurrentContent(nextContent);
+        
+        // Enviar evento de mudança de conteúdo
+        sendPlaybackEvent('content_change', {
+          previous_content_id: currentContent.id,
+          next_content_id: nextContent.id,
+          next_content_title: nextContent.title,
+          next_content_type: nextContent.type,
+          playlist_index: nextIndex
+        });
+      }, transitionTime);
     };
 
     const handleError = (e) => {
@@ -485,7 +526,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
             playsInline
             autoPlay
             preload="auto"
-            loop={playlist.length === 1}
+            loop={playbackConfig.playback_mode === 'loop_infinite' || (playlist.length === 1 && playbackConfig.loop_behavior === 'infinite')}
           />
         );
       

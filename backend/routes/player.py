@@ -900,10 +900,28 @@ def get_player_playlist(player_id):
         if inm and (inm.strip() == etag_header or inm.strip().strip('"') == etag_val):
             return '', 304, {'ETag': etag_header}
 
+        # Incluir configurações de reprodução do primeiro agendamento ativo
+        playback_config = {}
+        if schedules_to_use:
+            schedule = schedules_to_use[0]
+            playback_config = {
+                'playback_mode': schedule.get_effective_playback_mode(),
+                'loop_behavior': getattr(schedule, 'loop_behavior', 'until_next'),
+                'loop_duration_minutes': getattr(schedule, 'loop_duration_minutes', None),
+                'content_duration': getattr(schedule, 'content_duration', 10),
+                'transition_duration': getattr(schedule, 'transition_duration', 1),
+                'shuffle_enabled': getattr(schedule, 'shuffle_enabled', False),
+                'auto_skip_errors': getattr(schedule, 'auto_skip_errors', True),
+                'is_persistent': getattr(schedule, 'is_persistent', False),
+                'content_type': getattr(schedule, 'content_type', 'main'),
+            }
+            print(f"[DEBUG] Enviando configurações de reprodução: {playback_config}")
+        
         resp = jsonify({
             'player_id': player_id,
             'schedule_ids': [s.id for s in schedules_to_use],
-            'contents': items
+            'contents': items,
+            'playback_config': playback_config
         })
         resp.headers['ETag'] = etag_header
         return resp, 200
