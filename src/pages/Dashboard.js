@@ -45,6 +45,7 @@ import {
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
+  Remove,
   Storage as StorageIcon,
   CheckCircle as CheckCircleIcon,
   Timeline as TimelineIcon,
