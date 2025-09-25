@@ -62,6 +62,16 @@ class Player(db.Model):
     schedules = db.relationship('Schedule', lazy=True)
     distributions = db.relationship('ContentDistribution', lazy=True)
     
+    # Status de reprodução atual (para KPIs em tempo real)
+    current_content_id = db.Column(db.String(36))
+    current_content_title = db.Column(db.String(255))
+    current_content_type = db.Column(db.String(50))
+    current_campaign_id = db.Column(db.String(36))
+    current_campaign_name = db.Column(db.String(255))
+    is_playing = db.Column(db.Boolean, default=False)
+    playback_start_time = db.Column(db.DateTime)
+    last_playback_heartbeat = db.Column(db.DateTime)
+    
     @property
     def is_online(self):
         """Verifica se player está online baseado no último ping"""

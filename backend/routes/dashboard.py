@@ -470,24 +470,20 @@ def get_playback_status():
             else:
                 offline_players += 1
             
-            # Status de reprodução
-            playback_status = PLAYER_PLAYBACK_STATUS.get(player.id, {})
-            is_playing = playback_status.get('is_playing', False)
+            # Status de reprodução (ler do banco de dados)
+            is_playing = player.is_playing or False
             
-            # Verificar se heartbeat está atualizado (últimos 2 minutos)
-            last_heartbeat = playback_status.get('last_heartbeat')
+            # Verificar se o heartbeat está recente (últimos 2 minutos)
             heartbeat_fresh = False
-            if last_heartbeat:
-                try:
-                    heartbeat_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
-                    heartbeat_fresh = (current_time - heartbeat_time).total_seconds() < 120
-                except:
-                    pass
+            if player.last_playback_heartbeat:
+                heartbeat_age = (datetime.utcnow() - player.last_playback_heartbeat).total_seconds()
+                heartbeat_fresh = heartbeat_age < 120  # 2 minutos
             
-            # Determinar status final
-            if not is_online:
-                status = 'offline'
-            elif is_playing and heartbeat_fresh:
+            # Se não há heartbeat recente, considerar como não reproduzindo
+            if is_playing and not heartbeat_fresh:
+                is_playing = False
+            
+            if is_playing and heartbeat_fresh:
                 status = 'playing'
                 playing_players += 1
             else:
@@ -502,19 +498,18 @@ def get_playback_status():
                 'is_online': is_online,
                 'status': status,
                 'current_content': {
-                    'id': playback_status.get('content_id'),
-                    'title': playback_status.get('content_title'),
-                    'type': playback_status.get('content_type'),
-                    'campaign_name': playback_status.get('campaign_name'),
-                    'playlist_position': f"{playback_status.get('playlist_index', 0) + 1}/{playback_status.get('playlist_total', 1)}"
+                    'id': player.current_content_id,
+                    'title': player.current_content_title,
+                    'type': player.current_content_type,
+                    'campaign_name': player.current_campaign_name,
+                    'playlist_position': '1/1'  # Simplificado por enquanto
                 } if is_playing and heartbeat_fresh else None,
-                'last_heartbeat': last_heartbeat,
-                'start_time': playback_status.get('start_time')
+                'last_heartbeat': player.last_playback_heartbeat.isoformat() if player.last_playback_heartbeat else None,
+                'start_time': player.playback_start_time.isoformat() if player.playback_start_time else None
             })
         
         # Detectar players "fantasma" (online mas sem reprodução há mais de 10 minutos)
         ghost_players = []
-        ten_minutes_ago = current_time - timedelta(minutes=10)
         
         for player_id in online_player_ids:
             playback_status = PLAYER_PLAYBACK_STATUS.get(player_id, {})

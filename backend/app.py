@@ -663,6 +663,24 @@ def handle_playback_event(data):
         current_time = datetime.now(timezone.utc)
         
         if event_type == 'playback_start':
+            # Salvar no banco de dados em vez de memória
+            from models.player import Player
+            player = Player.query.get(player_id)
+            if player:
+                player.is_playing = True
+                player.current_content_id = event_data.get('content_id')
+                player.current_content_title = event_data.get('content_title')
+                player.current_content_type = event_data.get('content_type')
+                player.current_campaign_id = event_data.get('campaign_id')
+                player.current_campaign_name = event_data.get('campaign_name')
+                player.playback_start_time = current_time
+                player.last_playback_heartbeat = current_time
+                db.session.commit()
+                
+                print(f"[Playback] Player {player_id} iniciou reprodução: {event_data.get('content_title')}")
+                print(f"[Playback] Status salvo no banco de dados")
+            
+            # Manter também em memória para compatibilidade
             PLAYER_PLAYBACK_STATUS[player_id] = {
                 'is_playing': True,
                 'content_id': event_data.get('content_id'),
@@ -676,9 +694,6 @@ def handle_playback_event(data):
                 'playlist_total': event_data.get('playlist_total', 1),
                 'duration_expected': event_data.get('duration_expected', 0)
             }
-            print(f"[Playback] Player {player_id} iniciou reprodução: {event_data.get('content_title')}")
-            print(f"[Playback] Status salvo: {PLAYER_PLAYBACK_STATUS[player_id]}")
-            print(f"[Playback] PLAYER_PLAYBACK_STATUS completo: {PLAYER_PLAYBACK_STATUS}")
             
         elif event_type == 'playback_end':
             if player_id in PLAYER_PLAYBACK_STATUS:
