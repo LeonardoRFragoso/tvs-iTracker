@@ -44,11 +44,14 @@ class ScheduleExecutor:
             print(f"[DEBUG] Total de agendamentos no banco: {len(all_schedules)}")
             
             for s in all_schedules:
-                print(f"[DEBUG] Schedule: {s.name}, is_active: {s.is_active}, start_date: {s.start_date}, end_date: {s.end_date}")
+                campaign = Campaign.query.get(s.campaign_id)
+                campaign_active = campaign.is_active if campaign else False
+                print(f"[DEBUG] Schedule: {s.name}, is_active: {s.is_active}, campaign_active: {campaign_active}, start_date: {s.start_date}, end_date: {s.end_date}")
             
-            # Buscar agendamentos que devem estar ativos - query corrigida
-            active_schedules = Schedule.query.filter(
+            # Buscar agendamentos que devem estar ativos - incluindo verificação da campanha ativa
+            active_schedules = Schedule.query.join(Campaign).filter(
                 Schedule.is_active == True,
+                Campaign.is_active == True,  # ✅ CORREÇÃO CRÍTICA: Verificar se campanha está ativa
                 db.func.date(Schedule.start_date) <= current_date,
                 or_(Schedule.end_date.is_(None), db.func.date(Schedule.end_date) >= current_date)
             ).all()
@@ -533,6 +536,18 @@ class ScheduleExecutor:
             campaign = Campaign.query.get(schedule.campaign_id)
             if not campaign:
                 logger.error(f"Campanha {schedule.campaign_id} não encontrada")
+                return
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se campanha está ativa
+            if not campaign.is_active:
+                logger.warning(f"❌ BLOQUEADO: Campanha '{campaign.name}' está INATIVA - agendamento '{schedule.name}' não será executado")
+                print(f"[BLOCKED] Campanha '{campaign.name}' está INATIVA - agendamento '{schedule.name}' não será executado")
+                return
+            
+            # ✅ VALIDAÇÃO ADICIONAL: Verificar se agendamento está ativo
+            if not schedule.is_active:
+                logger.warning(f"❌ BLOQUEADO: Agendamento '{schedule.name}' está INATIVO")
+                print(f"[BLOCKED] Agendamento '{schedule.name}' está INATIVO")
                 return
             
             logger.info(f"Executando agendamento '{schedule.name}' no player '{player.name}'")
