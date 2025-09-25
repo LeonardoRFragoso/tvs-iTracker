@@ -1143,7 +1143,18 @@ def _ensure_schema_columns():
                     ('must_change_password', 'BOOLEAN', '0')
                 ],
                 'locations': [('company', 'VARCHAR(100)', 'iTracker')],
-                'location': [('company', 'VARCHAR(100)', 'iTracker')]  # fallback
+                'location': [('company', 'VARCHAR(100)', 'iTracker')],  # fallback
+                'players': [
+                    # Colunas de telemetria de reprodução para KPIs em tempo real
+                    ('current_content_id', 'VARCHAR(36)', None),
+                    ('current_content_title', 'VARCHAR(255)', None),
+                    ('current_content_type', 'VARCHAR(50)', None),
+                    ('current_campaign_id', 'VARCHAR(36)', None),
+                    ('current_campaign_name', 'VARCHAR(255)', None),
+                    ('is_playing', 'BOOLEAN', '0'),
+                    ('playback_start_time', 'DATETIME', None),
+                    ('last_playback_heartbeat', 'DATETIME', None)
+                ]
             }
             
             for table, columns in table_columns.items():
@@ -1155,7 +1166,10 @@ def _ensure_schema_columns():
                         for col_name, col_type, default_val in columns:
                             if col_name not in existing_cols:
                                 print(f"[DB] Adicionando coluna '{col_name}' à tabela {table}...")
-                                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type} DEFAULT '{default_val}'"))
+                                if default_val is None:
+                                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                                else:
+                                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type} DEFAULT '{default_val}'"))
                 except Exception as te:
                     print(f"[DB] Erro ao processar tabela {table}: {te}")
             
