@@ -5,9 +5,14 @@ from database import db
 # Helper to format datetime in Brazilian standard
 def fmt_br_datetime(dt):
     try:
+        # Se dt for uma string, retorná-la diretamente
+        if isinstance(dt, str):
+            return dt
+        # Se for um datetime, formatá-lo
         return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
-    except Exception:
-        return None
+    except Exception as e:
+        print(f"[WARN] Erro ao formatar datetime: {dt} - {str(e)}")
+        return str(dt) if dt else None
 
 class Location(db.Model):
     __tablename__ = 'locations'
@@ -36,6 +41,18 @@ class Location(db.Model):
     players = db.relationship('Player', backref='location_ref', lazy=True)
     
     def to_dict(self):
+        # Usar SQL direto para contar players e evitar carregar todos os objetos
+        from sqlalchemy import func, and_
+        from models.player import Player
+        
+        # Contar todos os players associados a esta location
+        player_count = db.session.query(func.count(Player.id)).filter(Player.location_id == self.id).scalar() or 0
+        
+        # Contar players online associados a esta location
+        online_count = db.session.query(func.count(Player.id)).filter(
+            and_(Player.location_id == self.id, Player.is_online == True)
+        ).scalar() or 0
+        
         return {
             'id': self.id,
             'name': self.name,
@@ -48,8 +65,8 @@ class Location(db.Model):
             'peak_hours_start': self.peak_hours_start.strftime('%H:%M') if self.peak_hours_start else None,
             'peak_hours_end': self.peak_hours_end.strftime('%H:%M') if self.peak_hours_end else None,
             'is_active': self.is_active,
-            'player_count': len(self.players),
-            'online_players': len([p for p in self.players if p.is_online]),
+            'player_count': player_count,
+            'online_players': online_count,
             'created_at': fmt_br_datetime(self.created_at)
         }
     

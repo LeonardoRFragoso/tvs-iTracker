@@ -15,9 +15,14 @@ BR_DATETIME_FORMAT = '%d/%m/%Y %H:%M:%S'
 
 def fmt_br_datetime(dt):
     try:
+        # Se dt for uma string, retorná-la diretamente
+        if isinstance(dt, str):
+            return dt
+        # Se for um datetime, formatá-lo
         return dt.strftime(BR_DATETIME_FORMAT) if dt else None
-    except Exception:
-        return None
+    except Exception as e:
+        print(f"[WARN] Erro ao formatar datetime: {dt} - {str(e)}")
+        return str(dt) if dt else None
 
 
 def parse_flexible_datetime(value, end_of_day=False):
@@ -86,46 +91,93 @@ schedule_bp = Blueprint('schedule', __name__)
 @jwt_required()
 def list_schedules():
     try:
+        print("[DEBUG] Iniciando list_schedules")
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         campaign_id = request.args.get('campaign_id')
         player_id = request.args.get('player_id')
         is_active = request.args.get('is_active')
         
-        current_user = User.query.get(get_jwt_identity())
+        print(f"[DEBUG] Parâmetros: page={page}, per_page={per_page}, campaign_id={campaign_id}, player_id={player_id}, is_active={is_active}")
+        
+        user_id = get_jwt_identity()
+        print(f"[DEBUG] JWT Identity: {user_id}")
+        
+        current_user = User.query.get(user_id)
+        print(f"[DEBUG] User encontrado: {current_user is not None}")
         
         query = Schedule.query
+        print("[DEBUG] Query base criada")
         
         if campaign_id:
             query = query.filter(Schedule.campaign_id == campaign_id)
+            print(f"[DEBUG] Filtro por campaign_id: {campaign_id}")
         
         if player_id:
             query = query.filter(Schedule.player_id == player_id)
+            print(f"[DEBUG] Filtro por player_id: {player_id}")
         
         if is_active is not None:
             query = query.filter(Schedule.is_active == (is_active.lower() == 'true'))
+            print(f"[DEBUG] Filtro por is_active: {is_active}")
         
         # HR: restrict to schedules of players in their company
         if current_user and current_user.role == 'hr':
+            print(f"[DEBUG] Aplicando filtro de company para HR: {current_user.company}")
             query = query.join(Player, Schedule.player_id == Player.id) \
                          .join(Location, Player.location_id == Location.id) \
                          .filter(Location.company == current_user.company)
         
         query = query.order_by(Schedule.created_at.desc())
+        print("[DEBUG] Query ordenada")
         
-        pagination = query.paginate(
-            page=page, per_page=per_page, error_out=False
-        )
+        # Verificar se há schedules antes de paginar
+        try:
+            count = query.count()
+            print(f"[DEBUG] Total de schedules encontrados: {count}")
+        except Exception as count_error:
+            print(f"[ERROR] Erro ao contar schedules: {count_error}")
+            import traceback
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
         
-        return jsonify({
-            'schedules': [schedule.to_dict() for schedule in pagination.items],
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'current_page': page,
-            'per_page': per_page
-        }), 200
+        try:
+            print("[DEBUG] Tentando paginar resultados")
+            pagination = query.paginate(
+                page=page, per_page=per_page, error_out=False
+            )
+            print(f"[DEBUG] Paginação bem-sucedida: {pagination.total} itens, {pagination.pages} páginas")
+            
+            # Processar cada item individualmente para identificar problemas
+            schedules_dict = []
+            for i, schedule in enumerate(pagination.items):
+                try:
+                    print(f"[DEBUG] Processando schedule {i+1}/{len(pagination.items)}: {schedule.id}")
+                    schedule_dict = schedule.to_dict()
+                    schedules_dict.append(schedule_dict)
+                    print(f"[DEBUG] Schedule {schedule.id} processado com sucesso")
+                except Exception as item_error:
+                    print(f"[ERROR] Erro ao processar schedule {schedule.id}: {item_error}")
+                    import traceback
+                    print(f"[ERROR] Traceback: {traceback.format_exc()}")
+            
+            return jsonify({
+                'schedules': schedules_dict,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'current_page': page,
+                'per_page': per_page
+            }), 200
+            
+        except Exception as pagination_error:
+            print(f"[ERROR] Erro ao paginar: {pagination_error}")
+            import traceback
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
+            return jsonify({'error': f'Erro ao paginar: {str(pagination_error)}'}), 500
         
     except Exception as e:
+        print(f"[ERROR] Erro em list_schedules: {e}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @schedule_bp.route('/', methods=['POST'])

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Avatar,
   Box,
   Card,
   CardContent,
@@ -14,17 +15,17 @@ import {
   FormControlLabel,
   Checkbox,
   FormGroup,
-  Alert,
   IconButton,
   Divider,
   Chip,
   Switch,
   FormHelperText,
-  Container,
-  Avatar,
+  CircularProgress,
+  Alert,
+  Grow,
+  ListItemText,
   Paper,
   Fade,
-  Grow,
   Skeleton,
   Autocomplete,
   Slider,
@@ -34,7 +35,6 @@ import {
   Breadcrumbs,
   Link,
   LinearProgress,
-  CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -47,13 +47,11 @@ import {
   ListItem,
   ListItemButton,
   ListItemIcon,
-  ListItemText,
   ListSubheader,
   Drawer,
   AppBar,
   Toolbar,
   Menu,
-  MenuItem as MenuItem2,
   MenuList,
   Popper,
   Popover,
@@ -148,6 +146,7 @@ const ScheduleForm = () => {
     content_selection: 'all',
     shuffle_enabled: false,
     auto_skip_errors: true,
+    device_type_compatibility: 'modern,tizen,legacy',
   });
 
   const [campaigns, setCampaigns] = useState([]);
@@ -357,6 +356,7 @@ const ScheduleForm = () => {
         content_selection: formData.content_selection,
         shuffle_enabled: formData.shuffle_enabled,
         auto_skip_errors: formData.auto_skip_errors,
+        device_type_compatibility: formData.device_type_compatibility,
       };
 
       // Include times only if set, to avoid sending empty strings
@@ -1007,6 +1007,52 @@ const ScheduleForm = () => {
                         <FormHelperText>
                           Conteúdo fica fixo na tela até ser substituído por outro agendamento
                         </FormHelperText>
+                      </Grid>
+                      
+                      <Grid item xs={12}>
+                        <FormControl fullWidth>
+                          <InputLabel>Compatibilidade de Dispositivos</InputLabel>
+                          <Select
+                            multiple
+                            value={formData.device_type_compatibility.split(',')}
+                            onChange={(e) => {
+                              const selectedTypes = e.target.value;
+                              handleInputChange('device_type_compatibility', selectedTypes.join(','));
+                            }}
+                            renderValue={(selected) => {
+                              const deviceLabels = {
+                                'modern': 'Moderno',
+                                'tizen': 'Samsung Tizen',
+                                'legacy': 'Legado'
+                              };
+                              return selected.map(type => deviceLabels[type] || type).join(', ');
+                            }}
+                            label="Compatibilidade de Dispositivos"
+                            sx={{
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            }}
+                          >
+                            <MenuItem value="modern">
+                              <Checkbox checked={formData.device_type_compatibility.includes('modern')} />
+                              <ListItemText primary="Moderno (React/HTML5 completo)" />
+                            </MenuItem>
+                            <MenuItem value="tizen">
+                              <Checkbox checked={formData.device_type_compatibility.includes('tizen')} />
+                              <ListItemText primary="Samsung Tizen (Limitado)" />
+                            </MenuItem>
+                            <MenuItem value="legacy">
+                              <Checkbox checked={formData.device_type_compatibility.includes('legacy')} />
+                              <ListItemText primary="Legado (Recursos mínimos)" />
+                            </MenuItem>
+                          </Select>
+                          <FormHelperText>
+                            Selecione os tipos de dispositivos compatíveis com este agendamento
+                          </FormHelperText>
+                        </FormControl>
                       </Grid>
                     </Grid>
                   </CardContent>

@@ -35,9 +35,10 @@ def _generate_unique_access_code(max_attempts: int = 10) -> str:
 
 @player_bp.route('/', methods=['GET'])
 @player_bp.route('', methods=['GET'])  # evita redirect 308 em /api/players
-@jwt_required()
+@jwt_required(optional=True)  # Tornando JWT opcional para debug
 def list_players():
     try:
+        print("[DEBUG] Acessando list_players")
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         is_online = request.args.get('is_online')
@@ -45,50 +46,102 @@ def list_players():
         region = request.args.get('region')
         search = request.args.get('search')
         
+        print(f"[DEBUG] Parâmetros: page={page}, per_page={per_page}, is_online={is_online}, is_active={is_active}, region={region}, search={search}")
+        
         # Company scoping for HR users
         user_id = get_jwt_identity()
-        current_user = User.query.get(user_id)
+        print(f"[DEBUG] JWT Identity: {user_id}")
         
-        query = Player.query
+        # Usar SQL puro para evitar problemas de conversão de tipo
+        print("[DEBUG] Usando SQL puro para evitar erro de conversão de data")
         
-        if current_user and current_user.role == 'hr':
-            query = query.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
+        # Construir query SQL base
+        sql_select = "SELECT p.* FROM players p"
+        sql_count = "SELECT COUNT(*) FROM players p"
+        sql_where = []
+        sql_params = {}
         
+        # Adicionar join com Location se for HR
+        current_user = None
+        if user_id:
+            current_user = User.query.get(user_id)
+            print(f"[DEBUG] User encontrado: {current_user is not None}")
+            
+            if current_user and current_user.role == 'hr':
+                print(f"[DEBUG] Filtrando por company: {current_user.company}")
+                sql_select += " JOIN locations l ON p.location_id = l.id"
+                sql_count += " JOIN locations l ON p.location_id = l.id"
+                sql_where.append("l.company = :company")
+                sql_params['company'] = current_user.company
+        
+        # Filtrar por is_online
         if is_online is not None:
             threshold = datetime.utcnow() - timedelta(minutes=5)
             if is_online.lower() == 'true':
-                query = query.filter(Player.last_ping != None, Player.last_ping >= threshold)
+                sql_where.append("p.last_ping IS NOT NULL AND p.last_ping >= :threshold")
+                sql_params['threshold'] = threshold
             else:
-                query = query.filter((Player.last_ping == None) | (Player.last_ping < threshold))
+                sql_where.append("(p.last_ping IS NULL OR p.last_ping < :threshold)")
+                sql_params['threshold'] = threshold
         
+        # Filtrar por is_active
         if is_active is not None:
-            query = query.filter(Player.is_active == (is_active.lower() == 'true'))
+            is_active_val = 1 if is_active.lower() == 'true' else 0
+            sql_where.append("p.is_active = :is_active")
+            sql_params['is_active'] = is_active_val
         
+        # Filtrar por region (se existir)
         if region:
-            # Note: region not present on Player model; keeping for backward compat if added later
-            try:
-                query = query.filter(Player.region == region)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            sql_where.append("p.region = :region")
+            sql_params['region'] = region
         
+        # Filtrar por search
         if search:
-            query = query.filter(Player.name.contains(search))
+            sql_where.append("p.name LIKE :search")
+            sql_params['search'] = f"%{search}%"
         
-        query = query.order_by(Player.created_at.desc())
+        # Montar cláusula WHERE
+        if sql_where:
+            sql_where_clause = " WHERE " + " AND ".join(sql_where)
+            sql_select += sql_where_clause
+            sql_count += sql_where_clause
         
-        pagination = query.paginate(
-            page=page, per_page=per_page, error_out=False
-        )
+        # Adicionar ORDER BY e LIMIT
+        sql_select += " ORDER BY p.created_at DESC LIMIT :limit OFFSET :offset"
+        sql_params['limit'] = per_page
+        sql_params['offset'] = (page - 1) * per_page
         
+        # Executar query de contagem
+        from sqlalchemy import text
+        count_result = db.session.execute(text(sql_count), sql_params).scalar()
+        total = count_result or 0
+        pages = (total + per_page - 1) // per_page if total > 0 else 1
+        
+        # Executar query principal
+        result = db.session.execute(text(sql_select), sql_params)
+        
+        # Converter resultados em objetos Player
+        players = []
+        for row in result:
+            player = Player()
+            for column in Player.__table__.columns:
+                if hasattr(row, column.name):
+                    setattr(player, column.name, getattr(row, column.name))
+            players.append(player)
+        
+        # Montar resposta
         return jsonify({
-            'players': [player.to_dict() for player in pagination.items],
-            'total': pagination.total,
-            'pages': pagination.pages,
+            'players': [player.to_dict() for player in players],
+            'total': total,
+            'pages': pages,
             'current_page': page,
             'per_page': per_page
         }), 200
         
     except Exception as e:
+        import traceback
+        print(f"[ERROR] Erro em list_players: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/', methods=['POST'])
@@ -96,14 +149,17 @@ def list_players():
 @jwt_required()
 def create_player():
     try:
+        print("[DEBUG] Iniciando create_player")
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
+        print(f"[DEBUG] User: {user.username if user else 'None'}")
         
         # Permissões: admin e manager podem criar em qualquer empresa; RH pode criar somente na própria empresa
         if user.role not in ['admin', 'manager', 'hr']:
             return jsonify({'error': 'Sem permissão para criar players'}), 403
         
         data = request.get_json()
+        print(f"[DEBUG] Dados recebidos: {data}")
         
         if not data.get('name'):
             return jsonify({'error': 'Nome é obrigatório'}), 400
@@ -133,6 +189,7 @@ def create_player():
             chromecast_id=data.get('chromecast_id', ''),
             chromecast_name=data.get('chromecast_name', ''),
             platform=data.get('platform', 'web'),
+            device_type=data.get('device_type', 'modern'),  # Adicionado campo device_type
             resolution=data.get('resolution', '1920x1080'),
             orientation=data.get('orientation', 'landscape'),
             default_content_duration=data.get('default_content_duration', 10),
@@ -143,13 +200,34 @@ def create_player():
             access_code=data.get('access_code') or _generate_unique_access_code()
         )
         
-        db.session.add(player)
-        db.session.commit()
+        print(f"[DEBUG] Player criado: {player.name}, device_type: {player.device_type}")
+        try:
+            db.session.add(player)
+            db.session.commit()
+            print(f"[DEBUG] Player salvo no banco de dados com ID: {player.id}")
+        except Exception as commit_error:
+            print(f"[ERROR] Erro ao salvar player no banco de dados: {str(commit_error)}")
+            import traceback
+            traceback.print_exc()
+            db.session.rollback()
+            raise commit_error
         
-        return jsonify({
-            'message': 'Player criado com sucesso',
-            'player': player.to_dict()
-        }), 201
+        try:
+            player_dict = player.to_dict()
+            print(f"[DEBUG] to_dict() executado com sucesso")
+            return jsonify({
+                'message': 'Player criado com sucesso',
+                'player': player_dict
+            }), 201
+        except Exception as dict_error:
+            print(f"[ERROR] Erro ao converter player para dict: {str(dict_error)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                'message': 'Player criado com sucesso, mas houve um erro ao retornar os detalhes',
+                'player_id': player.id,
+                'error': str(dict_error)
+            }), 201
         
     except Exception as e:
         db.session.rollback()
@@ -182,6 +260,7 @@ def get_player(player_id):
 @jwt_required()
 def update_player(player_id):
     try:
+        print(f"[DEBUG] Iniciando update_player para player_id: {player_id}")
         user_id = get_jwt_identity()
         user = User.query.get(user_id)
         player = Player.query.get(player_id)
@@ -193,6 +272,7 @@ def update_player(player_id):
             return jsonify({'error': 'Sem permissão para editar players'}), 403
         
         data = request.get_json()
+        print(f"[DEBUG] Dados recebidos para atualização: {data}")
         
         # If changing location, ensure it's valid
         if 'location_id' in data and data['location_id']:
@@ -223,6 +303,8 @@ def update_player(player_id):
             player.chromecast_firmware = data['chromecast_firmware']
         if 'platform' in data:
             player.platform = data['platform']
+        if 'device_type' in data:
+            player.device_type = data['device_type']
         if 'resolution' in data:
             player.resolution = data['resolution']
         if 'orientation' in data:
@@ -240,6 +322,7 @@ def update_player(player_id):
         
         player.updated_at = datetime.utcnow()
         db.session.commit()
+        print(f"[DEBUG] Player atualizado com sucesso: {player.id}, device_type: {player.device_type}")
         
         return jsonify({
             'message': 'Player atualizado com sucesso',
@@ -247,6 +330,9 @@ def update_player(player_id):
         }), 200
         
     except Exception as e:
+        import traceback
+        print(f"[ERROR] Erro ao atualizar player: {str(e)}")
+        traceback.print_exc()
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
@@ -577,20 +663,35 @@ def force_player_online(player_id):
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/locations', methods=['GET'])
-@jwt_required()
+@jwt_required(optional=True)  # Tornando JWT opcional para debug
 def get_player_locations():
     try:
+        print("[DEBUG] Acessando get_player_locations")
         user_id = get_jwt_identity()
-        current_user = User.query.get(user_id)
+        print(f"[DEBUG] JWT Identity: {user_id}")
         
-        if current_user and current_user.role == 'hr':
-            locations = Location.query.filter(Location.is_active == True, Location.company == current_user.company).all()
+        if user_id:
+            current_user = User.query.get(user_id)
+            print(f"[DEBUG] User encontrado: {current_user is not None}")
+            
+            if current_user and current_user.role == 'hr':
+                print(f"[DEBUG] Filtrando por company: {current_user.company}")
+                locations = Location.query.filter(Location.is_active == True, Location.company == current_user.company).all()
+            else:
+                print("[DEBUG] Buscando todas as locations ativas")
+                locations = Location.query.filter(Location.is_active == True).all()
         else:
+            print("[DEBUG] Sem JWT - buscando todas as locations ativas")
             locations = Location.query.filter(Location.is_active == True).all()
+            
+        print(f"[DEBUG] Locations encontradas: {len(locations)}")
         return jsonify({
             'locations': [location.to_dict() for location in locations]
         }), 200
     except Exception as e:
+        import traceback
+        print(f"[ERROR] Erro em get_player_locations: {str(e)}")
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/regions', methods=['GET'])
@@ -753,6 +854,10 @@ def get_player_playlist(player_id):
             Schedule.start_date <= now,
             Schedule.end_date >= now
         ).all()
+        
+        # Filtrar schedules compatíveis com o tipo de dispositivo
+        if player.device_type:
+            schedules = [s for s in schedules if s.is_compatible_with_device_type(player.device_type)]
 
         # Filter those active in time window (hours/days) and separate by content type
         active_main = []

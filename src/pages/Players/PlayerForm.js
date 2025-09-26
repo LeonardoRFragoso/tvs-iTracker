@@ -49,6 +49,7 @@ const PlayerForm = () => {
     chromecast_id: '',
     chromecast_name: '',
     platform: 'web',
+    device_type: 'modern',
     resolution: '1920x1080',
     orientation: 'landscape',
     default_content_duration: 10,
@@ -280,6 +281,29 @@ const PlayerForm = () => {
                           <MenuItem value="android">Android</MenuItem>
                           <MenuItem value="windows">Windows</MenuItem>
                           <MenuItem value="chromecast">Chromecast</MenuItem>
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          select
+                          label="Tipo de Dispositivo"
+                          value={formData.device_type}
+                          onChange={(e) => handleChange('device_type', e.target.value)}
+                          helperText="Selecione o tipo de dispositivo para determinar compatibilidade de conteúdo"
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
+                          }}
+                        >
+                          <MenuItem value="modern">Moderno (React/HTML5 completo)</MenuItem>
+                          <MenuItem value="tizen">Samsung Tizen (Limitado)</MenuItem>
+                          <MenuItem value="legacy">Legado (Recursos mínimos)</MenuItem>
                         </TextField>
                       </Grid>
                       <Grid item xs={12}>

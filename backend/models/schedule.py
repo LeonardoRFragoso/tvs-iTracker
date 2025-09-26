@@ -6,9 +6,14 @@ import uuid
 # Module-level helper to format datetime in Brazilian standard
 def fmt_br_datetime(dt):
     try:
+        # Se dt for uma string, retorná-la diretamente
+        if isinstance(dt, str):
+            return dt
+        # Se for um datetime, formatá-lo
         return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
-    except Exception:
-        return None
+    except Exception as e:
+        print(f"[WARN] Erro ao formatar datetime: {dt} - {str(e)}")
+        return str(dt) if dt else None
 
 class Schedule(db.Model):
     __tablename__ = 'schedules'
@@ -55,6 +60,9 @@ class Schedule(db.Model):
     shuffle_enabled = db.Column(db.Boolean, default=False)  # embaralhar conteúdos
     auto_skip_errors = db.Column(db.Boolean, default=True)  # pular conteúdos com erro
     
+    # Compatibilidade com tipos de dispositivos
+    device_type_compatibility = db.Column(db.String(100), default='modern,tizen,legacy')  # tipos de dispositivos compatíveis
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -89,6 +97,7 @@ class Schedule(db.Model):
             'content_selection': self.content_selection,
             'shuffle_enabled': self.shuffle_enabled,
             'auto_skip_errors': self.auto_skip_errors,
+            'device_type_compatibility': self.device_type_compatibility,
             'created_at': fmt_br_datetime(self.created_at),
             'updated_at': fmt_br_datetime(self.updated_at),
             'player': self.player.to_dict() if self.player else None,
@@ -263,6 +272,17 @@ class Schedule(db.Model):
             return content.content.duration
         else:
             return 10  # Duração padrão
+    
+    def is_compatible_with_device_type(self, device_type):
+        """Verifica se o agendamento é compatível com o tipo de dispositivo"""
+        if not device_type or not self.device_type_compatibility:
+            return True  # Se não há restrição, é compatível
+        
+        # Converter para lista de tipos compatíveis
+        compatible_types = [t.strip() for t in self.device_type_compatibility.split(',')]
+        
+        # Verificar se o tipo do dispositivo está na lista de compatíveis
+        return device_type in compatible_types
     
     def validate_schedule(self):
         """Valida a configuração do agendamento"""
