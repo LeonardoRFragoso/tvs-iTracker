@@ -793,6 +793,160 @@ def connect_player(player_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+    
+@player_bp.route('/<player_id>/playback_start', methods=['POST'])
+def playback_start(player_id):
+    """Public endpoint: registra início de reprodução e atualiza telemetria."""
+    try:
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        data = request.get_json() or {}
+        now = datetime.utcnow()
+
+        # Atualizar status de reprodução do player
+        player.is_playing = True
+        player.current_content_id = data.get('content_id')
+        player.current_content_title = data.get('content_title')
+        player.current_content_type = data.get('content_type')
+        player.current_campaign_id = data.get('campaign_id')
+        player.current_campaign_name = data.get('campaign_name')
+        player.playback_start_time = now
+        player.last_playback_heartbeat = now
+        # Manter presença atualizada
+        player.status = 'online'
+        player.last_ping = now
+
+        db.session.commit()
+
+        # Notificar dashboards (best-effort)
+        try:
+            from app import socketio
+            socketio.emit('playback_status_update', {
+                'player_id': player_id,
+                'event_type': 'playback_start',
+                'status': {
+                    'is_playing': True,
+                    'content_id': player.current_content_id,
+                    'content_title': player.current_content_title,
+                    'content_type': player.current_content_type,
+                    'campaign_id': player.current_campaign_id,
+                    'campaign_name': player.current_campaign_name,
+                    'start_time': player.playback_start_time.isoformat() if player.playback_start_time else None,
+                    'last_heartbeat': player.last_playback_heartbeat.isoformat() if player.last_playback_heartbeat else None
+                },
+                'timestamp': now.isoformat()
+            }, room='admin')
+        except Exception:
+            pass
+
+        return jsonify({'message': 'playback_start registrado'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@player_bp.route('/<player_id>/heartbeat', methods=['POST'])
+def playback_heartbeat(player_id):
+    """Public endpoint: atualiza heartbeat de reprodução."""
+    try:
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        data = request.get_json() or {}
+        now = datetime.utcnow()
+
+        # Atualizar heartbeat e campos opcionais
+        player.last_playback_heartbeat = now
+        if 'is_playing' in data:
+            player.is_playing = bool(data.get('is_playing'))
+        if data.get('content_id'):
+            player.current_content_id = data.get('content_id')
+        if data.get('content_title'):
+            player.current_content_title = data.get('content_title')
+        if data.get('content_type'):
+            player.current_content_type = data.get('content_type')
+        if data.get('campaign_id'):
+            player.current_campaign_id = data.get('campaign_id')
+        if data.get('campaign_name'):
+            player.current_campaign_name = data.get('campaign_name')
+        # Manter presença atualizada
+        player.status = 'online'
+        player.last_ping = now
+
+        db.session.commit()
+
+        # Notificar dashboards (best-effort)
+        try:
+            from app import socketio
+            socketio.emit('playback_status_update', {
+                'player_id': player_id,
+                'event_type': 'playback_heartbeat',
+                'status': {
+                    'is_playing': player.is_playing,
+                    'content_id': player.current_content_id,
+                    'content_title': player.current_content_title,
+                    'content_type': player.current_content_type,
+                    'campaign_id': player.current_campaign_id,
+                    'campaign_name': player.current_campaign_name,
+                    'last_heartbeat': player.last_playback_heartbeat.isoformat() if player.last_playback_heartbeat else None
+                },
+                'timestamp': now.isoformat()
+            }, room='admin')
+        except Exception:
+            pass
+
+        return jsonify({'message': 'heartbeat registrado'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@player_bp.route('/<player_id>/playback_end', methods=['POST'])
+def playback_end(player_id):
+    """Public endpoint: registra fim da reprodução."""
+    try:
+        player = Player.query.get(player_id)
+        if not player:
+            return jsonify({'error': 'Player não encontrado'}), 404
+
+        data = request.get_json() or {}
+        now = datetime.utcnow()
+
+        player.is_playing = False
+        player.last_playback_heartbeat = now
+        # Manter presença atualizada
+        player.status = 'online'
+        player.last_ping = now
+
+        db.session.commit()
+
+        # Notificar dashboards (best-effort)
+        try:
+            from app import socketio
+            socketio.emit('playback_status_update', {
+                'player_id': player_id,
+                'event_type': 'playback_end',
+                'status': {
+                    'is_playing': False,
+                    'content_id': player.current_content_id,
+                    'content_title': player.current_content_title,
+                    'content_type': player.current_content_type,
+                    'campaign_id': player.current_campaign_id,
+                    'campaign_name': player.current_campaign_name,
+                    'end_time': now.isoformat()
+                },
+                'timestamp': now.isoformat()
+            }, room='admin')
+        except Exception:
+            pass
+
+        return jsonify({'message': 'playback_end registrado'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/<player_id>/info', methods=['GET'])
 def get_player_info_public(player_id):

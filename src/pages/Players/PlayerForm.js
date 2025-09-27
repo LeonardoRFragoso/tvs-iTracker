@@ -87,7 +87,12 @@ const PlayerForm = () => {
   const loadPlayer = async () => {
     try {
       const response = await axios.get(`/players/${id}`);
-      setFormData(response.data);
+      const data = response.data || {};
+      // Coagir players legados para Tizen na edição (UI possui apenas Moderno e Tizen)
+      if (data.device_type === 'legacy') {
+        data.device_type = 'tizen';
+      }
+      setFormData(data);
     } catch (err) {
       setError('Erro ao carregar player');
     }
@@ -288,9 +293,9 @@ const PlayerForm = () => {
                           fullWidth
                           select
                           label="Tipo de Dispositivo"
-                          value={formData.device_type}
-                          onChange={(e) => handleChange('device_type', e.target.value)}
-                          helperText="Selecione o tipo de dispositivo para determinar compatibilidade de conteúdo"
+                          value={formData.device_type === 'legacy' ? 'tizen' : formData.device_type}
+                          onChange={(e) => handleChange('device_type', e.target.value === 'legacy' ? 'tizen' : e.target.value)}
+                          helperText="Apenas Moderno e Tizen. Dispositivos legados são tratados como Tizen automaticamente."
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
@@ -302,8 +307,7 @@ const PlayerForm = () => {
                           }}
                         >
                           <MenuItem value="modern">Moderno (React/HTML5 completo)</MenuItem>
-                          <MenuItem value="tizen">Samsung Tizen (Limitado)</MenuItem>
-                          <MenuItem value="legacy">Legado (Recursos mínimos)</MenuItem>
+                          <MenuItem value="tizen">Samsung Tizen (inclui Legacy)</MenuItem>
                         </TextField>
                       </Grid>
                       <Grid item xs={12}>
