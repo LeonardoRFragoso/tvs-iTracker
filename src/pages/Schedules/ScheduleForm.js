@@ -235,6 +235,8 @@ const ScheduleForm = () => {
         content_selection: schedule.content_selection || 'all',
         shuffle_enabled: schedule.shuffle_enabled || false,
         auto_skip_errors: schedule.auto_skip_errors !== false,
+        // Garantir valor padrão para evitar undefined em .split()/.includes()
+        device_type_compatibility: schedule.device_type_compatibility || 'modern,tizen,legacy',
       });
     } catch (err) {
       setError('Erro ao carregar agendamento');
@@ -1014,7 +1016,11 @@ const ScheduleForm = () => {
                           <InputLabel>Compatibilidade de Dispositivos</InputLabel>
                           <Select
                             multiple
-                            value={formData.device_type_compatibility.split(',')}
+                            value={
+                              typeof formData.device_type_compatibility === 'string' && formData.device_type_compatibility.length > 0
+                                ? formData.device_type_compatibility.split(',')
+                                : []
+                            }
                             onChange={(e) => {
                               const selectedTypes = e.target.value;
                               handleInputChange('device_type_compatibility', selectedTypes.join(','));
@@ -1037,15 +1043,15 @@ const ScheduleForm = () => {
                             }}
                           >
                             <MenuItem value="modern">
-                              <Checkbox checked={formData.device_type_compatibility.includes('modern')} />
+                              <Checkbox checked={(formData.device_type_compatibility || '').includes('modern')} />
                               <ListItemText primary="Moderno (React/HTML5 completo)" />
                             </MenuItem>
                             <MenuItem value="tizen">
-                              <Checkbox checked={formData.device_type_compatibility.includes('tizen')} />
+                              <Checkbox checked={(formData.device_type_compatibility || '').includes('tizen')} />
                               <ListItemText primary="Samsung Tizen (Limitado)" />
                             </MenuItem>
                             <MenuItem value="legacy">
-                              <Checkbox checked={formData.device_type_compatibility.includes('legacy')} />
+                              <Checkbox checked={(formData.device_type_compatibility || '').includes('legacy')} />
                               <ListItemText primary="Legado (Recursos mínimos)" />
                             </MenuItem>
                           </Select>
