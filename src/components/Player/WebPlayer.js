@@ -12,6 +12,15 @@ import {
 import { useSocket } from '../../contexts/SocketContext';
 import axios from '../../config/axios';
 
+// Detecta modo legado automaticamente para rotas de Kiosk/TV
+const isBrowser = typeof window !== 'undefined';
+const currentPath = isBrowser ? (window.location.pathname || '') : '';
+const LEGACY_MODE = isBrowser && (
+  currentPath.startsWith('/kiosk') ||
+  currentPath.startsWith('/k/') ||
+  currentPath.startsWith('/tv')
+);
+
 const WebPlayer = ({ playerId, fullscreen = false }) => {
   const { socket, joinPlayerRoom } = useSocket();
   
@@ -28,6 +37,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const [lastLoadTime, setLastLoadTime] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [showControls, setShowControls] = useState(false);
   const [segments, setSegments] = useState([]);
   const [currentSegmentIdx, setCurrentSegmentIdx] = useState(-1);
   const [showCampaignBanner, setShowCampaignBanner] = useState(false);
@@ -64,10 +74,11 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
   const loadTimeoutRef = useRef(null);
   const preloadCacheRef = useRef({});
 
-  // Constantes
-  const RECONNECT_DELAY = 15000;
+  // Constantes (ajustadas para modo legado)
   const MAX_ATTEMPTS = 5;
   const CIRCUIT_BREAKER_TIMEOUT = 30000;
+  const RECONNECT_DELAY = LEGACY_MODE ? 30000 : 15000;
+  const HEARTBEAT_INTERVAL_MS = LEGACY_MODE ? 60000 : 30000;
 
   // Main initialization effect
   useEffect(() => {
@@ -311,7 +322,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
           playlist_total: playlist.length
         });
       }
-    }, 30000); // Heartbeat a cada 30 segundos
+    }, HEARTBEAT_INTERVAL_MS);
   }, [sendPlaybackEvent, currentContent, isPlaying, currentIndex, playlist.length]);
 
   // Função para parar heartbeat de reprodução
@@ -355,6 +366,22 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       console.log('[WebPlayer] Player ID:', playerId);
       setIsPlaying(true);
       playbackStartTimeRef.current = Date.now();
+
+      // Tentar iniciar reprodução explicitamente (autoplay pode falhar em TVs antigas)
+      if (currentContent.type === 'video' && mediaRef.current && typeof mediaRef.current.play === 'function') {
+        try {
+          const p = mediaRef.current.play();
+          if (p && typeof p.catch === 'function') {
+            p.catch(() => {
+              try { mediaRef.current.controls = true; } catch (_) {}
+              setShowControls(true);
+            });
+          }
+        } catch (_) {
+          try { mediaRef.current.controls = true; } catch (_) {}
+          setShowControls(true);
+        }
+      }
       
       // Enviar evento de início de reprodução
       console.log('[WebPlayer] Enviando playback_start...');
@@ -463,6 +490,9 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
       console.error('[WebPlayer] Erro na mídia:', e);
       setIsPlaying(false);
       stopPlaybackHeartbeat();
+      // Fallback: exibir controles para permitir gesto do usuário
+      try { if (mediaRef.current) mediaRef.current.controls = true; } catch (_) {}
+      setShowControls(true);
     };
 
     // Adicionar event listeners apenas para vídeos
@@ -483,8 +513,9 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
         handlePlay();
       }, 100);
 
-      // Simular duração da imagem (padrão 10 segundos)
-      const imageDuration = currentContent.duration || 10000;
+      // Simular duração da imagem (em segundos → ms quando necessário)
+      const rawDur = currentContent.duration || playbackConfig.content_duration || 10;
+      const imageDuration = rawDur > 1000 ? rawDur : (rawDur * 1000);
       setTimeout(() => {
         handleEnded();
       }, imageDuration);
@@ -510,7 +541,7 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     const commonStyle = {
       width: '100%',
       height: '100%',
-      objectFit: 'contain',
+      ...(LEGACY_MODE ? {} : { objectFit: 'contain' }),
       backgroundColor: '#000',
     };
 
@@ -525,7 +556,8 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
             muted={muted}
             playsInline
             autoPlay
-            preload="auto"
+            preload={LEGACY_MODE ? 'metadata' : 'auto'}
+            controls={showControls}
             loop={playbackConfig.playback_mode === 'loop_infinite' || (playlist.length === 1 && playbackConfig.loop_behavior === 'infinite')}
           />
         );
@@ -648,25 +680,27 @@ const WebPlayer = ({ playerId, fullscreen = false }) => {
     >
       {renderContent()}
       
-      {/* Progress Bar */}
-      <LinearProgress
-        variant="determinate"
-        value={progress}
-        sx={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 4,
-          backgroundColor: 'rgba(255,255,255,0.3)',
-          '& .MuiLinearProgress-bar': {
-            backgroundColor: '#1976d2',
-          },
-        }}
-      />
+      {/* Progress Bar (oculta no modo legado) */}
+      {!LEGACY_MODE && (
+        <LinearProgress
+          variant="determinate"
+          value={progress}
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 4,
+            backgroundColor: 'rgba(255,255,255,0.3)',
+            '& .MuiLinearProgress-bar': {
+              backgroundColor: '#1976d2',
+            },
+          }}
+        />
+      )}
       
-      {/* Content Info Overlay */}
-      {!fullscreen && currentContent && (
+      {/* Content Info Overlay (oculta no modo legado) */}
+      {!fullscreen && !LEGACY_MODE && currentContent && (
         <Box
           sx={{
             position: 'absolute',

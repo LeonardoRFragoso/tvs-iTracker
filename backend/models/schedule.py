@@ -275,14 +275,23 @@ class Schedule(db.Model):
     
     def is_compatible_with_device_type(self, device_type):
         """Verifica se o agendamento é compatível com o tipo de dispositivo"""
-        if not device_type or not self.device_type_compatibility:
-            return True  # Se não há restrição, é compatível
-        
-        # Converter para lista de tipos compatíveis
-        compatible_types = [t.strip() for t in self.device_type_compatibility.split(',')]
-        
-        # Verificar se o tipo do dispositivo está na lista de compatíveis
-        return device_type in compatible_types
+        # Sem restrição explícita → compatível
+        if not self.device_type_compatibility:
+            return True
+
+        # Normaliza lista de tipos
+        compatible_types = [t.strip() for t in str(self.device_type_compatibility or '').split(',') if t and str(t).strip()]
+
+        # Se vazio após normalização, considerar compatível
+        if not compatible_types:
+            return True
+
+        # Política: 'legacy' representa compatibilidade de recursos mínimos ⇒ vale para todos
+        if 'legacy' in compatible_types:
+            return True
+
+        # Caso contrário, exigir correspondência explícita
+        return (device_type or '').strip() in compatible_types
     
     def validate_schedule(self):
         """Valida a configuração do agendamento"""

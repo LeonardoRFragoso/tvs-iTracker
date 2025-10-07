@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_from_directory, make_response, redirect, g
+from werkzeug.routing import BaseConverter
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -74,6 +75,12 @@ socketio = SocketIO(app, cors_allowed_origins="*",
                   async_mode='threading', logger=False, engineio_logger=False, 
                   ping_timeout=60, ping_interval=30)
 app.socketio = socketio
+
+# Conversor de rota para códigos numéricos (6 a 8 dígitos)
+class DigitCodeConverter(BaseConverter):
+    regex = r'\d{6,8}'
+
+app.url_map.converters['code'] = DigitCodeConverter
 
 # Importar modelos
 from models.user import User
@@ -998,6 +1005,15 @@ def kiosk_player_page(player_id):
     if _has_react_build():
         return _serve_react_file('index.html')
     return _kiosk_landing_html()
+
+# Fallback human-friendly: permitir acessar diretamente http://<host>/<CODIGO>
+# Ex.: http://10.21.65.158/287427 → redireciona para /k/287427
+@app.route('/<code:code>')
+def numeric_code_shortlink(code):
+    try:
+        return redirect(f"/k/{code}")
+    except Exception:
+        return _kiosk_landing_html(prefill_code=str(code))
 
 # Redirects para rotas admin (consolidado)
 @app.route('/<path:admin_route>')

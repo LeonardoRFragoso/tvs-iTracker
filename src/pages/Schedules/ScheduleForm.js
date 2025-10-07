@@ -23,7 +23,7 @@ import {
   CircularProgress,
   Alert,
   Grow,
-  ListItemText,
+  
   Paper,
   Fade,
   Skeleton,
@@ -146,7 +146,7 @@ const ScheduleForm = () => {
     content_selection: 'all',
     shuffle_enabled: false,
     auto_skip_errors: true,
-    device_type_compatibility: 'modern,tizen,legacy',
+    device_type_compatibility: 'legacy',
   });
 
   const [campaigns, setCampaigns] = useState([]);
@@ -235,8 +235,8 @@ const ScheduleForm = () => {
         content_selection: schedule.content_selection || 'all',
         shuffle_enabled: schedule.shuffle_enabled || false,
         auto_skip_errors: schedule.auto_skip_errors !== false,
-        // Garantir valor padrão para evitar undefined em .split()/.includes()
-        device_type_compatibility: schedule.device_type_compatibility || 'modern,tizen,legacy',
+        // Forçar compatibilidade única: legado (recursos mínimos)
+        device_type_compatibility: 'legacy',
       });
     } catch (err) {
       setError('Erro ao carregar agendamento');
@@ -358,7 +358,7 @@ const ScheduleForm = () => {
         content_selection: formData.content_selection,
         shuffle_enabled: formData.shuffle_enabled,
         auto_skip_errors: formData.auto_skip_errors,
-        device_type_compatibility: formData.device_type_compatibility,
+        device_type_compatibility: 'legacy',
       };
 
       // Include times only if set, to avoid sending empty strings
@@ -1011,55 +1011,7 @@ const ScheduleForm = () => {
                         </FormHelperText>
                       </Grid>
                       
-                      <Grid item xs={12}>
-                        <FormControl fullWidth>
-                          <InputLabel>Compatibilidade de Dispositivos</InputLabel>
-                          <Select
-                            multiple
-                            value={
-                              typeof formData.device_type_compatibility === 'string' && formData.device_type_compatibility.length > 0
-                                ? formData.device_type_compatibility.split(',')
-                                : []
-                            }
-                            onChange={(e) => {
-                              const selectedTypes = e.target.value;
-                              handleInputChange('device_type_compatibility', selectedTypes.join(','));
-                            }}
-                            renderValue={(selected) => {
-                              const deviceLabels = {
-                                'modern': 'Moderno',
-                                'tizen': 'Samsung Tizen',
-                                'legacy': 'Legado'
-                              };
-                              return selected.map(type => deviceLabels[type] || type).join(', ');
-                            }}
-                            label="Compatibilidade de Dispositivos"
-                            sx={{
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            }}
-                          >
-                            <MenuItem value="modern">
-                              <Checkbox checked={(formData.device_type_compatibility || '').includes('modern')} />
-                              <ListItemText primary="Moderno (React/HTML5 completo)" />
-                            </MenuItem>
-                            <MenuItem value="tizen">
-                              <Checkbox checked={(formData.device_type_compatibility || '').includes('tizen')} />
-                              <ListItemText primary="Samsung Tizen (Limitado)" />
-                            </MenuItem>
-                            <MenuItem value="legacy">
-                              <Checkbox checked={(formData.device_type_compatibility || '').includes('legacy')} />
-                              <ListItemText primary="Legado (Recursos mínimos)" />
-                            </MenuItem>
-                          </Select>
-                          <FormHelperText>
-                            Selecione os tipos de dispositivos compatíveis com este agendamento
-                          </FormHelperText>
-                        </FormControl>
-                      </Grid>
+                      {/* Compatibilidade de Dispositivos removida — sempre 'legacy' por padrão */}
                     </Grid>
                   </CardContent>
                 </Paper>
