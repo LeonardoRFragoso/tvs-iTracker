@@ -49,6 +49,7 @@ const PlayerForm = () => {
     chromecast_id: '',
     chromecast_name: '',
     platform: 'web',
+    device_type: 'modern',
     resolution: '1920x1080',
     orientation: 'landscape',
     default_content_duration: 10,
@@ -86,7 +87,12 @@ const PlayerForm = () => {
   const loadPlayer = async () => {
     try {
       const response = await axios.get(`/players/${id}`);
-      setFormData(response.data);
+      const data = response.data || {};
+      // Coagir players legados para Tizen na edição (UI possui apenas Moderno e Tizen)
+      if (data.device_type === 'legacy') {
+        data.device_type = 'tizen';
+      }
+      setFormData(data);
     } catch (err) {
       setError('Erro ao carregar player');
     }
@@ -280,6 +286,28 @@ const PlayerForm = () => {
                           <MenuItem value="android">Android</MenuItem>
                           <MenuItem value="windows">Windows</MenuItem>
                           <MenuItem value="chromecast">Chromecast</MenuItem>
+                        </TextField>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          fullWidth
+                          select
+                          label="Tipo de Dispositivo"
+                          value={formData.device_type === 'legacy' ? 'tizen' : formData.device_type}
+                          onChange={(e) => handleChange('device_type', e.target.value === 'legacy' ? 'tizen' : e.target.value)}
+                          helperText="Apenas Moderno e Tizen. Dispositivos legados são tratados como Tizen automaticamente."
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                transition: 'transform 0.2s ease-in-out',
+                              },
+                            },
+                          }}
+                        >
+                          <MenuItem value="modern">Moderno (React/HTML5 completo)</MenuItem>
+                          <MenuItem value="tizen">Samsung Tizen (inclui Legacy)</MenuItem>
                         </TextField>
                       </Grid>
                       <Grid item xs={12}>

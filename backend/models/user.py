@@ -6,9 +6,14 @@ from database import db
 
 def fmt_br_datetime(dt):
     try:
+        # Se dt for uma string, retorná-la diretamente
+        if isinstance(dt, str):
+            return dt
+        # Se for um datetime, formatá-lo
         return dt.strftime('%d/%m/%Y %H:%M:%S') if dt else None
-    except Exception:
-        return None
+    except Exception as e:
+        print(f"[WARN] Erro ao formatar datetime: {dt} - {str(e)}")
+        return str(dt) if dt else None
 
 class User(db.Model):
     __tablename__ = 'users'

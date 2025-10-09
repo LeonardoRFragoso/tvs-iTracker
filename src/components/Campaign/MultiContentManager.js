@@ -66,11 +66,15 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
   const [preset, setPreset] = useState('1080p');
   const [customResolution, setCustomResolution] = useState('1920x1080');
   const [customFps, setCustomFps] = useState(30);
+  // Estado para áudio de fundo
+  const [campaignBgAudioId, setCampaignBgAudioId] = useState('');
 
   const [addContentDialog, setAddContentDialog] = useState(false);
   const [editContentDialog, setEditContentDialog] = useState(false);
   const [previewDialog, setPreviewDialog] = useState(false);
   const [compiledPreviewOpen, setCompiledPreviewOpen] = useState(false);
+  // Áudio de fundo para compilação (opcional)
+  const [bgAudioId, setBgAudioId] = useState('');
   const [selectedContent, setSelectedContent] = useState(null);
 
   const [contentFormData, setContentFormData] = useState({
@@ -127,7 +131,14 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       const data = contentsResp.data || {};
       const items = data.contents || data.campaign_contents || [];
       setCampaignContents(items);
-      setCampaign((campaignResp.data && campaignResp.data.campaign) || data.campaign || null);
+      const campaignData = (campaignResp.data && campaignResp.data.campaign) || data.campaign || null;
+      setCampaign(campaignData);
+      
+      // Carregar áudio de fundo persistido
+      if (campaignData && campaignData.background_audio_content_id) {
+        setCampaignBgAudioId(campaignData.background_audio_content_id);
+        setBgAudioId(campaignData.background_audio_content_id);
+      }
       setError('');
     } catch (err) {
       setError('Erro ao carregar conteúdos da campanha');
@@ -166,9 +177,23 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       setCompileError('');
       setSuccess('Compilação iniciada, isso pode levar alguns minutos...');
       setCompileProgress(1);
-      const body = preset === 'custom'
+      
+      // Se o áudio de fundo mudou, salvar na campanha primeiro
+      if (bgAudioId !== campaignBgAudioId) {
+        try {
+          await axios.put(`/campaigns/${campaignId}`, {
+            background_audio_content_id: bgAudioId || null
+          });
+          setCampaignBgAudioId(bgAudioId);
+        } catch (err) {
+          console.error('Erro ao salvar áudio de fundo:', err);
+        }
+      }
+      
+      const base = preset === 'custom'
         ? { resolution: customResolution, fps: Number(customFps) || 30 }
         : { preset };
+      const body = bgAudioId ? { ...base, background_audio_content_id: bgAudioId } : base;
       await axios.post(`/campaigns/${campaignId}/compile`, body);
       const poll = async (retries = 120) => {
         const statusData = await fetchCompiledStatus();
@@ -208,6 +233,26 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     }
   };
 
+  // Add content and trigger immediate recompilation
+  const handleAddContentAndCompile = async () => {
+    try {
+      setLoading(true);
+      await axios.post(`/campaigns/${campaignId}/contents`, contentFormData);
+      setSuccess('Conteúdo adicionado. Iniciando recompilação...');
+      setAddContentDialog(false);
+      resetForm();
+      await loadCampaignContents();
+      if (onContentChange) onContentChange();
+      await fetchCompiledStatus();
+      // Usa o preset/fps atual selecionado no cabeçalho
+      startCompilation();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao adicionar conteúdo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUpdateContent = async () => {
     try {
       setLoading(true);
@@ -221,6 +266,28 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
       loadCampaignContents();
       if (onContentChange) onContentChange();
       fetchCompiledStatus();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao atualizar conteúdo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update content and trigger immediate recompilation
+  const handleUpdateContentAndCompile = async () => {
+    try {
+      setLoading(true);
+      await axios.put(
+        `/campaigns/${campaignId}/contents/${selectedContent.content_id}`,
+        contentFormData
+      );
+      setSuccess('Conteúdo atualizado. Iniciando recompilação...');
+      setEditContentDialog(false);
+      resetForm();
+      await loadCampaignContents();
+      if (onContentChange) onContentChange();
+      await fetchCompiledStatus();
+      startCompilation();
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao atualizar conteúdo');
     } finally {
@@ -386,6 +453,39 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
             </>
           )}
           {/* Compiled video quick actions */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              size="small"
+              select
+              label="Áudio de fundo"
+              value={bgAudioId}
+              onChange={(e) => setBgAudioId(e.target.value)}
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="">Nenhum</MenuItem>
+              {(availableContents || [])
+                .filter((c) => (c.content_type || c.type) === 'audio')
+                .map((aud) => (
+                  <MenuItem key={aud.id} value={aud.id}>{aud.title || aud.file_path || aud.id}</MenuItem>
+                ))}
+            </TextField>
+            {bgAudioId && bgAudioId !== campaignBgAudioId && (
+              <Chip 
+                size="small" 
+                color="warning" 
+                label="Não salvo" 
+                icon={<WarningAmber />}
+              />
+            )}
+            {bgAudioId && bgAudioId === campaignBgAudioId && (
+              <Chip 
+                size="small" 
+                color="success" 
+                label="✓ Configurado" 
+                icon={<CloudDone />}
+              />
+            )}
+          </Box>
           <Button
             variant="outlined"
             startIcon={<VideoCompiledIcon />}
@@ -463,6 +563,26 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
                 <Typography variant="body2">
                   {formatDuration(campaign.content_duration)}
                 </Typography>
+              </Grid>
+              {/* Background audio indicator */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  Áudio de Fundo
+                </Typography>
+                {campaignBgAudioId ? (
+                  <Chip 
+                    size="small" 
+                    color="success" 
+                    label={`🎵 ${availableContents.find(c => c.id === campaignBgAudioId)?.title || 'Configurado'}`}
+                    sx={{ fontWeight: 600 }}
+                  />
+                ) : (
+                  <Chip 
+                    size="small" 
+                    variant="outlined"
+                    label="Nenhum"
+                  />
+                )}
               </Grid>
               {/* Compiled status */}
               <Grid item xs={12}>
@@ -685,6 +805,14 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
           >
             Adicionar
           </Button>
+          <Button
+            onClick={handleAddContentAndCompile}
+            variant="outlined"
+            color="secondary"
+            disabled={!contentFormData.content_id || loading}
+          >
+            Adicionar e Recompilar
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -728,6 +856,14 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
             disabled={loading}
           >
             Salvar
+          </Button>
+          <Button
+            onClick={handleUpdateContentAndCompile}
+            variant="outlined"
+            color="secondary"
+            disabled={loading}
+          >
+            Salvar e Recompilar
           </Button>
         </DialogActions>
       </Dialog>

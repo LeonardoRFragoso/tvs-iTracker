@@ -544,12 +544,12 @@ def list_companies():
         user_companies = [row[0] for row in db.session.query(distinct(User.company)).all()]
         location_companies = [row[0] for row in db.session.query(distinct(Location.company)).all()]
 
-        # Unificar, remover vazios/nulos e ordenar
-        companies = sorted({c.strip() for c in (user_companies + location_companies) if c and str(c).strip()})
+        # Empresas padrão conhecidas do sistema
+        default_companies = ['iTracker', 'Rio Brasil Terminal - RBT', 'CLIA']
 
-        # Fallback amigável se vazio
-        if not companies:
-            companies = ['iTracker', 'Rio Brasil Terminal - RBT', 'CLIA']
+        # Unificar, remover vazios/nulos e incluir defaults
+        base_set = {c.strip() for c in (user_companies + location_companies) if c and str(c).strip()}
+        companies = sorted(base_set.union(default_companies))
 
         return jsonify({'companies': companies}), 200
     except Exception as e:

@@ -19,6 +19,15 @@ import WebPlayer from '../../components/Player/WebPlayer';
 
 const API_BASE_URL = axios.defaults.baseURL;
 
+// Detecta modo kiosk/legado por pathname
+const isBrowser = typeof window !== 'undefined';
+const kioskPathname = isBrowser ? (window.location.pathname || '') : '';
+const IS_KIOSK_LEGACY = isBrowser && (
+  kioskPathname.startsWith('/kiosk') ||
+  kioskPathname.startsWith('/k/') ||
+  kioskPathname.startsWith('/tv')
+);
+
 const PlayerView = () => {
   const { id, code } = useParams();
   const [searchParams] = useSearchParams();
@@ -253,36 +262,39 @@ const PlayerView = () => {
       >
         <WebPlayer playerId={playerId} fullscreen={true} />
         
-        {/* Fullscreen Controls */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            zIndex: 10000,
-          }}
-        >
-          <Tooltip title="Sair do modo tela cheia (ESC)">
-            <IconButton
-              onClick={exitFullscreen}
-              sx={{
-                color: 'white',
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                '&:hover': {
-                  backgroundColor: 'rgba(0,0,0,0.7)',
-                },
-              }}
-            >
-              <FullscreenExitIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        {/* Fullscreen Controls (ocultos no modo kiosk/legado) */}
+        {!IS_KIOSK_LEGACY && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 10000,
+            }}
+          >
+            <Tooltip title="Sair do modo tela cheia (ESC)">
+              <IconButton
+                onClick={exitFullscreen}
+                sx={{
+                  color: 'white',
+                  backgroundColor: 'rgba(0,0,0,0.5)',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0,0,0,0.7)',
+                  },
+                }}
+              >
+                <FullscreenExitIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
     );
   }
 
   return (
     <Box>
+      {!IS_KIOSK_LEGACY && (
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box display="flex" alignItems="center">
           <IconButton onClick={() => navigate('/players')} sx={{ mr: 2 }}>
@@ -315,6 +327,7 @@ const PlayerView = () => {
           </Tooltip>
         </Box>
       </Box>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -329,11 +342,13 @@ const PlayerView = () => {
 
       <WebPlayer playerId={playerId} fullscreen={false} />
 
-      <Box mt={2}>
-        <Typography variant="body2" color="text.secondary">
-          Pressione <strong>F</strong> para entrar no modo tela cheia ou <strong>ESC</strong> para sair.
-        </Typography>
-      </Box>
+      {!IS_KIOSK_LEGACY && (
+        <Box mt={2}>
+          <Typography variant="body2" color="text.secondary">
+            Pressione <strong>F</strong> para entrar no modo tela cheia ou <strong>ESC</strong> para sair.
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 };

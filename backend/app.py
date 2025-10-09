@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, send_from_directory, make_response, redirect, g
+from werkzeug.routing import BaseConverter
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -74,6 +75,12 @@ socketio = SocketIO(app, cors_allowed_origins="*",
                   async_mode='threading', logger=False, engineio_logger=False, 
                   ping_timeout=60, ping_interval=30)
 app.socketio = socketio
+
+# Conversor de rota para códigos numéricos (6 a 8 dígitos)
+class DigitCodeConverter(BaseConverter):
+    regex = r'\d{6,8}'
+
+app.url_map.converters['code'] = DigitCodeConverter
 
 # Importar modelos
 from models.user import User
@@ -738,11 +745,8 @@ def api_cors_preflight(any_path):
 
 # Servir arquivos de upload
 @app.route('/uploads/<path:filename>')
-def uploaded_file(filename):
-    """Serve arquivos de mídia com cache forte e suporte a faixas (delegado ao servidor/browsers).
-    Adiciona Cache-Control: immutable e um ETag estável baseado em size+mtime.
-    """
-    # Resolver caminho absoluto da pasta de uploads
+def serve_upload(filename):
+    """Serve uploaded files"""
     upload_dir = app.config['UPLOAD_FOLDER']
     if not os.path.isabs(upload_dir):
         upload_dir = os.path.join(app.root_path, upload_dir)
@@ -765,6 +769,13 @@ def uploaded_file(filename):
     # Garantir indicação de suporte a faixas
     resp.headers['Accept-Ranges'] = 'bytes'
     return resp
+
+# Servir arquivos do player Tizen
+@app.route('/tizen-player/<path:filename>')
+def serve_tizen_player(filename):
+    """Serve Tizen player files"""
+    tizen_dir = os.path.join(app.root_path, '..', 'tizen-player')
+    return send_from_directory(tizen_dir, filename)
 
 # Service Worker para cache offline de mídias
 @app.route('/sw.js')
@@ -923,13 +934,51 @@ def public_companies():
 # Short-link público /k/<code>
 @app.route('/k/<code>')
 def short_link_kiosk(code):
-    """Link curto para player por código"""
+    """Link curto para player por código com detecção de dispositivo"""
     try:
         player = Player.query.filter(Player.access_code == code.upper()).first()
-        if player:
+        if not player:
+            return _kiosk_landing_html(prefill_code=code)
+        
+        # Detectar tipo de dispositivo baseado no User-Agent
+        user_agent = request.headers.get('User-Agent', '').lower()
+        
+        # Detectar Samsung Tizen
+        if 'tizen' in user_agent:
+            # Se o player já está configurado como tizen, manter
+            if player.device_type != 'tizen':
+                print(f"[INFO] Detectado dispositivo Tizen acessando player {player.id}")
+                # Atualizar o tipo de dispositivo para tizen se ainda não estiver configurado
+                if player.device_type == 'modern':
+                    player.device_type = 'tizen'
+                    db.session.commit()
+                    print(f"[INFO] Player {player.id} atualizado para tipo 'tizen'")
+            
+            # Redirecionar para o player Tizen
+            return redirect(f"/tizen-player/index.html?id={player.id}")
+        
+        # Detectar dispositivos legados (navegadores antigos)
+        elif ('msie' in user_agent or 'trident' in user_agent or 
+              'edge/' in user_agent and 'edg/' not in user_agent):
+            # Se o player já está configurado como legacy, manter
+            if player.device_type != 'legacy':
+                print(f"[INFO] Detectado dispositivo legado acessando player {player.id}")
+                # Atualizar o tipo de dispositivo para legacy se ainda não estiver configurado
+                if player.device_type == 'modern':
+                    player.device_type = 'legacy'
+                    db.session.commit()
+                    print(f"[INFO] Player {player.id} atualizado para tipo 'legacy'")
+            
+            # Redirecionar para o player legado (ainda não implementado, usar Tizen por enquanto)
+            return redirect(f"/tizen-player/index.html?id={player.id}")
+        
+        # Dispositivos modernos (padrão - React)
+        else:
+            # Redirecionar para o player React padrão
             return redirect(f"/kiosk/player/{player.id}?fullscreen=true")
-        return _kiosk_landing_html(prefill_code=code)
-    except Exception:
+    
+    except Exception as e:
+        print(f"[ERROR] Erro ao processar short_link_kiosk: {str(e)}")
         return _kiosk_landing_html(prefill_code=code)
 
 # Rota raiz: kiosk landing
@@ -956,6 +1005,15 @@ def kiosk_player_page(player_id):
     if _has_react_build():
         return _serve_react_file('index.html')
     return _kiosk_landing_html()
+
+# Fallback human-friendly: permitir acessar diretamente http://<host>/<CODIGO>
+# Ex.: http://10.21.65.158/287427 → redireciona para /k/287427
+@app.route('/<code:code>')
+def numeric_code_shortlink(code):
+    try:
+        return redirect(f"/k/{code}")
+    except Exception:
+        return _kiosk_landing_html(prefill_code=str(code))
 
 # Redirects para rotas admin (consolidado)
 @app.route('/<path:admin_route>')
@@ -1652,6 +1710,17 @@ def create_tables():
             db.create_all()
             _ensure_schema_columns()
             
+            # Executar migração para adicionar colunas device_type
+            try:
+                from migrations.add_device_type_columns import run_migration
+                migration_result = run_migration()
+                if migration_result:
+                    print("[Init] Migração add_device_type_columns executada com sucesso")
+                else:
+                    print("[Init] Migração add_device_type_columns não foi necessária ou falhou")
+            except Exception as migration_error:
+                print(f"[Init] Erro ao executar migração add_device_type_columns: {migration_error}")
+            
             # Criar usuário admin padrão se não existir
             admin = User.query.filter_by(email='admin@tvs.com').first()
             if not admin:
@@ -1672,107 +1741,109 @@ def create_tables():
 
 def setup_scheduler_jobs():
     """Configura todos os jobs do scheduler dentro do contexto da aplicação"""
-    try:
-        print("[Scheduler] Configurando jobs...")
-        
-        # Job: Verificação de agendamentos (cada minuto)
-        if not scheduler.get_job('schedule_checker'):
-            scheduler.add_job(
-                func=check_schedules_with_context,
-                trigger="interval",
-                minutes=1,
-                id='schedule_checker',
-                name='Verificar e executar agendamentos',
-                replace_existing=True
-            )
-        
-        # Job: Emissão de estatísticas de tráfego (configurável, com fallback)
+    # Garantir que estamos dentro do contexto da aplicação
+    with app.app_context():
         try:
-            emit_interval = int(SystemConfig.get_value('monitor.emit_interval_sec', 30) or 30)
-        except:
-            emit_interval = 30  # fallback se SystemConfig não estiver disponível
+            print("[Scheduler] Configurando jobs...")
             
-        if not scheduler.get_job('traffic_stats_emitter'):
-            scheduler.add_job(
-                func=emit_traffic_stats_job,
-                trigger="interval",
-                seconds=emit_interval,
-                id='traffic_stats_emitter',
-                name='Emitir estatísticas de tráfego para admins',
-                replace_existing=True
-            )
-        
-        # Job: Sincronização de players (cada minuto)  
-        if not scheduler.get_job('player_status_sync'):
-            scheduler.add_job(
-                func=sync_player_statuses_job,
-                trigger="interval",
-                minutes=1,
-                id='player_status_sync',
-                name='Sincronizar status dos players',
-                replace_existing=True
-            )
-        
-        # Job: Persistir buckets de tráfego (cada 60 segundos)
-        if not scheduler.get_job('traffic_minute_flush'):
-            scheduler.add_job(
-                func=_flush_traffic_minute_job,
-                trigger='interval',
-                seconds=60,
-                id='traffic_minute_flush',
-                name='Persistir buckets de tráfego por minuto',
-                replace_existing=True
-            )
-        
-        # Job: Agregação minute->hour (cada 5 minutos)
-        if not scheduler.get_job('agg_minute_hour'):
-            scheduler.add_job(
-                func=_aggregate_minute_to_hour_job,
-                trigger='interval',
-                minutes=5,
-                id='agg_minute_hour',
-                name='Agregação minute->hour (lookback 6h)',
-                replace_existing=True
-            )
-        
-        # Job: Agregação hour->day (cada hora)
-        if not scheduler.get_job('agg_hour_day'):
-            scheduler.add_job(
-                func=_aggregate_hour_to_day_job,
-                trigger='interval',
-                hours=1,
-                id='agg_hour_day',
-                name='Agregação hour->day (lookback 3d)',
-                replace_existing=True
-            )
-        
-        # Job: Limpeza por retenção (diário às 03:15)
-        if not scheduler.get_job('retention_cleanup'):
-            scheduler.add_job(
-                func=_retention_cleanup_job,
-                trigger='cron',
-                hour=3,
-                minute=15,
-                id='retention_cleanup',
-                name='Limpeza por retenção (samples antigas)',
-                replace_existing=True
-            )
-        
-        # Job: Emissão de métricas do sistema
-        if not scheduler.get_job('system_stats_emitter'):
-            scheduler.add_job(
-                func=emit_system_stats_job,
-                trigger='interval',
-                seconds=int(SystemConfig.get_value('monitor.emit_interval_sec', 30) or 30),
-                id='system_stats_emitter',
-                name='Emitir métricas do sistema para admins',
-                replace_existing=True
-            )
-        
-        print(f"[Scheduler] {len(scheduler.get_jobs())} jobs configurados")
-        
-    except Exception as e:
-        print(f"[Scheduler] Erro ao configurar jobs: {e}")
+            # Job: Verificação de agendamentos (cada minuto)
+            if not scheduler.get_job('schedule_checker'):
+                scheduler.add_job(
+                    func=check_schedules_with_context,
+                    trigger="interval",
+                    minutes=1,
+                    id='schedule_checker',
+                    name='Verificar e executar agendamentos',
+                    replace_existing=True
+                )
+            
+            # Job: Emissão de estatísticas de tráfego (configurável, com fallback)
+            try:
+                emit_interval = int(SystemConfig.get_value('monitor.emit_interval_sec', 30) or 30)
+            except Exception:
+                emit_interval = 30  # fallback se SystemConfig não estiver disponível
+                
+            if not scheduler.get_job('traffic_stats_emitter'):
+                scheduler.add_job(
+                    func=emit_traffic_stats_job,
+                    trigger="interval",
+                    seconds=emit_interval,
+                    id='traffic_stats_emitter',
+                    name='Emitir estatísticas de tráfego para admins',
+                    replace_existing=True
+                )
+            
+            # Job: Sincronização de players (cada minuto)  
+            if not scheduler.get_job('player_status_sync'):
+                scheduler.add_job(
+                    func=sync_player_statuses_job,
+                    trigger="interval",
+                    minutes=1,
+                    id='player_status_sync',
+                    name='Sincronizar status dos players',
+                    replace_existing=True
+                )
+            
+            # Job: Persistir buckets de tráfego (cada 60 segundos)
+            if not scheduler.get_job('traffic_minute_flush'):
+                scheduler.add_job(
+                    func=_flush_traffic_minute_job,
+                    trigger='interval',
+                    seconds=60,
+                    id='traffic_minute_flush',
+                    name='Persistir buckets de tráfego por minuto',
+                    replace_existing=True
+                )
+            
+            # Job: Agregação minute->hour (cada 5 minutos)
+            if not scheduler.get_job('agg_minute_hour'):
+                scheduler.add_job(
+                    func=_aggregate_minute_to_hour_job,
+                    trigger='interval',
+                    minutes=5,
+                    id='agg_minute_hour',
+                    name='Agregação minute->hour (lookback 6h)',
+                    replace_existing=True
+                )
+            
+            # Job: Agregação hour->day (cada hora)
+            if not scheduler.get_job('agg_hour_day'):
+                scheduler.add_job(
+                    func=_aggregate_hour_to_day_job,
+                    trigger='interval',
+                    hours=1,
+                    id='agg_hour_day',
+                    name='Agregação hour->day (lookback 3d)',
+                    replace_existing=True
+                )
+            
+            # Job: Limpeza por retenção (diário às 03:15)
+            if not scheduler.get_job('retention_cleanup'):
+                scheduler.add_job(
+                    func=_retention_cleanup_job,
+                    trigger='cron',
+                    hour=3,
+                    minute=15,
+                    id='retention_cleanup',
+                    name='Limpeza por retenção (samples antigas)',
+                    replace_existing=True
+                )
+            
+            # Job: Emissão de métricas do sistema
+            if not scheduler.get_job('system_stats_emitter'):
+                scheduler.add_job(
+                    func=emit_system_stats_job,
+                    trigger='interval',
+                    seconds=int(SystemConfig.get_value('monitor.emit_interval_sec', 30) or 30),
+                    id='system_stats_emitter',
+                    name='Emitir métricas do sistema para admins',
+                    replace_existing=True
+                )
+            
+            print(f"[Scheduler] {len(scheduler.get_jobs())} jobs configurados")
+            
+        except Exception as e:
+            print(f"[Scheduler] Erro ao configurar jobs: {e}")
 
 def start_application():
     """Inicia a aplicação completa"""

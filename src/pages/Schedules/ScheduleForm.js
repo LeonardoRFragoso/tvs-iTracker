@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Avatar,
   Box,
   Card,
   CardContent,
@@ -14,17 +15,17 @@ import {
   FormControlLabel,
   Checkbox,
   FormGroup,
-  Alert,
   IconButton,
   Divider,
   Chip,
   Switch,
   FormHelperText,
-  Container,
-  Avatar,
+  CircularProgress,
+  Alert,
+  Grow,
+  
   Paper,
   Fade,
-  Grow,
   Skeleton,
   Autocomplete,
   Slider,
@@ -34,7 +35,6 @@ import {
   Breadcrumbs,
   Link,
   LinearProgress,
-  CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -47,13 +47,11 @@ import {
   ListItem,
   ListItemButton,
   ListItemIcon,
-  ListItemText,
   ListSubheader,
   Drawer,
   AppBar,
   Toolbar,
   Menu,
-  MenuItem as MenuItem2,
   MenuList,
   Popper,
   Popover,
@@ -148,6 +146,7 @@ const ScheduleForm = () => {
     content_selection: 'all',
     shuffle_enabled: false,
     auto_skip_errors: true,
+    device_type_compatibility: 'legacy',
   });
 
   const [campaigns, setCampaigns] = useState([]);
@@ -236,6 +235,8 @@ const ScheduleForm = () => {
         content_selection: schedule.content_selection || 'all',
         shuffle_enabled: schedule.shuffle_enabled || false,
         auto_skip_errors: schedule.auto_skip_errors !== false,
+        // Forçar compatibilidade única: legado (recursos mínimos)
+        device_type_compatibility: 'legacy',
       });
     } catch (err) {
       setError('Erro ao carregar agendamento');
@@ -357,6 +358,7 @@ const ScheduleForm = () => {
         content_selection: formData.content_selection,
         shuffle_enabled: formData.shuffle_enabled,
         auto_skip_errors: formData.auto_skip_errors,
+        device_type_compatibility: 'legacy',
       };
 
       // Include times only if set, to avoid sending empty strings
@@ -1008,6 +1010,8 @@ const ScheduleForm = () => {
                           Conteúdo fica fixo na tela até ser substituído por outro agendamento
                         </FormHelperText>
                       </Grid>
+                      
+                      {/* Compatibilidade de Dispositivos removida — sempre 'legacy' por padrão */}
                     </Grid>
                   </CardContent>
                 </Paper>
