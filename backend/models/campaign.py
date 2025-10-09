@@ -33,6 +33,9 @@ class Campaign(db.Model):
     # Chave estrangeira para usuário
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=True)
     
+    # Áudio de fundo para compilação
+    background_audio_content_id = db.Column(db.String(36), db.ForeignKey('contents.id'), nullable=True)
+    
     # REMOVIDO: Configurações de reprodução movidas para Schedule
     # Campanha agora é apenas um container de conteúdos
     
@@ -53,6 +56,7 @@ class Campaign(db.Model):
     contents = db.relationship('CampaignContent', lazy=True, cascade='all, delete-orphan')
     schedules = db.relationship('Schedule', lazy=True)
     user = db.relationship('User', overlaps="campaigns,creator", lazy=True)
+    background_audio = db.relationship('Content', foreign_keys=[background_audio_content_id], lazy=True)
     
     def to_dict(self):
         return {
@@ -72,6 +76,8 @@ class Campaign(db.Model):
             'content_count': len([c for c in self.contents if c.is_active]),
             'total_content_count': len(self.contents),
             'user_id': self.user_id,
+            # Background audio
+            'background_audio_content_id': self.background_audio_content_id,
             # Compiled video fields
             'compiled_video_path': self.compiled_video_path,
             'compiled_video_url': (f"/uploads/{self.compiled_video_path}" if self.compiled_video_path else None),

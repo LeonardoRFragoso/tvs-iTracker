@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import json
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
@@ -8,6 +8,7 @@ from models.campaign import Campaign, CampaignContent, db, PlaybackEvent
 from models.content import Content
 from models.player import Player
 from models.user import User
+from models.schedule import Schedule
 from models.system_config import SystemConfig
 import os
 
@@ -108,9 +109,21 @@ def list_campaigns():
                 if first_cc and first_cc.content:
                     content = first_cc.content
                     if content.thumbnail_path:
-                        # Não incluir '/api' aqui; o frontend prefixa API_BASE_URL
-                        thumb_path = f"/content/thumbnails/{content.thumbnail_path}"
-                    elif content.file_path and content.content_type == 'image':
+                        # Verificar existência do arquivo de thumbnail; se não existir, usar fallback
+                        thumb_candidate = f"/content/thumbnails/{content.thumbnail_path}"
+                        try:
+                            upload_dir = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+                            if not os.path.isabs(upload_dir):
+                                upload_dir = os.path.join(current_app.root_path, upload_dir)
+                            thumb_fs = os.path.join(upload_dir, 'thumbnails', os.path.basename(content.thumbnail_path))
+                            if os.path.exists(thumb_fs):
+                                thumb_path = thumb_candidate
+                            else:
+                                thumb_path = None
+                        except Exception:
+                            thumb_path = None
+                    if not thumb_path and content.file_path and content.content_type == 'image':
+                        # Fallback: servir a própria imagem
                         thumb_path = f"/content/media/{content.file_path}"
                 cdict['thumbnail'] = thumb_path
                 
@@ -184,6 +197,9 @@ def create_campaign():
                 return bool(value)
             return default
         
+        # Extract background audio ID if provided
+        bg_audio_id = data.get('background_audio_content_id') or data.get('audio_content_id')
+        
         campaign = Campaign(
             name=data['name'],
             description=data.get('description', ''),
@@ -195,14 +211,43 @@ def create_campaign():
             time_slots=json.dumps(data.get('time_slots', [])),
             days_of_week=json.dumps(data.get('days_of_week', [])),
             user_id=user_id,
+            background_audio_content_id=bg_audio_id,
             # REMOVIDO: Configurações de reprodução movidas para Schedule
         )
         
         db.session.add(campaign)
         db.session.flush()  # Para obter o ID
         
-        # Adicionar conteúdos se fornecidos
-        if data.get('content_ids'):
+        # Adicionar conteúdos se fornecidos (suporta overrides)
+        contents_payload = data.get('contents')
+        if isinstance(contents_payload, list) and len(contents_payload) > 0:
+            for i, item in enumerate(contents_payload):
+                try:
+                    content_id = item.get('id') if isinstance(item, dict) else None
+                    if not content_id and isinstance(item, dict):
+                        content_id = item.get('content_id')
+                    if not content_id:
+                        continue
+                    content = Content.query.get(content_id)
+                    if not content:
+                        continue
+                    duration_override = None
+                    if isinstance(item, dict) and 'duration_override' in item:
+                        try:
+                            val = int(item.get('duration_override'))
+                            duration_override = val if val and val > 0 else None
+                        except Exception:
+                            duration_override = None
+                    campaign_content = CampaignContent(
+                        campaign_id=campaign.id,
+                        content_id=content_id,
+                        order_index=i,
+                        duration_override=duration_override
+                    )
+                    db.session.add(campaign_content)
+                except Exception:
+                    continue
+        elif data.get('content_ids'):
             for i, content_id in enumerate(data['content_ids']):
                 content = Content.query.get(content_id)
                 if content:
@@ -215,7 +260,7 @@ def create_campaign():
         
         db.session.commit()
 
-        # Auto-compile if enabled
+        # Auto-compile if enabled (usando áudio de fundo persistido na campanha)
         try:
             enabled = SystemConfig.get_value('general.auto_update')
             if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
@@ -225,7 +270,8 @@ def create_campaign():
                     db.session.commit()
                 except Exception:
                     db.session.rollback()
-                video_compiler.start_async_compile(campaign.id)
+                # Usa o background_audio_content_id persistido na campanha
+                video_compiler.start_async_compile(campaign.id, background_audio_content_id=campaign.background_audio_content_id)
         except Exception:
             pass
         
@@ -306,6 +352,9 @@ def update_campaign(campaign_id):
             campaign.days_of_week = json.dumps(data['days_of_week'])
         if 'is_active' in data:
             campaign.is_active = data['is_active']
+        # Update background audio if provided
+        if 'background_audio_content_id' in data:
+            campaign.background_audio_content_id = data.get('background_audio_content_id') or None
         # Novos campos de reprodução
         if 'playback_mode' in data:
             campaign.playback_mode = data['playback_mode'] or 'sequential'
@@ -351,7 +400,36 @@ def delete_campaign(campaign_id):
         user = User.query.get(user_id)
         if campaign.user_id != user_id and user.role not in ['admin', 'manager']:
             return jsonify({'error': 'Sem permissão para deletar esta campanha'}), 403
-        
+
+        # Remover dependências que possuem FK para a campanha (evita erro 500 por constraint)
+        try:
+            # Eventos de reprodução
+            PlaybackEvent.query.filter(PlaybackEvent.campaign_id == campaign_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        try:
+            # Agendamentos vinculados
+            Schedule.query.filter_by(campaign_id=campaign_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # Remover arquivo de vídeo compilado, se existir
+        try:
+            if getattr(campaign, 'compiled_video_path', None):
+                upload_dir = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+                if not os.path.isabs(upload_dir):
+                    upload_dir = os.path.join(current_app.root_path, upload_dir)
+                compiled_full = os.path.join(upload_dir, campaign.compiled_video_path)
+                if os.path.exists(compiled_full):
+                    try:
+                        os.remove(compiled_full)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # Deletar a campanha (CampaignContent é cascade delete-orphan)
         db.session.delete(campaign)
         db.session.commit()
         
@@ -784,39 +862,54 @@ def debug_campaign_analytics(campaign_id):
 @campaign_bp.route('/<campaign_id>/compile', methods=['POST'])
 @jwt_required()
 def compile_campaign(campaign_id):
-    """Dispara compilação assíncrona do vídeo da campanha."""
+    """Dispara compilação assíncrona do vídeo da campanha, usando parâmetros fixos do .env."""
     try:
         campaign = Campaign.query.get(campaign_id)
         if not campaign:
             return jsonify({'error': 'Campanha não encontrada'}), 404
 
-        data = request.get_json(silent=True) or {}
-        preset = (data.get('preset') or '').lower().strip()
-        resolution = data.get('resolution')
-        fps = data.get('fps')
-
-        # Presets mapping
-        preset_map = {
-            '360p': ('640x360', 30),
-            '720p': ('1280x720', 30),
-            '1080p': ('1920x1080', 30),
-        }
-        if preset in preset_map:
-            resolution, fps = preset_map[preset]
-        # Defaults if not provided
-        resolution = resolution or '1920x1080'
+        # Payload opcional: background audio (pode sobrescrever o persistido)
         try:
-            fps = int(fps) if fps is not None else 30
+            req = request.get_json(silent=True) or {}
         except Exception:
-            fps = 30
+            req = {}
+        # Se fornecido no request, usar ele e atualizar na campanha
+        bg_audio_id = req.get('background_audio_content_id') or req.get('audio_content_id')
+        if bg_audio_id:
+            # Atualizar o áudio de fundo persistido na campanha
+            campaign.background_audio_content_id = bg_audio_id
+            db.session.commit()
+        else:
+            # Usar o áudio de fundo já persistido na campanha
+            bg_audio_id = campaign.background_audio_content_id
 
-        # Cache: if ready and not stale and matches resolution/fps, return ready
-        if (campaign.compiled_video_status == 'ready' and
+        # Parâmetros fixos via .env (COMPILE_PRESET | COMPILE_RESOLUTION | COMPILE_FPS)
+        def _env_compile_params():
+            preset_map = {
+                '360p': ('640x360', 30),
+                '720p': ('1280x720', 30),
+                '1080p': ('1920x1080', 30),
+            }
+            preset = str(os.getenv('COMPILE_PRESET', '1080p') or '').lower().strip()
+            res, default_fps = preset_map.get(preset, ('1920x1080', 30))
+            res = os.getenv('COMPILE_RESOLUTION', res)
+            try:
+                fps_val = int(os.getenv('COMPILE_FPS', default_fps))
+            except Exception:
+                fps_val = default_fps
+            return res, fps_val
+
+        resolution, fps = _env_compile_params()
+
+        # Cache: se já está pronto, não está stale e os parâmetros batem, retorna pronto
+        # Observação: se o cliente solicitou áudio de fundo, sempre recompilar.
+        if (not bg_audio_id and
+            campaign.compiled_video_status == 'ready' and
             not getattr(campaign, 'compiled_stale', False) and
             getattr(campaign, 'compiled_video_resolution', None) == resolution and
             int(getattr(campaign, 'compiled_video_fps', 0) or 0) == int(fps)):
             return jsonify({
-                'message': 'Compilação já está pronta para os parâmetros solicitados',
+                'message': 'Compilação já está pronta para os parâmetros configurados',
                 'status': 'ready',
                 'compiled_video_url': f"/uploads/{campaign.compiled_video_path}" if campaign.compiled_video_path else None,
                 'compiled_video_duration': campaign.compiled_video_duration,
@@ -828,12 +921,14 @@ def compile_campaign(campaign_id):
         # Se acabou de alterar conteúdos, marcar stale (se não marcado)
         if campaign.compiled_stale is None:
             campaign.compiled_stale = True
+            db.session.commit()
 
-        ok = video_compiler.start_async_compile(campaign_id, resolution=resolution, fps=fps)
-        if not ok:
-            return jsonify({'error': 'Não foi possível iniciar a compilação. Verifique se já não está em processamento.'}), 400
-
-        return jsonify({'message': 'Compilação iniciada', 'status': 'processing'}), 202
+        # Parâmetros passados para o compilador (inclui áudio de fundo opcional)
+        try:
+            video_compiler.start_async_compile(campaign.id, resolution=resolution, fps=fps, background_audio_content_id=bg_audio_id)
+            return jsonify({'status': 'processing', 'message': 'Compilação iniciada'}), 202
+        except Exception as e:
+            return jsonify({'error': f'Falha ao iniciar compilação: {str(e)}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

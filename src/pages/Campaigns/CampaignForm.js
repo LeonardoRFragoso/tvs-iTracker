@@ -126,6 +126,9 @@ const CampaignForm = () => {
   const { id } = useParams();
   const isEdit = Boolean(id);
 
+  // Obter instancia de socket do contexto
+  const { socket } = useSocket();
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -145,18 +148,20 @@ const CampaignForm = () => {
   const [success, setSuccess] = useState('');
   const [contentDialog, setContentDialog] = useState(false);
   const [selectedContents, setSelectedContents] = useState([]);
+  // Duração por imagem definida no modal (id -> segundos)
+  const [selectedDurations, setSelectedDurations] = useState({});
   const [currentTab, setCurrentTab] = useState(0);
   const [contentSearch, setContentSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [denseCards, setDenseCards] = useState(false);
   // Aba ativa do modal (seleção/preview)
   const [contentModalTab, setContentModalTab] = useState('selection');
-  // Compile controls/state (Preview tab)
-  const [compilePreset, setCompilePreset] = useState('1080p');
-  const [compileFps, setCompileFps] = useState(30);
+  // Estado de compilação (Preview tab)
   const [compileStatus, setCompileStatus] = useState(null); // 'processing' | 'ready' | 'stale' | 'error' | null
   const [compileInfo, setCompileInfo] = useState(null); // { url, duration, resolution, fps, updatedAt }
+  const [compileStale, setCompileStale] = useState(null); // boolean | null
   const [compileError, setCompileError] = useState('');
+  // Música de fundo opcional para compilação
+  const [bgAudioId, setBgAudioId] = useState('');
   const compilePollRef = useRef(null);
   const [compileProgress, setCompileProgress] = useState(0);
   const [compileMessage, setCompileMessage] = useState('');
@@ -194,7 +199,14 @@ const CampaignForm = () => {
   };
 
   const getSelectedTotalDuration = () => {
-    return getSelectedContentObjects().reduce((sum, c) => sum + (c?.duration || 0), 0);
+    const list = getSelectedContentObjects();
+    return list.reduce((sum, c) => {
+      const t = getTypeFor(c);
+      const cid = c?.id;
+      const imgDur = parseInt(selectedDurations[cid], 10);
+      const dur = t === 'image' ? (Number.isFinite(imgDur) && imgDur > 0 ? imgDur : 10) : (c?.duration || 0);
+      return sum + Math.max(0, dur);
+    }, 0);
   };
 
   // Inline preview state (modal)
@@ -328,11 +340,15 @@ const CampaignForm = () => {
       .map(id => availableContents.find(c => c.id === id))
       .filter(content => content && !campaignContents.find(cc => cc.id === content.id));
 
-    const newCampaignContents = contentsToAdd.map((content, index) => ({
-      ...content,
-      order: campaignContents.length + index,
-      duration: content?.duration ?? formData?.content_duration ?? 10,
-    }));
+    const newCampaignContents = contentsToAdd.map((content, index) => {
+      const type = getTypeFor(content);
+      const override = type === 'image' ? (parseInt(selectedDurations[content.id], 10) || 10) : (content?.duration || 0);
+      return {
+        ...content,
+        order: campaignContents.length + index,
+        duration: override,
+      };
+    });
 
     setCampaignContents(prev => [...prev, ...newCampaignContents]);
     setSelectedContents([]);
@@ -374,6 +390,14 @@ const CampaignForm = () => {
   };
   const getContentDuration = (content) => {
     if (!content) return 0;
+    const type = getTypeFor(content);
+    const cid = content.id;
+    // No modal de seleção, permitir override para imagens
+    if (type === 'image' && selectedContents.includes(cid)) {
+      const v = parseInt(selectedDurations[cid], 10);
+      if (Number.isFinite(v) && v > 0) return v;
+      return 10;
+    }
     const d = content.duration;
     return (typeof d === 'number' && d > 0) ? d : (parseInt(formData?.content_duration, 10) || 10);
   };
@@ -469,9 +493,15 @@ const CampaignForm = () => {
         // REMOVIDO: Configurações de reprodução movidas para Schedule
       };
 
-      // Include content_ids only for creation flow (no id and no draft yet)
+      // Sempre enviar o áudio de fundo (mesmo que vazio para remover)
+      submitData.background_audio_content_id = bgAudioId || null;
+
+      // Incluir contents com duration_override (somente criação, sem draft ainda)
       if (!id && !draftCampaignId && campaignContents && campaignContents.length > 0) {
-        submitData.content_ids = campaignContents.map((c) => c.id);
+        submitData.contents = campaignContents.map((c) => ({
+          id: c.id,
+          duration_override: (getTypeFor(c) === 'image') ? (parseInt(c.duration, 10) || 10) : undefined,
+        }));
       }
 
       // Debug log AFTER defining submitData (avoid reference errors)
@@ -522,6 +552,10 @@ const CampaignForm = () => {
           end_date: parseDateTimeFlexible(c.end_date),
           // REMOVIDO: Configurações de reprodução movidas para Schedule
         }));
+        // Carregar áudio de fundo persistido
+        if (c.background_audio_content_id) {
+          setBgAudioId(c.background_audio_content_id);
+        }
         // Map existing contents for inline list visualization (optional)
         const cc = Array.isArray(c.contents) ? c.contents : [];
         const mapped = cc
@@ -583,6 +617,7 @@ const CampaignForm = () => {
         const r = await axios.get(`/campaigns/${effId}/compile/status`);
         const s = r.data?.compiled_video_status || null;
         setCompileStatus(s);
+        setCompileStale(Boolean(r.data?.compiled_stale));
         if (s === 'ready') {
           setCompileInfo({
             url: computeCompiledUrl(r.data?.compiled_video_url),
@@ -604,6 +639,34 @@ const CampaignForm = () => {
     }, 2000);
   };
 
+  // Consulta única para refletir auto-compilação feita no backend
+  const fetchCompileStatusOnce = async () => {
+    const effId = effectiveCampaignId;
+    if (!effId) return;
+    try {
+      const r = await axios.get(`/campaigns/${effId}/compile/status`);
+      const s = r.data?.compiled_video_status || null;
+      setCompileStatus(s);
+      setCompileStale(Boolean(r.data?.compiled_stale));
+      if (s === 'ready') {
+        setCompileInfo({
+          url: computeCompiledUrl(r.data?.compiled_video_url),
+          duration: r.data?.compiled_video_duration,
+          resolution: r.data?.compiled_video_resolution,
+          fps: r.data?.compiled_video_fps,
+          updatedAt: r.data?.compiled_video_updated_at,
+        });
+      } else if (s === 'processing') {
+        // Se já estiver processando, iniciar polling para acompanhar
+        setCompileMessage('Processando...');
+        if (!compilePollRef.current) pollCompileStatus();
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  // Iniciar compilação com áudio opcional
   const startCompile = async () => {
     const effId = effectiveCampaignId;
     if (!effId) {
@@ -614,8 +677,9 @@ const CampaignForm = () => {
     setCompileProgress(1);
     setCompileMessage('Iniciando compilação...');
     try {
-      const payload = { preset: compilePreset, fps: compileFps };
-      const resp = await axios.post(`/campaigns/${effId}/compile`, payload);
+      // Servidor usa presets/fps fixos via dotenv; enviar áudio opcional
+      const payload = bgAudioId ? { background_audio_content_id: bgAudioId } : {};
+      await axios.post(`/campaigns/${effId}/compile`, payload);
       setCompileStatus('processing');
       setCompileInfo(null);
       pollCompileStatus();
@@ -623,9 +687,7 @@ const CampaignForm = () => {
       setCompileError(err?.response?.data?.error || 'Falha ao iniciar compilação');
     }
   };
-
-  // Real-time progress via Socket.IO
-  const { socket } = useSocket();
+  // Escutar progresso da compilação via Socket.IO
   useEffect(() => {
     if (!socket) return;
     const effId = effectiveCampaignId;
@@ -654,6 +716,7 @@ const CampaignForm = () => {
             fps: data.fps,
             updatedAt: new Date().toISOString(),
           });
+          setCompileStale(false);
           setCompileProgress(100);
           setCompileMessage(data.message || 'Compilação concluída');
         } else if (s === 'failed' || s === 'error') {
@@ -673,6 +736,13 @@ const CampaignForm = () => {
       try { socket.off('campaign_compile_complete', onComplete); } catch (_) {}
     };
   }, [socket, effectiveCampaignId]);
+
+  // Ao abrir a aba de Preview, consultar status atual (inclui auto-compilação pós-salvamento)
+  useEffect(() => {
+    if (contentDialog && contentModalTab === 'preview') {
+      fetchCompileStatusOnce();
+    }
+  }, [contentDialog, contentModalTab, effectiveCampaignId]);
 
   // Quick save inside modal: create draft campaign with current form fields and selected contents
   const handleQuickSaveDraft = async () => {
@@ -705,12 +775,20 @@ const CampaignForm = () => {
         start_date: toBRDateTime(sd),
         end_date: toBRDateTime(ed),
         is_active: !!formData.is_active,
-        playback_mode: formData.playback_mode || 'sequential',
-        content_duration: parseInt(formData.content_duration, 10) || 10,
-        loop_enabled: !!formData.loop_enabled,
-        shuffle_enabled: !!formData.shuffle_enabled,
-        content_ids: (selectedContents || []).slice(),
+        contents: (selectedContents || []).map((id) => {
+          const c = availableContents.find(x => x.id === id);
+          const type = getTypeFor(c);
+          return {
+            id,
+            duration_override: type === 'image' ? (parseInt(selectedDurations[id], 10) || 10) : undefined,
+          };
+        }),
       };
+
+      // Incluir áudio de fundo, se escolhido, para que a autocompilação utilize
+      if (bgAudioId) {
+        submitData.background_audio_content_id = bgAudioId;
+      }
 
       setLoading(true);
       const resp = await axios.post('/campaigns', submitData);
@@ -769,6 +847,7 @@ const CampaignForm = () => {
   // Lista visível no modal (aplica filtros e exclui já adicionados)
   const getVisibleAvailableContents = useCallback(() => {
     return (availableContents || [])
+      .filter(content => getTypeFor(content) !== 'audio')
       .filter(content => !campaignContents.find(cc => cc.id === content.id))
       .filter(content => !typeFilter || (getTypeFor(content) === typeFilter))
       .filter(content => {
@@ -906,7 +985,7 @@ const CampaignForm = () => {
             </Grid>
           </Grid>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <Box>
             <Grid container spacing={3}>
               {/* Enhanced Campaign Information Card */}
               <Grid item xs={12} md={6}>
@@ -1109,7 +1188,7 @@ const CampaignForm = () => {
                       </Box>
 
                       {campaignContents.length > 0 && (
-                        <Box mb={2}>
+                        <Box mb={2} display="flex" gap={1} flexWrap="wrap">
                           <Chip
                             label={`Duração total: ${formatDuration(getTotalDuration())}`}
                             sx={{
@@ -1120,6 +1199,15 @@ const CampaignForm = () => {
                               fontWeight: 'bold',
                             }}
                           />
+                          {bgAudioId && (
+                            <Chip
+                              label={`🎵 Áudio: ${availableContents.find(c => c.id === bgAudioId)?.title || 'Configurado'}`}
+                              color="success"
+                              sx={{
+                                fontWeight: 'bold',
+                              }}
+                            />
+                          )}
                         </Box>
                       )}
 
@@ -1182,54 +1270,9 @@ const CampaignForm = () => {
                 </Grow>
               </Grid>
 
-              {/* Enhanced Action Buttons */}
-              <Grid item xs={12}>
-                <Fade in timeout={1400}>
-                  <Box display="flex" gap={2} justifyContent="flex-end">
-                    <Button
-                      variant="outlined"
-                      onClick={() => navigate('/campaigns')} 
-                      startIcon={<CancelIcon />}
-                      sx={{
-                        borderRadius: 2,
-                        px: 4,
-                        py: 1.5,
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          transition: 'transform 0.2s ease-in-out',
-                        },
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      disabled={loading || !formData.name || !formData.start_date || !formData.end_date}
-                      startIcon={<SaveIcon />}
-                      sx={{
-                        borderRadius: 2,
-                        px: 4,
-                        py: 1.5,
-                        background: (theme) => theme.palette.mode === 'dark'
-                          ? theme.palette.primary.main
-                          : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                        '&:hover': {
-                          transform: 'translateY(-2px)',
-                          transition: 'transform 0.2s ease-in-out',
-                        },
-                        '&:disabled': {
-                          background: 'rgba(0, 0, 0, 0.12)',
-                        },
-                      }}
-                    >
-                      {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar')}
-                    </Button>
-                  </Box>
-                </Fade>
-              </Grid>
+              {/* Enhanced Action Buttons removidos para evitar duplicação */}
             </Grid>
-          </form>
+          </Box>
         )}
 
         {/* Enhanced Content Selection Dialog */}
@@ -1327,12 +1370,10 @@ const CampaignForm = () => {
                           <MenuItem value="">Todos</MenuItem>
                           <MenuItem value="video">Vídeo</MenuItem>
                           <MenuItem value="image">Imagem</MenuItem>
-                          <MenuItem value="audio">Áudio</MenuItem>
                         </Select>
                       </FormControl>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <FormControlLabel control={<Switch size="small" checked={denseCards} onChange={(e) => setDenseCards(e.target.checked)} />} label={<Typography variant="body2">Modo denso</Typography>} />
                       <Button size="small" variant="outlined" onClick={selectAllVisible}>Selecionar todos</Button>
                       <Button size="small" variant="outlined" onClick={deselectAllVisible}>Desmarcar</Button>
                       <Button size="small" variant="outlined" onClick={invertVisibleSelection}>Inverter</Button>
@@ -1392,7 +1433,7 @@ const CampaignForm = () => {
                                       }
                                     }}
                                   >
-                                    <CardContent sx={{ p: denseCards ? 2 : 3 }}>
+                                    <CardContent sx={{ p: 3 }}>
                                       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                                         <Checkbox
                                           checked={selectedContents.includes(content.id)}
@@ -1448,6 +1489,27 @@ const CampaignForm = () => {
                       {/* Coluna direita: fila ordenável dos selecionados */}
                       <Grid item xs={12} md={4} sx={{ height: '100%', borderLeft: 1, borderColor: 'divider' }}>
                         <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                      {/* Seletor de Áudio de fundo movido para a aba de Seleção */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Áudio de fundo</InputLabel>
+                          <Select label="Áudio de fundo" value={bgAudioId} onChange={(e) => setBgAudioId(e.target.value)}>
+                            <MenuItem value="">Nenhum</MenuItem>
+                            {(availableContents || [])
+                              .filter((c) => (c.content_type || c.type) === 'audio')
+                              .map((aud) => (
+                                <MenuItem key={aud.id} value={aud.id}>{aud.title || aud.file_path || aud.id}</MenuItem>
+                              ))}
+                          </Select>
+                        </FormControl>
+                        {bgAudioId && (
+                          <Chip 
+                            size="small" 
+                            color="info" 
+                            label={`🎵 ${availableContents.find(c => c.id === bgAudioId)?.title || 'Áudio selecionado'}`}
+                          />
+                        )}
+                      </Box>
                           <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                             <Typography variant="subtitle1" fontWeight={600}>
                               Selecionados ({selectedContents.length})
@@ -1480,10 +1542,23 @@ const CampaignForm = () => {
                                       </ListItemAvatar>
                                       <ListItemText
                                         primary={`${index + 1}. ${content.title}`}
-                                        secondary={`${formatDuration(content.duration || 0)} • ${getTypeFor(content) || 'desconhecido'}`}
+                                        secondary={`${formatDuration(getTypeFor(content) === 'image' ? (parseInt(selectedDurations[id], 10) || 10) : (content.duration || 0))} • ${getTypeFor(content) || 'desconhecido'}`}
                                         primaryTypographyProps={{ variant: 'body2', noWrap: true }}
                                         secondaryTypographyProps={{ variant: 'caption' }}
                                       />
+                                      {/* Campo de duração apenas para imagens */}
+                                      {getTypeFor(content) === 'image' && (
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 1 }}>
+                                          <TextField
+                                            size="small"
+                                            type="number"
+                                            value={selectedDurations[id] ?? ''}
+                                            onChange={(e) => setSelectedDurations(prev => ({ ...prev, [id]: e.target.value }))}
+                                            placeholder="seg"
+                                            inputProps={{ min: 1, style: { width: 72 } }}
+                                          />
+                                        </Box>
+                                      )}
                                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                                         <IconButton size="small" onClick={() => moveSelected(id, 'up')} disabled={index === 0}>
                                           <ArrowUpIcon fontSize="small" />
@@ -1519,25 +1594,8 @@ const CampaignForm = () => {
                       </Typography>
                     ) : (
                       <Box>
-                        {/* Compile controls */}
+                        {/* Controles de compilação simplificados (presets/fps fixos no servidor) */}
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                          <FormControl size="small" sx={{ minWidth: 120 }}>
-                            <InputLabel>Preset</InputLabel>
-                            <Select label="Preset" value={compilePreset} onChange={(e) => setCompilePreset(e.target.value)}>
-                              <MenuItem value="360p">360p</MenuItem>
-                              <MenuItem value="720p">720p</MenuItem>
-                              <MenuItem value="1080p">1080p</MenuItem>
-                            </Select>
-                          </FormControl>
-                          <TextField
-                            size="small"
-                            label="FPS"
-                            type="number"
-                            value={compileFps}
-                            onChange={(e) => setCompileFps(parseInt(e.target.value) || 30)}
-                            sx={{ width: 100 }}
-                            inputProps={{ min: 1, max: 60 }}
-                          />
                           <Chip
                             size="small"
                             label={`Status: ${compileStatus || '—'}`}
@@ -1548,15 +1606,16 @@ const CampaignForm = () => {
                             <Button size="small" href={compileInfo.url} target="_blank" rel="noopener">Ver vídeo</Button>
                           )}
                           <Box sx={{ flexGrow: 1 }} />
+                          {/* (Apenas Preview e ações) */}
                           <Tooltip title={effectiveCampaignId ? '' : 'Salve a campanha primeiro para compilar'}>
                             <span>
                               <Button
                                 size="small"
                                 variant="contained"
                                 onClick={startCompile}
-                                disabled={!effectiveCampaignId || selectedContents.length === 0 || compileStatus === 'processing'}
+                                disabled={!effectiveCampaignId || selectedContents.length === 0 || compileStatus === 'processing' || (compileStatus === 'ready' && !compileStale)}
                               >
-                                Compilar
+                                {compileStatus === 'ready' && !compileStale ? 'Pronto' : 'Compilar'}
                               </Button>
                             </span>
                           </Tooltip>
@@ -1600,32 +1659,47 @@ const CampaignForm = () => {
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}>
-                          {selectedContents.length > 0 && (
-                            <video
-                              key={getMediaUrlFor(getSelectedContentObjects()[0])}
-                              ref={videoRef}
-                              poster={getThumbUrlFor(getSelectedContentObjects()[0]) || undefined}
-                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                              controls
-                              muted
-                              playsInline
-                              preload="auto"
-                              autoPlay={previewPlaying}
-                              crossOrigin="anonymous"
-                              onLoadedMetadata={(e) => {
-                                try { e.currentTarget.currentTime = 0; } catch (_) {}
-                                if (previewPlaying) {
-                                  try { e.currentTarget.play(); } catch (_) {}
-                                }
-                                setPreviewElapsed(0);
-                              }}
-                              onError={(e) => {
-                                console.error('Video load error for URL:', getMediaUrlFor(getSelectedContentObjects()[0]), e);
-                              }}
-                            >
-                              <source src={getMediaUrlFor(getSelectedContentObjects()[0])} type={getMimeTypeFor(getSelectedContentObjects()[0]) || 'video/mp4'} />
-                            </video>
-                          )}
+                          {selectedContents.length > 0 && (() => {
+                            const current = getSelectedContentObjects()[previewIndex] || null;
+                            const type = getTypeFor(current);
+                            if (type === 'video') {
+                              return (
+                                <video
+                                  key={getMediaUrlFor(current)}
+                                  ref={videoRef}
+                                  poster={getThumbUrlFor(current) || undefined}
+                                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                  controls
+                                  muted
+                                  playsInline
+                                  preload="auto"
+                                  autoPlay={previewPlaying}
+                                  crossOrigin="anonymous"
+                                  onLoadedMetadata={(e) => {
+                                    try { e.currentTarget.currentTime = 0; } catch (_) {}
+                                    if (previewPlaying) {
+                                      try { e.currentTarget.play(); } catch (_) {}
+                                    }
+                                    setPreviewElapsed(0);
+                                  }}
+                                  onError={(e) => {
+                                    console.error('Video load error for URL:', getMediaUrlFor(current), e);
+                                  }}
+                                >
+                                  <source src={getMediaUrlFor(current)} type={getMimeTypeFor(current) || 'video/mp4'} />
+                                </video>
+                              );
+                            }
+                            // Imagem ou outros tipos
+                            return (
+                              <img
+                                key={getMediaUrlFor(current) || getThumbUrlFor(current) || current?.id}
+                                src={getMediaUrlFor(current) || getThumbUrlFor(current)}
+                                alt={current?.title || ''}
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              />
+                            );
+                          })()}
                         </Box>
                         {/* Filmstrip with thumbnails of the sequence */}
                         <Box sx={{ display: 'flex', gap: 1, overflowX: 'auto', pb: 1, mb: 2 }}>

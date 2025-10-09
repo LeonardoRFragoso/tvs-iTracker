@@ -1161,6 +1161,9 @@ def get_player_playlist(player_id):
 
         # Incluir configurações de reprodução do primeiro agendamento ativo
         playback_config = {}
+        background_audio_id = None
+        background_audio_url = None
+        
         if schedules_to_use:
             schedule = schedules_to_use[0]
             playback_config = {
@@ -1175,12 +1178,33 @@ def get_player_playlist(player_id):
                 'content_type': getattr(schedule, 'content_type', 'main'),
             }
             print(f"[DEBUG] Enviando configurações de reprodução: {playback_config}")
+            
+            # Incluir áudio de fundo da campanha, se configurado
+            try:
+                campaign = getattr(schedule, 'campaign', None)
+                if campaign and hasattr(campaign, 'background_audio_content_id'):
+                    bg_audio_id = getattr(campaign, 'background_audio_content_id', None)
+                    if bg_audio_id:
+                        from models.content import Content
+                        bg_audio = Content.query.get(bg_audio_id)
+                        if bg_audio and bg_audio.file_path:
+                            filename = str(bg_audio.file_path).split('/')[-1]
+                            # Verificar existência do arquivo
+                            bg_audio_abs = os.path.join(upload_dir, filename)
+                            if os.path.exists(bg_audio_abs):
+                                background_audio_id = bg_audio_id
+                                background_audio_url = f"{media_base}/api/content/media/{filename}?pid={player_id}"
+                                print(f"[DEBUG] Background audio configurado: {background_audio_url}")
+            except Exception as e:
+                print(f"[DEBUG] Erro ao carregar áudio de fundo: {str(e)}")
         
         resp = jsonify({
             'player_id': player_id,
             'schedule_ids': [s.id for s in schedules_to_use],
             'contents': items,
-            'playback_config': playback_config
+            'playback_config': playback_config,
+            'background_audio_content_id': background_audio_id,
+            'background_audio_url': background_audio_url
         })
         resp.headers['ETag'] = etag_header
         return resp, 200

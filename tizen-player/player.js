@@ -47,7 +47,11 @@
         playbackStartTime: null,
         lastActivity: Date.now(),
         connected: false,
-        circuitBreakerOpen: false
+        circuitBreakerOpen: false,
+        // Background audio support
+        backgroundAudioUrl: null,
+        backgroundAudioElement: null,
+        backgroundAudioLoaded: false
     };
 
     // Elementos DOM
@@ -331,6 +335,16 @@
                         STATE.playbackConfig = response.playback_config;
                     }
                     
+                    // Carregar áudio de fundo se disponível
+                    if (response.background_audio_url) {
+                        log('Áudio de fundo detectado', response.background_audio_url);
+                        STATE.backgroundAudioUrl = response.background_audio_url;
+                        setupBackgroundAudio();
+                    } else {
+                        log('Nenhum áudio de fundo configurado');
+                        cleanupBackgroundAudio();
+                    }
+                    
                     hideLoading();
                     updateStatusInfo();
                     
@@ -522,6 +536,142 @@
         updateStatusInfo(`Reconectando em ${Math.round(delay/1000)}s...`);
     }
 
+    // ===== Funções de Áudio de Fundo =====
+
+    /**
+     * Configura o áudio de fundo
+     */
+    function setupBackgroundAudio() {
+        if (!STATE.backgroundAudioUrl) {
+            log('Nenhuma URL de áudio de fundo fornecida');
+            return;
+        }
+
+        // Limpar áudio anterior se existir
+        cleanupBackgroundAudio();
+
+        try {
+            log('Criando elemento de áudio de fundo:', STATE.backgroundAudioUrl);
+            
+            // Criar elemento <audio> com JavaScript puro
+            var audio = document.createElement('audio');
+            audio.src = STATE.backgroundAudioUrl;
+            audio.loop = true; // Loop infinito
+            audio.preload = 'auto';
+            audio.volume = 0.3; // Volume 30% (para não sobrepor vídeos com áudio)
+            audio.style.display = 'none'; // Ocultar elemento
+            
+            // Event listeners
+            audio.addEventListener('canplaythrough', function() {
+                log('Áudio de fundo carregado e pronto para reproduzir');
+                STATE.backgroundAudioLoaded = true;
+                // Tentar iniciar reprodução se já estiver tocando conteúdo
+                if (STATE.isPlaying) {
+                    startBackgroundAudio();
+                }
+            });
+            
+            audio.addEventListener('error', function(e) {
+                log('Erro ao carregar áudio de fundo:', e);
+                STATE.backgroundAudioLoaded = false;
+            });
+            
+            audio.addEventListener('play', function() {
+                log('🎵 Áudio de fundo iniciado');
+            });
+            
+            audio.addEventListener('pause', function() {
+                log('🎵 Áudio de fundo pausado');
+            });
+            
+            // Adicionar ao documento (necessário para alguns navegadores)
+            document.body.appendChild(audio);
+            STATE.backgroundAudioElement = audio;
+            
+            // Carregar o áudio
+            audio.load();
+            
+        } catch (e) {
+            log('Erro ao configurar áudio de fundo:', e);
+        }
+    }
+
+    /**
+     * Inicia a reprodução do áudio de fundo
+     */
+    function startBackgroundAudio() {
+        if (!STATE.backgroundAudioElement || !STATE.backgroundAudioLoaded) {
+            log('Áudio de fundo não está pronto ainda');
+            return;
+        }
+
+        // Verificar se já está tocando para evitar reiniciar
+        if (!STATE.backgroundAudioElement.paused) {
+            log('Áudio de fundo já está tocando, mantendo reprodução');
+            return;
+        }
+
+        try {
+            log('Iniciando áudio de fundo...');
+            var playPromise = STATE.backgroundAudioElement.play();
+            
+            // Alguns navegadores retornam Promise, outros não
+            if (playPromise && playPromise.catch) {
+                playPromise.catch(function(error) {
+                    log('Falha ao iniciar áudio de fundo (pode precisar de interação do usuário):', error);
+                    // Em caso de falha por autoplay policy, tentar após primeiro gesto do usuário
+                    document.addEventListener('click', function tryPlayOnGesture() {
+                        if (STATE.backgroundAudioElement && STATE.backgroundAudioElement.paused) {
+                            STATE.backgroundAudioElement.play().catch(function(e) {
+                                log('Ainda não foi possível iniciar áudio:', e);
+                            });
+                        }
+                        document.removeEventListener('click', tryPlayOnGesture);
+                    }, { once: true });
+                });
+            }
+        } catch (e) {
+            log('Erro ao iniciar áudio de fundo:', e);
+        }
+    }
+
+    /**
+     * Para a reprodução do áudio de fundo
+     */
+    function stopBackgroundAudio() {
+        if (!STATE.backgroundAudioElement) return;
+        
+        try {
+            log('Parando áudio de fundo');
+            STATE.backgroundAudioElement.pause();
+            STATE.backgroundAudioElement.currentTime = 0;
+        } catch (e) {
+            log('Erro ao parar áudio de fundo:', e);
+        }
+    }
+
+    /**
+     * Limpa o elemento de áudio de fundo
+     */
+    function cleanupBackgroundAudio() {
+        if (!STATE.backgroundAudioElement) return;
+        
+        try {
+            log('Limpando áudio de fundo');
+            STATE.backgroundAudioElement.pause();
+            STATE.backgroundAudioElement.src = '';
+            if (STATE.backgroundAudioElement.parentNode) {
+                STATE.backgroundAudioElement.parentNode.removeChild(STATE.backgroundAudioElement);
+            }
+        } catch (e) {
+            log('Erro ao limpar áudio de fundo:', e);
+        }
+        
+        STATE.backgroundAudioElement = null;
+        STATE.backgroundAudioLoaded = false;
+        STATE.backgroundAudioUrl = null;
+    }
+
     // ===== Funções de Reprodução de Mídia =====
 
     /**
@@ -672,6 +822,16 @@
         const transitionTime = (playbackConfig.transition_duration || 1) * 1000;
         log(`Aplicando transição de ${transitionTime}ms`);
         
+        // Sincronizar áudio de fundo quando voltar ao início do ciclo
+        if (nextIndex === 0 && STATE.backgroundAudioElement) {
+            log('🔄 Ciclo recomeçou, sincronizando áudio de fundo');
+            try {
+                STATE.backgroundAudioElement.currentTime = 0; // Reiniciar áudio
+            } catch (e) {
+                log('Erro ao reiniciar áudio de fundo:', e);
+            }
+        }
+        
         setTimeout(() => {
             STATE.currentIndex = nextIndex;
             playContent();
@@ -690,6 +850,9 @@
         hideLoading();
         STATE.isPlaying = true;
         STATE.playbackStartTime = Date.now();
+        
+        // Iniciar áudio de fundo se disponível
+        startBackgroundAudio();
         
         // Enviar evento de início de reprodução
         sendPlaybackStart();
@@ -737,6 +900,9 @@
         hideLoading();
         STATE.isPlaying = true;
         STATE.playbackStartTime = Date.now();
+        
+        // Iniciar áudio de fundo se disponível (importante para imagens!)
+        startBackgroundAudio();
         
         // Enviar evento de início de reprodução
         sendPlaybackStart();

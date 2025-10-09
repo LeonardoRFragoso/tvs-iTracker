@@ -19,7 +19,7 @@ class VideoCompiler:
         os.makedirs(self.compiled_dir, exist_ok=True)
 
     # -------------------- Public API --------------------
-    def start_async_compile(self, campaign_id: str, resolution: str = '1920x1080', fps: int = 30) -> bool:
+    def start_async_compile(self, campaign_id: str, resolution: str = None, fps: int = None, background_audio_content_id: str = None) -> bool:
         try:
             # Validate campaign exists
             campaign = Campaign.query.get(campaign_id)
@@ -30,6 +30,36 @@ class VideoCompiler:
             if campaign.compiled_video_status == 'processing':
                 return True
 
+            # Normalizar parâmetros a partir do .env se não informados
+            try:
+                preset_map = {
+                    '360p': ('640x360', 30),
+                    '720p': ('1280x720', 30),
+                    '1080p': ('1920x1080', 30),
+                }
+                if not resolution or not fps:
+                    preset = str(os.getenv('COMPILE_PRESET', '1080p') or '').lower().strip()
+                    res_def, fps_def = preset_map.get(preset, ('1920x1080', 30))
+                    resolution = resolution or os.getenv('COMPILE_RESOLUTION', res_def)
+                    try:
+                        fps = int(fps if fps is not None else os.getenv('COMPILE_FPS', fps_def))
+                    except Exception:
+                        fps = fps_def
+                # Garantir tipos corretos
+                if not isinstance(resolution, str) or 'x' not in resolution:
+                    resolution = '1920x1080'
+                try:
+                    fps = int(fps)
+                except Exception:
+                    fps = 30
+            except Exception:
+                # Fallback seguro
+                resolution = resolution or '1920x1080'
+                try:
+                    fps = int(fps) if fps is not None else 30
+                except Exception:
+                    fps = 30
+
             # Mark as processing
             campaign.compiled_video_status = 'processing'
             campaign.compiled_video_error = None
@@ -38,7 +68,7 @@ class VideoCompiler:
 
             # Capture Flask app and launch background thread
             app = current_app._get_current_object()
-            t = threading.Thread(target=self._compile_campaign_worker, args=(app, campaign_id, resolution, fps), daemon=True)
+            t = threading.Thread(target=self._compile_campaign_worker, args=(app, campaign_id, resolution, fps, background_audio_content_id), daemon=True)
             t.start()
             # Fire start event
             try:
@@ -59,7 +89,7 @@ class VideoCompiler:
             return False
 
     # -------------------- Worker --------------------
-    def _compile_campaign_worker(self, app, campaign_id: str, resolution: str, fps: int):
+    def _compile_campaign_worker(self, app, campaign_id: str, resolution: str, fps: int, background_audio_content_id: str = None):
         # Ensure app context for DB/session access
         with app.app_context():
             campaign = Campaign.query.get(campaign_id)
@@ -178,6 +208,110 @@ class VideoCompiler:
                     'message': 'Analisando duração'
                 })
                 duration_sec = self._probe_duration(out_full)
+
+                # Optional: escolher áudio de fundo automaticamente se não informado
+                bg_id = background_audio_content_id
+                if not bg_id:
+                    try:
+                        # Pegar primeiro conteúdo de áudio ativo da campanha
+                        first_audio = next((cc for cc in contents
+                                            if getattr(cc, 'is_active', True) and cc.content and (getattr(cc.content, 'content_type', '') or '').lower() == 'audio'), None)
+                        if first_audio and getattr(first_audio, 'content', None):
+                            bg_id = getattr(first_audio.content, 'id', None)
+                            if bg_id:
+                                # Aviso de fallback
+                                self._emit(app, 'campaign_compile_progress', {
+                                    'campaign_id': campaign_id,
+                                    'status': 'processing',
+                                    'progress': 93,
+                                    'message': 'Áudio de fundo detectado automaticamente'
+                                })
+                    except Exception:
+                        bg_id = None
+
+                # Optional: Mux background audio (loop to match duration, replace original audio)
+                if bg_id:
+                    try:
+                        from models.content import Content
+                        bg_content = Content.query.get(bg_id)
+                        bg_src = None
+                        # Resolver caminho do áudio de forma tolerante (não depender do content_type)
+                        if bg_content and getattr(bg_content, 'file_path', None):
+                            candidate1 = os.path.join(self.uploads_dir, os.path.basename(bg_content.file_path))
+                            candidate2 = bg_content.file_path
+                            # Se o caminho salvo começar com '/uploads' ou 'uploads', normalizar
+                            try:
+                                norm2 = candidate2.lstrip('/')
+                                if norm2.lower().startswith('uploads/'):
+                                    candidate3 = os.path.join('.', norm2)
+                                else:
+                                    candidate3 = None
+                            except Exception:
+                                candidate3 = None
+                            for cand in [candidate1, candidate2, candidate3]:
+                                if cand and os.path.exists(cand):
+                                    bg_src = cand
+                                    break
+                        if not bg_src:
+                            raise FileNotFoundError('Áudio de fundo não encontrado')
+
+                        self._emit(app, 'campaign_compile_progress', {
+                            'campaign_id': campaign_id,
+                            'status': 'processing',
+                            'progress': 94,
+                            'message': 'Aplicando música de fundo'
+                        })
+
+                        out_with_audio = os.path.join(self.compiled_dir, f"campaign_{campaign_id}_{ts}_bg.mp4")
+                        # Loop audio to cover full video duration and trim to exact duration
+                        dur_arg = str(int(duration_sec)) if duration_sec else None
+                        cmd = [
+                            'ffmpeg', '-y',
+                            '-stream_loop', '-1', '-i', bg_src,  # loop audio
+                            '-i', out_full,                      # video (with any original audio)
+                        ]
+                        if dur_arg:
+                            cmd.extend(['-t', dur_arg])
+                        cmd.extend([
+                            '-map', '1:v:0',   # take video from compiled video
+                            '-map', '0:a:0',   # take audio from background
+                            '-c:v', 'copy',
+                            '-c:a', 'aac', '-b:a', '192k',
+                            '-movflags', '+faststart',
+                            '-shortest',       # stop at shortest (video)
+                            out_with_audio
+                        ])
+
+                        self._run(cmd, 'mux-background-audio')
+
+                        # Replace output with audio version
+                        try:
+                            shutil.move(out_with_audio, out_full)
+                        except Exception:
+                            # If move fails (e.g., cross-device), copy then remove
+                            shutil.copy2(out_with_audio, out_full)
+                            try:
+                                os.remove(out_with_audio)
+                            except Exception:
+                                pass
+                        # Small progress bump
+                        self._emit(app, 'campaign_compile_progress', {
+                            'campaign_id': campaign_id,
+                            'status': 'processing',
+                            'progress': 96,
+                            'message': 'Música aplicada'
+                        })
+                    except Exception as e:
+                        # Do not fail compilation if audio mix fails; record warning
+                        try:
+                            self._emit(app, 'campaign_compile_progress', {
+                                'campaign_id': campaign_id,
+                                'status': 'processing',
+                                'progress': 96,
+                                'message': f'Falha ao aplicar música: {str(e)}'
+                            })
+                        except Exception:
+                            pass
 
                 # Persist compiled metadata
                 campaign.compiled_video_path = os.path.join('compiled', out_name).replace('\\', '/')
