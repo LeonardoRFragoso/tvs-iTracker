@@ -106,7 +106,7 @@ const LocationDetail = () => {
   if (!location) {
     return (
       <Box sx={{ p: 4 }}>
-        <Typography variant="h6">Sede não encontrada</Typography>
+        <Typography variant="h6">Empresa não encontrada</Typography>
       </Box>
     );
   }

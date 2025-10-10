@@ -147,7 +147,7 @@ const LocationList = () => {
       setStats(statsMap);
       
     } catch (err) {
-      setError('Erro ao carregar sedes: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao carregar empresas: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ const LocationList = () => {
       setDeleteDialog({ open: false, location: null });
       fetchLocations();
     } catch (err) {
-      setError('Erro ao deletar sede: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao deletar empresa: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -215,7 +215,7 @@ const LocationList = () => {
     <Box sx={{ p: 4 }}>
       {/* Header com PageTitle */}
       <PageTitle 
-        title="Gerenciamento de Sedes"
+        title="Gerenciamento de Empresas"
         subtitle="Administre as localizações e seus dispositivos"
         actions={
           <>
@@ -256,7 +256,7 @@ const LocationList = () => {
                 transition: 'all 0.3s ease',
               }}
             >
-              Nova Sede
+              Nova Empresa
             </Button>
           </>
         }
@@ -293,10 +293,10 @@ const LocationList = () => {
             </Avatar>
             <Box>
               <Typography variant="h6" fontWeight="bold">
-                Buscar Sedes
+                Buscar Empresas
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Encontre sedes por nome, cidade, estado ou empresa
+                Encontre empresas por nome, cidade, estado ou empresa
               </Typography>
             </Box>
           </Box>
@@ -304,7 +304,7 @@ const LocationList = () => {
             <Grid item xs={12} md={8}>
               <TextField
                 fullWidth
-                placeholder="Buscar sedes por nome, cidade ou estado..."
+                placeholder="Buscar empresas por nome, cidade ou estado..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
@@ -390,7 +390,7 @@ const LocationList = () => {
                         {locations.length}
                       </Typography>
                       <Typography variant="h6" sx={{ opacity: 0.9 }}>
-                        Total de Sedes
+                        Total de Empresas
                       </Typography>
                     </Box>
                     <Avatar
@@ -864,7 +864,7 @@ const LocationList = () => {
       {filteredLocations.length === 0 && (
         <Box textAlign="center" py={4}>
           <Typography variant="body1" color="text.secondary">
-            {searchTerm ? 'Nenhuma sede encontrada para a busca.' : 'Nenhuma sede cadastrada.'}
+            {searchTerm ? 'Nenhuma empresa encontrada para a busca.' : 'Nenhuma empresa cadastrada.'}
           </Typography>
           {!searchTerm && (
             <Button
@@ -873,7 +873,7 @@ const LocationList = () => {
               onClick={() => navigate('/locations/new')}
               sx={{ mt: 2 }}
             >
-              Cadastrar Primeira Sede
+              Cadastrar Primeira Empresa
             </Button>
           )}
         </Box>
@@ -887,7 +887,7 @@ const LocationList = () => {
         <DialogTitle>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
-            Tem certeza que deseja deletar a sede "{deleteDialog.location?.name}"?
+            Tem certeza que deseja deletar a empresa "{deleteDialog.location?.name}"?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Esta ação não pode ser desfeita.

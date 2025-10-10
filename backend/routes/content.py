@@ -11,7 +11,12 @@ from models.user import User
 
 content_bp = Blueprint('content', __name__)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'html', 'txt'}
+ALLOWED_EXTENSIONS = {
+    'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp',
+    'mp4', 'avi', 'mov', 'wmv', 'flv',
+    'mp3', 'wav', 'ogg', 'm4a',
+    'html', 'txt'
+}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -22,6 +27,8 @@ def get_content_type(filename):
         return 'image'
     elif ext in ['mp4', 'avi', 'mov', 'wmv', 'flv']:
         return 'video'
+    elif ext in ['mp3', 'wav', 'ogg', 'm4a']:
+        return 'audio'
     elif ext in ['html']:
         return 'html'
     elif ext in ['txt']:
@@ -235,6 +242,13 @@ def update_content(content_id):
                 
                 # Atualizar duração em update de arquivo (multipart)
                 if content.content_type == 'video':
+                    try:
+                        real_dur_new = get_video_duration_seconds(file_path)
+                        if real_dur_new and real_dur_new > 0:
+                            content.duration = int(real_dur_new)
+                    except Exception:
+                        pass
+                elif content.content_type == 'audio':
                     try:
                         real_dur_new = get_video_duration_seconds(file_path)
                         if real_dur_new and real_dur_new > 0:
@@ -461,6 +475,11 @@ def create_content():
                         pass
                 elif content_type == 'video':
                     # Calcular duração real do vídeo
+                    real_dur = get_video_duration_seconds(file_path)
+                    if real_dur and real_dur > 0:
+                        duration = int(real_dur)
+                elif content_type == 'audio':
+                    # Calcular duração real do áudio (ffprobe funciona igualmente)
                     real_dur = get_video_duration_seconds(file_path)
                     if real_dur and real_dur > 0:
                         duration = int(real_dur)

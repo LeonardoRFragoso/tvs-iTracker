@@ -34,6 +34,9 @@ import { useDropzone } from 'react-dropzone';
 import axios from '../../config/axios';
 import PageTitle from '../../components/Common/PageTitle';
 
+// Limite total por lote (50 MB)
+const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
+
 const ContentForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -49,11 +52,16 @@ const ContentForm = () => {
     content_type: '',
     thumbnail_path: '',
   });
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]); // suporta múltiplos arquivos
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [totalBytesSelected, setTotalBytesSelected] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [successCount, setSuccessCount] = useState(0);
+  const [errorCount, setErrorCount] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [tagInput, setTagInput] = useState('');
@@ -117,28 +125,59 @@ const ContentForm = () => {
     return contentType === 'video' || contentType === 'audio';
   };
 
+  // Normaliza um content-type (MIME ou simples) para 'image' | 'video' | 'audio' | 'unknown'
+  const normalizeContentKind = (t) => {
+    if (!t) return 'unknown';
+    const s = String(t).toLowerCase();
+    if (s.startsWith('image/') || s === 'image') return 'image';
+    if (s.startsWith('video/') || s === 'video') return 'video';
+    if (s.startsWith('audio/') || s === 'audio') return 'audio';
+    return 'unknown';
+  };
+
+  // Tipo efetivo para controlar UI (campo de duração)
+  const effectiveKind = normalizeContentKind(detectedContentType || formData.content_type || '');
+  const showDurationInput = effectiveKind === 'video' || effectiveKind === 'audio';
+
   const onDrop = (acceptedFiles) => {
+    if (!acceptedFiles || acceptedFiles.length === 0) return;
+
+    // Validação: tamanho total do lote não pode exceder 50MB
+    const totalBytes = acceptedFiles.reduce((sum, f) => sum + (f?.size || 0), 0);
+    if (totalBytes > MAX_TOTAL_BYTES) {
+      setError('O tamanho total dos arquivos selecionados excede 50 MB. Selecione um lote menor.');
+      setFiles([]);
+      setPreview(null);
+      return;
+    }
+
+    setError('');
+    setFiles(acceptedFiles);
+    setTotalBytesSelected(totalBytes);
+    setCompletedCount(0);
+    setSuccessCount(0);
+    setErrorCount(0);
+    setUploadProgress(0);
+
+    // Para pré-visualização mostramos apenas o primeiro arquivo se for imagem
     const selectedFile = acceptedFiles[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      const contentType = getContentTypeFromFile(selectedFile);
-      setDetectedContentType(selectedFile.type);
-      
-      // Set default duration based on content type
-      if (contentType === 'image') {
-        setFormData(prev => ({ ...prev, duration: '' })); // Images don't need duration
-      } else if (contentType === 'video' || contentType === 'audio') {
-        setFormData(prev => ({ ...prev, duration: prev.duration || '' })); // Keep existing or empty for user input
-      }
-      
-      // Create preview for images
-      if (selectedFile.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => setPreview(reader.result);
-        reader.readAsDataURL(selectedFile);
-      } else {
-        setPreview(null);
-      }
+    const contentType = getContentTypeFromFile(selectedFile);
+    setDetectedContentType(selectedFile.type);
+    
+    // Set default duration based on content type
+    if (contentType === 'image') {
+      setFormData(prev => ({ ...prev, duration: '' })); // Images don't need duration
+    } else if (contentType === 'video' || contentType === 'audio') {
+      setFormData(prev => ({ ...prev, duration: prev.duration || '' })); // Keep existing or empty for user input
+    }
+    
+    // Create preview for images
+    if (selectedFile.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setPreview(reader.result);
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setPreview(null);
     }
   };
 
@@ -149,7 +188,7 @@ const ContentForm = () => {
       'video/*': ['.mp4', '.avi', '.mov', '.wmv', '.flv'],
       'audio/*': ['.mp3', '.wav', '.ogg', '.m4a']
     },
-    multiple: false
+    multiple: true
   });
 
   const handleInputChange = (e) => {
@@ -182,54 +221,78 @@ const ContentForm = () => {
     setError('');
     setSuccess('');
     setLoading(true);
+    setCompletedCount(0);
+    setSuccessCount(0);
+    setErrorCount(0);
+    setCurrentIndex(0);
+    setUploadProgress(0);
 
     try {
-      const submitData = new FormData();
-      
-      // Get content type from file
-      const contentType = file ? getContentTypeFromFile(file) : 'text';
-      
-      // Add form fields
-      Object.keys(formData).forEach(key => {
-        if (key === 'tags') {
-          submitData.append('tags', JSON.stringify(formData.tags));
-        } else if (key === 'duration') {
-          // Only include duration for video and audio files
-          if (isDurationRequired(contentType) && formData[key]) {
+      // Edição continua permitindo apenas um arquivo
+      const targetFiles = isEdit ? (files[0] ? [files[0]] : []) : files;
+
+      // Validação: tamanho total do lote
+      const totalBytes = targetFiles.reduce((sum, f) => sum + (f?.size || 0), 0);
+      if (totalBytes > MAX_TOTAL_BYTES) {
+        setError('O tamanho total dos arquivos deste envio excede 50 MB. Divida em lotes menores.');
+        return;
+      }
+      setTotalBytesSelected(totalBytes);
+
+      let uploadedSoFar = 0;
+      for (let idx = 0; idx < targetFiles.length; idx++) {
+        const f = targetFiles[idx];
+        const submitData = new FormData();
+
+        const contentType = f ? getContentTypeFromFile(f) : normalizeContentKind(formData.content_type || '');
+
+        Object.keys(formData).forEach(key => {
+          if (key === 'tags') {
+            submitData.append('tags', JSON.stringify(formData.tags));
+          } else if (key === 'duration') {
+            if (isDurationRequired(contentType) && formData[key]) {
+              submitData.append(key, formData[key]);
+            }
+          } else if (key === 'title') {
+            // Se múltiplos arquivos e título vazio, usa nome do arquivo (sem extensão)
+            const val = (formData.title || '').trim() || f.name.replace(/\.[^.]+$/, '');
+            submitData.append('title', val);
+          } else {
             submitData.append(key, formData[key]);
           }
-          // For images, don't send duration at all - backend will set default
-          return;
-        } else {
-          submitData.append(key, formData[key]);
+        });
+
+        if (f) submitData.append('file', f);
+
+        const config = {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (pe) => {
+            try {
+              const overall = Math.round(((uploadedSoFar + pe.loaded) / Math.max(1, totalBytes)) * 100);
+              setUploadProgress(Math.min(100, Math.max(0, overall)));
+              setCurrentIndex(idx + 1);
+            } catch (_) {}
+          }
+        };
+
+        try {
+          if (isEdit) {
+            await axios.put(`/content/${id}`, submitData, config);
+          } else {
+            await axios.post('/content', submitData, config);
+          }
+          setSuccessCount((s) => s + 1);
+        } catch (reqErr) {
+          setErrorCount((e) => e + 1);
+          // Continua com os demais arquivos
         }
-      });
 
-      // Add file if present
-      if (file) {
-        submitData.append('file', file);
+        uploadedSoFar += f?.size || 0;
+        setCompletedCount((c) => c + 1);
+        setUploadProgress(Math.round((uploadedSoFar / Math.max(1, totalBytes)) * 100));
       }
 
-      const config = {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setUploadProgress(percentCompleted);
-        },
-      };
-
-      let response;
-      if (isEdit) {
-        response = await axios.put(`/content/${id}`, submitData, config);
-      } else {
-        response = await axios.post(`/content`, submitData, config);
-      }
-
-      setSuccess(isEdit ? 'Conteúdo atualizado com sucesso!' : 'Conteúdo criado com sucesso!');
+      setSuccess(isEdit ? 'Conteúdo atualizado com sucesso!' : `Carregado ${targetFiles.length} conteúdo(s) com sucesso!`);
       
       // Redirect after success
       setTimeout(() => {
@@ -339,34 +402,36 @@ const ContentForm = () => {
                     
                     <Box
                       {...getRootProps()}
-                      sx={{
+                      sx={(theme) => ({
                         border: '2px dashed',
-                        borderColor: isDragActive ? 'primary.main' : 'grey.300',
+                        borderColor: isDragActive ? theme.palette.primary.main : theme.palette.divider,
                         borderRadius: 3,
                         p: 4,
                         textAlign: 'center',
                         cursor: 'pointer',
-                        backgroundColor: isDragActive ? 'primary.50' : 'grey.50',
+                        backgroundColor: isDragActive
+                          ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : theme.palette.action.hover)
+                          : (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : theme.palette.background.default),
                         transition: 'all 0.3s ease',
                         '&:hover': {
-                          borderColor: 'primary.main',
-                          backgroundColor: 'primary.50',
+                          borderColor: theme.palette.primary.main,
+                          backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : theme.palette.action.hover,
                           transform: 'translateY(-2px)',
-                          boxShadow: '0 8px 25px rgba(0,0,0,0.1)',
+                          boxShadow: theme.palette.mode === 'dark' ? '0 8px 25px rgba(0,0,0,0.35)' : '0 8px 25px rgba(0,0,0,0.1)',
                         },
-                      }}
+                      })}
                     >
                       <input {...getInputProps()} />
                       <UploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
-                      {file ? (
-                        <Box>
+                      {files.length > 0 ? (
+                          <Box>
                           <Typography variant="h6" gutterBottom>
-                            {file.name}
+                            {files.length === 1 ? files[0].name : `${files.length} arquivos selecionados`}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {formatFileSize(file.size)}
+                            Tamanho total: {formatFileSize(files.reduce((s,f)=>s+(f?.size||0),0))} (limite: 50 MB)
                           </Typography>
-                        </Box>
+                          </Box>
                       ) : (
                         <Box>
                           <Typography variant="h6" gutterBottom>
@@ -402,17 +467,18 @@ const ContentForm = () => {
                         <LinearProgress 
                           variant="determinate" 
                           value={uploadProgress}
-                          sx={{ 
+                          sx={(theme) => ({ 
                             height: 8, 
                             borderRadius: 4,
-                            bgcolor: 'grey.200',
+                            bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : theme.palette.grey[200],
                             '& .MuiLinearProgress-bar': {
                               borderRadius: 4,
                             }
-                          }}
+                          })}
                         />
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 1, textAlign: 'center' }}>
-                          Upload: {uploadProgress}%
+                          Envio do lote: {uploadProgress}% • {completedCount}/{files.length || 1} concluído(s)
+                          {successCount + errorCount > 0 && ` • OK: ${successCount} • Erros: ${errorCount}`}
                         </Typography>
                       </Box>
                     )}
@@ -528,32 +594,29 @@ const ContentForm = () => {
                         </FormControl>
                       </Grid>
                       
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          name="duration"
-                          label="Duração (segundos)"
-                          type="number"
-                          value={formData.duration}
-                          onChange={handleInputChange}
-                          placeholder="Ex: 30"
-                          helperText={
-                            detectedContentType.startsWith('image/') 
-                              ? "Imagens têm duração automática" 
-                              : "Duração em segundos"
-                          }
-                          disabled={detectedContentType.startsWith('image/')}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
+                      {showDurationInput && (
+                        <Grid item xs={12} md={6}>
+                          <TextField
+                            fullWidth
+                            name="duration"
+                            label="Duração (segundos)"
+                            type="number"
+                            value={formData.duration}
+                            onChange={handleInputChange}
+                            placeholder="Ex: 30"
+                            helperText={"Duração em segundos (detectada automaticamente para vídeo/áudio quando possível)"}
+                            sx={{
+                              '& .MuiOutlinedInput-root': {
+                                borderRadius: 2,
+                                '&:hover': {
+                                  transform: 'translateY(-2px)',
+                                  transition: 'transform 0.2s ease-in-out',
+                                },
                               },
-                            },
-                          }}
-                        />
-                      </Grid>
+                            }}
+                          />
+                        </Grid>
+                      )}
                       
                       <Grid item xs={12}>
                         <TextField
@@ -619,7 +682,7 @@ const ContentForm = () => {
                 <Button
                   type="submit"
                   variant="contained"
-                  disabled={loading || (!file && !isEdit)}
+                  disabled={loading || (files.length === 0 && !isEdit)}
                   startIcon={<SaveIcon />}
                   sx={{
                     borderRadius: 2,

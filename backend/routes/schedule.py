@@ -282,8 +282,9 @@ def create_schedule():
             loop_behavior=data.get('loop_behavior', 'until_next'),
             loop_duration_minutes=data.get('loop_duration_minutes'),
             content_selection=data.get('content_selection', 'all'),
-            shuffle_enabled=data.get('shuffle_enabled', False),
-            auto_skip_errors=data.get('auto_skip_errors', True)
+            # Política da aplicação: sem embaralhar e sempre pular conteúdos com erro
+            shuffle_enabled=False,
+            auto_skip_errors=True
         )
         
         print(f"[DEBUG] Schedule object created, adding to session...")
@@ -382,10 +383,9 @@ def update_schedule(schedule_id):
             schedule.loop_duration_minutes = int(data['loop_duration_minutes']) if data['loop_duration_minutes'] else None
         if 'content_selection' in data:
             schedule.content_selection = data['content_selection']
-        if 'shuffle_enabled' in data:
-            schedule.shuffle_enabled = bool(data['shuffle_enabled'])
-        if 'auto_skip_errors' in data:
-            schedule.auto_skip_errors = bool(data['auto_skip_errors'])
+        # Política da aplicação: reforçar flags independentemente do payload
+        schedule.shuffle_enabled = False
+        schedule.auto_skip_errors = True
         
         if 'name' in data:
             schedule.name = data['name']

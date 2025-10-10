@@ -537,7 +537,7 @@ def forgot_password():
 @auth_bp.route('/companies', methods=['GET'])
 @jwt_required()
 def list_companies():
-    """Lista de empresas conhecidas no sistema (distintas de usuários e sedes)."""
+    """Lista de empresas conhecidas no sistema (distintas de usuários e empresas)."""
     try:
         # Coletar companies distintas de Users e Locations
         from models.location import Location  # import interno para evitar ciclos

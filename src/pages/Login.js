@@ -205,18 +205,6 @@ const Login = () => {
               </Button>
             </Stack>
           </Box>
-
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
-              Credenciais padrão:
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Email: admin@tvs.com
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Senha: admin123
-            </Typography>
-          </Box>
         </Paper>
       </Box>
     </Container>

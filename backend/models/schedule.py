@@ -121,10 +121,12 @@ class Schedule(db.Model):
         # Definir filtro padrão por slot caso não haja filtro explícito
         content_type_filter = filters.get('content_type') if isinstance(filters, dict) else None
         if not content_type_filter:
+            # CORREÇÃO: Para content_type 'main', não aplicar filtro automático de tipo
+            # Permitir que campanhas com imagens sejam reproduzidas em slots 'main'
             if self.content_type == 'overlay':
                 content_type_filter = 'image'
-            elif self.content_type == 'main':
-                content_type_filter = 'video'
+            # Removido: elif self.content_type == 'main': content_type_filter = 'video'
+            # Agora 'main' aceita qualquer tipo de conteúdo (video, image, audio)
         
         # Contexto do agendamento para filtros
         schedule_context = {
@@ -228,8 +230,8 @@ class Schedule(db.Model):
         
         playback_mode = self.get_effective_playback_mode()
         
-        # Aplicar shuffle se habilitado
-        if self.shuffle_enabled and playback_mode == 'random':
+        # Modo aleatório independe do switch 'shuffle_enabled' (UI simplificada)
+        if playback_mode == 'random':
             import random
             return random.choice(contents)
         

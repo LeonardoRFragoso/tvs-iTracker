@@ -103,10 +103,10 @@ const Layout = () => {
       badge: badges.content > 0 ? badges.content.toString() : null,
       description: 'Gerenciar mídias'
     },
-    { 
-      text: 'Sedes', 
-      icon: <LocationOn />, 
-      path: '/locations',
+      { 
+        text: 'Empresas', 
+        icon: <LocationOn />, 
+        path: '/locations',
       badge: badges.locations > 0 ? badges.locations.toString() : null,
       description: 'Localizações ativas'
     },

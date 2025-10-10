@@ -123,7 +123,7 @@ const LocationForm = () => {
         is_active: location.is_active !== undefined ? location.is_active : true
       });
     } catch (err) {
-      setError('Erro ao carregar sede: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao carregar empresa: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -169,10 +169,10 @@ const LocationForm = () => {
 
       if (isEdit) {
         await axios.put(`/locations/${id}`, payload);
-        setSuccess('Sede atualizada com sucesso!');
+        setSuccess('Empresa atualizada com sucesso!');
       } else {
         await axios.post('/locations/', payload);
-        setSuccess('Sede criada com sucesso!');
+        setSuccess('Empresa criada com sucesso!');
       }
       
       setTimeout(() => {
@@ -180,7 +180,7 @@ const LocationForm = () => {
       }, 1500);
       
     } catch (err) {
-      setError('Erro ao salvar sede: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao salvar empresa: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -204,8 +204,8 @@ const LocationForm = () => {
     >
       {/* Header com PageTitle */}
       <PageTitle 
-        title={isEdit ? 'Editar Sede' : 'Nova Sede'}
-        subtitle={isEdit ? 'Atualize as informações da sede' : 'Cadastre uma nova sede no sistema'}
+        title={isEdit ? 'Editar Empresa' : 'Nova Empresa'}
+        subtitle={isEdit ? 'Atualize as informações da empresa' : 'Cadastre uma nova empresa no sistema'}
         backTo="/locations"
       />
 
@@ -281,7 +281,7 @@ const LocationForm = () => {
                         <TextField
                           fullWidth
                           required
-                          label="Nome da Sede"
+                          label="Nome da Empresa"
                           value={formData.name}
                           onChange={handleChange('name')}
                           placeholder="Ex: Matriz São Paulo"
@@ -515,7 +515,7 @@ const LocationForm = () => {
                     </Box>
                     
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      Defina o horário comercial da sede para otimização de conteúdo
+                      Defina o horário comercial da empresa para otimização de conteúdo
                     </Typography>
                     
                     <Grid container spacing={3}>
@@ -566,7 +566,7 @@ const LocationForm = () => {
                                 onChange={handleChange('is_active')}
                               />
                             }
-                            label="Sede ativa"
+                            label="Empresa ativa"
                           />
                         </Box>
                       </Grid>

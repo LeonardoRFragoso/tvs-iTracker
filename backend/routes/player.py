@@ -170,7 +170,7 @@ def create_player():
             return jsonify({'error': 'location_id é obrigatório'}), 400
         location = Location.query.get(loc_id)
         if not location:
-            return jsonify({'error': 'Sede (location) não encontrada'}), 404
+            return jsonify({'error': 'Empresa (location) não encontrada'}), 404
         
         # HR só pode criar players na própria empresa
         if user.role == 'hr':
@@ -278,7 +278,7 @@ def update_player(player_id):
         if 'location_id' in data and data['location_id']:
             new_loc = Location.query.get(data['location_id'])
             if not new_loc:
-                return jsonify({'error': 'Sede (location) não encontrada'}), 404
+                return jsonify({'error': 'Empresa (location) não encontrada'}), 404
         
         # Atualizar campos do player
         if 'name' in data:

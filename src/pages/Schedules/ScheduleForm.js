@@ -137,14 +137,12 @@ const ScheduleForm = () => {
     content_type: 'main',
     is_active: true,
     is_all_day: false,
-    // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+    // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO (simplificadas)
     playback_mode: 'sequential',
-    content_duration: 10,
-    transition_duration: 1,
     loop_behavior: 'until_next',
     loop_duration_minutes: null,
     content_selection: 'all',
-    shuffle_enabled: false,
+    // auto_skip_errors agora é obrigatório e sempre true
     auto_skip_errors: true,
     device_type_compatibility: 'legacy',
   });
@@ -228,13 +226,11 @@ const ScheduleForm = () => {
         is_all_day: isAllDayDetected,
         // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
         playback_mode: schedule.playback_mode || 'sequential',
-        content_duration: schedule.content_duration || 10,
-        transition_duration: schedule.transition_duration || 1,
         loop_behavior: schedule.loop_behavior || 'until_next',
         loop_duration_minutes: schedule.loop_duration_minutes || null,
         content_selection: schedule.content_selection || 'all',
-        shuffle_enabled: schedule.shuffle_enabled || false,
-        auto_skip_errors: schedule.auto_skip_errors !== false,
+        // embaralhar removido do UI; manter estado interno padrão
+        auto_skip_errors: true, // obrigatório
         // Forçar compatibilidade única: legado (recursos mínimos)
         device_type_compatibility: 'legacy',
       });
@@ -351,13 +347,12 @@ const ScheduleForm = () => {
         is_all_day: formData.is_all_day,
         // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
         playback_mode: formData.playback_mode,
-        content_duration: parseInt(formData.content_duration, 10) || 10,
-        transition_duration: parseInt(formData.transition_duration, 10) || 1,
         loop_behavior: formData.loop_behavior,
         loop_duration_minutes: formData.loop_duration_minutes ? parseInt(formData.loop_duration_minutes, 10) : null,
         content_selection: formData.content_selection,
-        shuffle_enabled: formData.shuffle_enabled,
-        auto_skip_errors: formData.auto_skip_errors,
+        // Forçar políticas: sem embaralhar e sempre pular conteúdos com erro
+        shuffle_enabled: false,
+        auto_skip_errors: true,
         device_type_compatibility: 'legacy',
       };
 
@@ -1114,51 +1109,7 @@ const ScheduleForm = () => {
                         </FormControl>
                       </Grid>
 
-                      <Grid item xs={12} md={4}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Duração por Conteúdo (segundos)"
-                          value={formData.content_duration}
-                          onChange={(e) => handleInputChange('content_duration', parseInt(e.target.value) || 10)}
-                          inputProps={{ min: 1, max: 3600 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                        <FormHelperText>
-                          Tempo padrão de exibição para cada conteúdo
-                        </FormHelperText>
-                      </Grid>
-
-                      <Grid item xs={12} md={4}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Transição entre Conteúdos (segundos)"
-                          value={formData.transition_duration}
-                          onChange={(e) => handleInputChange('transition_duration', parseInt(e.target.value) || 1)}
-                          inputProps={{ min: 0, max: 60 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                        <FormHelperText>
-                          Pausa entre um conteúdo e outro
-                        </FormHelperText>
-                      </Grid>
+                      {/* Duração por Conteúdo e Transição removidos: reprodução usa vídeo compilado da campanha */}
 
                       {formData.loop_behavior === 'time_limited' && (
                         <Grid item xs={12} md={4}>
@@ -1186,27 +1137,11 @@ const ScheduleForm = () => {
                         </Grid>
                       )}
 
+                      {/* Políticas fixas: sem embaralhar; pular conteúdos com erro sempre habilitado */}
                       <Grid item xs={12}>
-                        <Box display="flex" gap={4} flexWrap="wrap">
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={formData.shuffle_enabled}
-                                onChange={(e) => handleInputChange('shuffle_enabled', e.target.checked)}
-                              />
-                            }
-                            label="Embaralhar Conteúdos"
-                          />
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={formData.auto_skip_errors}
-                                onChange={(e) => handleInputChange('auto_skip_errors', e.target.checked)}
-                              />
-                            }
-                            label="Pular Conteúdos com Erro"
-                          />
-                        </Box>
+                        <Typography variant="body2" color="text.secondary">
+                          Este agendamento reproduz o vídeo já compilado da campanha. Embaralhamento não é aplicável e conteúdos com erro serão pulados automaticamente.
+                        </Typography>
                       </Grid>
                     </Grid>
                   </CardContent>

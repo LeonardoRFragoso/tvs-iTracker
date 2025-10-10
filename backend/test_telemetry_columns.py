@@ -112,7 +112,7 @@ def test_telemetry_columns():
             return False
         else:
             print("\n🎉 SUCESSO: Todas as colunas de telemetria estão presentes!")
-            print("   O erro de criação de sede NÃO deve acontecer na VM.")
+            print("   O erro de criação de empresa NÃO deve acontecer na VM.")
             return True
             
     except Exception as e:
@@ -120,9 +120,9 @@ def test_telemetry_columns():
         return False
 
 def simulate_location_creation():
-    """Simula a criação de uma sede para verificar se o erro ocorreria"""
+    """Simula a criação de uma empresa para verificar se o erro ocorreria"""
     
-    print("\n🧪 Simulando criação de sede...")
+    print("\n🧪 Simulando criação de empresa...")
     
     try:
         # Importar Flask app
@@ -133,7 +133,7 @@ def simulate_location_creation():
         with app.app_context():
             # Criar uma localização de teste
             test_location = Location(
-                name="Teste Sede",
+                name="Teste Empresa",
                 address="Rua Teste, 123",
                 company="iTracker"
             )
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     # Teste 1: Verificar colunas no banco
     success1 = test_telemetry_columns()
     
-    # Teste 2: Simular criação de sede
+    # Teste 2: Simular criação de empresa
     success2 = simulate_location_creation()
     
     print("\n" + "=" * 60)

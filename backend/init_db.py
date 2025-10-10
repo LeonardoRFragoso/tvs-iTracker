@@ -73,9 +73,9 @@ def init_database():
             
             print("✅ Usuários criados (admin/admin123, manager/manager123)")
             
-            # Criar sedes de exemplo
-            sede_sp = Location(
-                name='Sede São Paulo Centro',
+            # Criar empresas de exemplo
+            empresa_sp = Location(
+                name='Empresa São Paulo Centro',
                 city='São Paulo',
                 state='SP',
                 address='Av. Paulista, 1000 - Bela Vista',
@@ -86,10 +86,10 @@ def init_database():
                 is_active=True,
                 company=COMPANY_ITRACKER
             )
-            db.session.add(sede_sp)
+            db.session.add(empresa_sp)
             
-            sede_rj = Location(
-                name='Sede Rio de Janeiro',
+            empresa_rj = Location(
+                name='Empresa Rio de Janeiro',
                 city='Rio de Janeiro',
                 state='RJ',
                 address='Av. Atlântica, 500 - Copacabana',
@@ -100,10 +100,10 @@ def init_database():
                 is_active=True,
                 company=COMPANY_RBT
             )
-            db.session.add(sede_rj)
+            db.session.add(empresa_rj)
             
-            sede_bh = Location(
-                name='Sede Belo Horizonte',
+            empresa_bh = Location(
+                name='Empresa Belo Horizonte',
                 city='Belo Horizonte',
                 state='MG',
                 address='Av. Afonso Pena, 3000 - Centro',
@@ -114,26 +114,26 @@ def init_database():
                 is_active=True,
                 company=COMPANY_CLIA
             )
-            db.session.add(sede_bh)
+            db.session.add(empresa_bh)
             
-            # Commit para obter IDs das sedes
+            # Commit para obter IDs das empresas
             db.session.commit()
-            print("✅ Sedes criadas (São Paulo, Rio de Janeiro, Belo Horizonte)")
+            print("✅ Empresas criadas (São Paulo, Rio de Janeiro, Belo Horizonte)")
             
             # Criar players de exemplo
             players_data = [
                 # São Paulo
-                {'name': 'TV Recepção SP', 'location': sede_sp, 'room': 'Recepção'},
-                {'name': 'TV Sala Reunião SP', 'location': sede_sp, 'room': 'Sala de Reunião 1'},
-                {'name': 'TV Cafeteria SP', 'location': sede_sp, 'room': 'Cafeteria'},
+                {'name': 'TV Recepção SP', 'location': empresa_sp, 'room': 'Recepção'},
+                {'name': 'TV Sala Reunião SP', 'location': empresa_sp, 'room': 'Sala de Reunião 1'},
+                {'name': 'TV Cafeteria SP', 'location': empresa_sp, 'room': 'Cafeteria'},
                 
                 # Rio de Janeiro  
-                {'name': 'TV Lobby RJ', 'location': sede_rj, 'room': 'Lobby'},
-                {'name': 'TV Auditório RJ', 'location': sede_rj, 'room': 'Auditório'},
+                {'name': 'TV Lobby RJ', 'location': empresa_rj, 'room': 'Lobby'},
+                {'name': 'TV Auditório RJ', 'location': empresa_rj, 'room': 'Auditório'},
                 
                 # Belo Horizonte
-                {'name': 'TV Entrada BH', 'location': sede_bh, 'room': 'Entrada'},
-                {'name': 'TV Corredor BH', 'location': sede_bh, 'room': 'Corredor Principal'},
+                {'name': 'TV Entrada BH', 'location': empresa_bh, 'room': 'Entrada'},
+                {'name': 'TV Corredor BH', 'location': empresa_bh, 'room': 'Corredor Principal'},
             ]
             
             for player_data in players_data:
@@ -148,7 +148,7 @@ def init_database():
                 )
                 db.session.add(player)
             
-            print("✅ Players criados (7 players distribuídos pelas sedes)")
+            print("✅ Players criados (7 players distribuídos pelas empresas)")
             
             # Criar conteúdos de exemplo
             contents_data = [
@@ -196,7 +196,7 @@ def init_database():
             print("🎉 Banco de dados inicializado com sucesso!")
             print("\n📋 Resumo:")
             print(f"   👥 Usuários: {User.query.count()}")
-            print(f"   🏢 Sedes: {Location.query.count()}")
+            print(f"   🏢 Empresas: {Location.query.count()}")
             print(f"   📺 Players: {Player.query.count()}")
             print(f"   🎬 Conteúdos: {Content.query.count()}")
             print("\n🔐 Credenciais de acesso:")
