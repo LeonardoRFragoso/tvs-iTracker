@@ -223,6 +223,7 @@ const ContentList = () => {
       <PageTitle 
         title="Gerenciar Conteúdo"
         subtitle="Gerencie e organize sua biblioteca de mídia"
+        icon={<VideoIcon />}
         actions={
           <>
             <Tooltip title="Atualizar lista">
@@ -280,8 +281,8 @@ const ContentList = () => {
         <Paper
           elevation={0}
           sx={{
-            mb: 4,
-            p: 3,
+            mb: 3,
+            p: 2,
             borderRadius: 3,
             background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
             border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
@@ -292,7 +293,7 @@ const ContentList = () => {
             },
           }}
         >
-          <Box display="flex" alignItems="center" gap={2} mb={3}>
+          <Box display="flex" alignItems="center" gap={2} mb={2}>
             <Avatar sx={{ bgcolor: 'primary.main' }}>
               <FilterIcon />
             </Avatar>
@@ -305,7 +306,7 @@ const ContentList = () => {
               </Typography>
             </Box>
           </Box>
-          <Grid container spacing={3} alignItems="center">
+          <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
@@ -394,8 +395,8 @@ const ContentList = () => {
         </Paper>
       </Fade>
 
-      {/* Lista de Conteúdos */}
-      <Grid container spacing={3}>
+      {/* Grid de Conteúdos */}
+      <Grid container spacing={2}>
         {loading ? (
           Array.from({ length: 12 }, (_, index) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
@@ -439,7 +440,7 @@ const ContentList = () => {
                 >
                   <CardMedia
                     sx={{
-                      height: 200,
+                      height: 160,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

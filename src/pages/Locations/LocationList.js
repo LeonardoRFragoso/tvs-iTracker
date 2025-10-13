@@ -212,11 +212,12 @@ const LocationList = () => {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: 2 }}>
       {/* Header com PageTitle */}
       <PageTitle 
         title="Gerenciamento de Empresas"
         subtitle="Administre as localizações e seus dispositivos"
+        icon={<BusinessIcon />}
         actions={
           <>
             <Tooltip title="Atualizar dados">

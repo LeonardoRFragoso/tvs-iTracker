@@ -41,7 +41,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
 
-const drawerWidth = 240;
+const drawerWidth = 220;
 
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -226,8 +226,8 @@ const Layout = () => {
           <Avatar
             sx={{
               bgcolor: 'rgba(255, 255, 255, 0.2)',
-              width: 40,
-              height: 40,
+              width: 28,
+              height: 28,
               border: '2px solid rgba(255, 255, 255, 0.3)',
             }}
           >
@@ -244,7 +244,7 @@ const Layout = () => {
         </Box>
       </Toolbar>
 
-      <Box sx={{ p: 2, position: 'relative', zIndex: 1, flexShrink: 0 }}>
+      <Box sx={{ p: 1.5, position: 'relative', zIndex: 1, flexShrink: 0 }}>
         <Chip
           label={`Bem-vindo, ${user?.username || 'Usuário'}`}
           avatar={<Avatar sx={{ bgcolor: 'primary.main' }}><AccountCircle /></Avatar>}
@@ -252,7 +252,7 @@ const Layout = () => {
           sx={{
             width: '100%',
             justifyContent: 'flex-start',
-            mb: 2,
+            mb: 1.5,
             bgcolor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
             borderColor: isDarkMode ? 'rgba(255, 152, 0, 0.3)' : 'rgba(25, 118, 210, 0.3)',
             '&:hover': {
@@ -283,7 +283,7 @@ const Layout = () => {
           },
         }}
       >
-        <List sx={{ px: 1, pt: 2, pb: 4 }}>
+        <List sx={{ px: 1, pt: 1.5, pb: 3 }}>
           {computedMenuItems.map((item, index) => {
             const isActive = location.pathname === item.path || 
                             (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
@@ -331,7 +331,7 @@ const Layout = () => {
                         position: 'relative',
                         overflow: 'hidden',
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        minHeight: 48,
+                        minHeight: 42,
                         '&::before': {
                           content: '""',
                           position: 'absolute',
@@ -377,7 +377,7 @@ const Layout = () => {
                           color: isActive ? (isDarkMode ? '#ff9800' : '#1976d2') : 'inherit',
                           transition: 'all 0.3s ease',
                           transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                          minWidth: 40,
+                          minWidth: 36,
                         }}
                       >
                         {item.icon}
@@ -405,8 +405,8 @@ const Layout = () => {
                                 sx={{
                                   '& .MuiBadge-badge': {
                                     fontSize: '0.7rem',
-                                    minWidth: 18,
-                                    height: 18,
+                                    minWidth: 16,
+                                    height: 16,
                                     bgcolor: isDarkMode ? '#ff9800' : '#1976d2',
                                   },
                                 }}
@@ -421,7 +421,7 @@ const Layout = () => {
                               color: 'text.secondary',
                               opacity: isActive ? 1 : 0.7,
                               transition: 'opacity 0.3s ease',
-                              fontSize: '0.75rem',
+                              fontSize: '0.7rem',
                             }}
                           >
                             {item.description}
@@ -580,7 +580,7 @@ const Layout = () => {
       </Box>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
+        sx={{ flexGrow: 1, p: 2, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
       >
         <Toolbar />
         <Outlet />
