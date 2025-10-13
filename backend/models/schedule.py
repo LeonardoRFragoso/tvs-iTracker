@@ -101,8 +101,12 @@ class Schedule(db.Model):
             'created_at': fmt_br_datetime(self.created_at),
             'updated_at': fmt_br_datetime(self.updated_at),
             'player': self.player.to_dict() if self.player else None,
+            'player_name': self.player.name if self.player else None,
             'campaign': self.campaign.to_dict() if self.campaign else None,
-            'is_all_day': (self.start_time == time(0, 0, 0) and self.end_time == time(23, 59, 59)) if (self.start_time and self.end_time) else False
+            'campaign_name': self.campaign.name if self.campaign else None,
+            'location_name': self.player.location.name if (self.player and self.player.location) else None,
+            'is_all_day': self.is_all_day,
+            'has_conflicts': self.has_conflicts_with_other_schedules()
         }
     
     def get_filtered_contents(self):
@@ -328,3 +332,62 @@ class Schedule(db.Model):
             errors.append("Duração do conteúdo deve ser maior que 0")
         
         return errors
+    
+    def has_conflicts_with_other_schedules(self):
+        """Verifica se este agendamento tem conflitos com outros agendamentos do mesmo player"""
+        if not self.player_id or not self.start_date or not self.end_date:
+            return False
+            
+        # Buscar outros agendamentos ativos do mesmo player no mesmo período
+        conflicting_schedules = Schedule.query.filter(
+            Schedule.id != self.id,
+            Schedule.player_id == self.player_id,
+            Schedule.is_active == True,
+            Schedule.start_date <= self.end_date,
+            Schedule.end_date >= self.start_date
+        ).all()
+        
+        if not conflicting_schedules:
+            return False
+            
+        # Verificar conflitos de horário e dias da semana
+        self_days = set(map(int, self.days_of_week.split(','))) if self.days_of_week else set()
+        
+        for other_schedule in conflicting_schedules:
+            other_days = set(map(int, other_schedule.days_of_week.split(','))) if other_schedule.days_of_week else set()
+            
+            # Se há dias em comum
+            if self_days.intersection(other_days):
+                # Verificar conflito de horário
+                if self._has_time_conflict(other_schedule):
+                    return True
+                    
+        return False
+    
+    @property
+    def is_all_day(self):
+        """Verifica se o agendamento é para o dia inteiro (24/7)"""
+        return (self.start_time == time(0, 0, 0) and self.end_time == time(23, 59, 59)) if (self.start_time and self.end_time) else False
+    
+    def _has_time_conflict(self, other_schedule):
+        """Verifica se há conflito de horário entre dois agendamentos"""
+        # Se ambos são dia inteiro, há conflito
+        if self.is_all_day and other_schedule.is_all_day:
+            return True
+            
+        # Se um é dia inteiro e o outro não, há conflito
+        if self.is_all_day or other_schedule.is_all_day:
+            return True
+            
+        # Verificar conflito de horários específicos
+        if not self.start_time or not self.end_time or not other_schedule.start_time or not other_schedule.end_time:
+            return True
+            
+        # Converter horários para minutos para facilitar comparação
+        self_start_min = self.start_time.hour * 60 + self.start_time.minute
+        self_end_min = self.end_time.hour * 60 + self.end_time.minute
+        other_start_min = other_schedule.start_time.hour * 60 + other_schedule.start_time.minute
+        other_end_min = other_schedule.end_time.hour * 60 + other_schedule.end_time.minute
+        
+        # Verificar sobreposição de horários
+        return not (self_end_min <= other_start_min or other_end_min <= self_start_min)

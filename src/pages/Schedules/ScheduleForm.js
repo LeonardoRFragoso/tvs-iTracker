@@ -149,6 +149,10 @@ const ScheduleForm = () => {
 
   const [campaigns, setCampaigns] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [targetMode, setTargetMode] = useState('single'); // single | location | multi
+  const [targetLocationId, setTargetLocationId] = useState('');
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [error, setError] = useState('');
@@ -174,6 +178,7 @@ const ScheduleForm = () => {
   useEffect(() => {
     loadCampaigns();
     loadPlayers();
+    loadLocations();
     if (isEdit) {
       loadSchedule();
     }
@@ -260,9 +265,21 @@ const ScheduleForm = () => {
     }
   };
 
+  const loadLocations = async () => {
+    try {
+      const response = await axios.get('/locations');
+      const list = response.data.locations || response.data || [];
+      setLocations(list);
+    } catch (err) {
+      console.error('Load locations error:', err);
+    }
+  };
+
   useEffect(() => {
-    checkConflicts();
-  }, [formData.player_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time, formData.days_of_week]);
+    if (targetMode === 'single') {
+      checkConflicts();
+    }
+  }, [targetMode, formData.player_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time, formData.days_of_week]);
 
   const checkConflicts = async () => {
     if (!formData.player_id || !formData.start_date || !formData.end_date) return;
@@ -321,8 +338,14 @@ const ScheduleForm = () => {
       if (!formData.campaign_id) {
         throw new Error('Campanha é obrigatória');
       }
-      if (!formData.player_id) {
+      if (targetMode === 'single' && !formData.player_id) {
         throw new Error('Player é obrigatório');
+      }
+      if (targetMode === 'location' && !targetLocationId) {
+        throw new Error('Empresa (location) é obrigatória');
+      }
+      if (targetMode === 'multi' && selectedPlayerIds.length === 0) {
+        throw new Error('Selecione ao menos um player');
       }
       if (formData.start_date >= formData.end_date) {
         throw new Error('Data de início deve ser anterior à data de fim');
@@ -334,7 +357,6 @@ const ScheduleForm = () => {
       const submitData = {
         name: formData.name,
         campaign_id: formData.campaign_id,
-        player_id: formData.player_id,
         start_date: toBRDateTime(formData.start_date, { endOfDay: false }),
         end_date: toBRDateTime(formData.end_date, { endOfDay: true }),
         days_of_week: formData.days_of_week.join(','),
@@ -366,9 +388,15 @@ const ScheduleForm = () => {
 
       let response;
       if (isEdit) {
-        response = await axios.put(`/schedules/${id}`, submitData);
+        response = await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
       } else {
-        response = await axios.post('/schedules', submitData);
+        if (targetMode === 'single') {
+          response = await axios.post('/schedules', { ...submitData, player_id: formData.player_id });
+        } else if (targetMode === 'location') {
+          response = await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId, check_conflicts: true });
+        } else {
+          response = await axios.post('/schedules/bulk', { ...submitData, player_ids: selectedPlayerIds, check_conflicts: true });
+        }
       }
 
       setSuccess(isEdit ? 'Agendamento atualizado com sucesso!' : 'Agendamento criado com sucesso!');
@@ -624,12 +652,12 @@ const ScheduleForm = () => {
                       </Grid>
                       
                       <Grid item xs={12}>
-                        <FormControl fullWidth required>
-                          <InputLabel>Player</InputLabel>
+                        <FormControl fullWidth>
+                          <InputLabel>Destino</InputLabel>
                           <Select
-                            value={formData.player_id}
-                            onChange={(e) => handleInputChange('player_id', e.target.value)}
-                            label="Player"
+                            value={targetMode}
+                            onChange={(e) => setTargetMode(e.target.value)}
+                            label="Destino"
                             sx={{
                               borderRadius: 2,
                               '&:hover': {
@@ -638,14 +666,79 @@ const ScheduleForm = () => {
                               },
                             }}
                           >
-                            {players.map(player => (
-                              <MenuItem key={player.id} value={player.id}>
-                                {player.name}
-                              </MenuItem>
-                            ))}
+                            <MenuItem value="single">Um player</MenuItem>
+                            <MenuItem value="location">Todos os players de uma empresa</MenuItem>
+                            <MenuItem value="multi">Vários players selecionados</MenuItem>
                           </Select>
                         </FormControl>
                       </Grid>
+
+                      {targetMode === 'single' && (
+                        <Grid item xs={12}>
+                          <FormControl fullWidth required>
+                            <InputLabel>Player</InputLabel>
+                            <Select
+                              value={formData.player_id}
+                              onChange={(e) => handleInputChange('player_id', e.target.value)}
+                              label="Player"
+                              sx={{
+                                borderRadius: 2,
+                                '&:hover': {
+                                  transform: 'translateY(-2px)',
+                                  transition: 'transform 0.2s ease-in-out',
+                                },
+                              }}
+                            >
+                              {players.map(player => (
+                                <MenuItem key={player.id} value={player.id}>
+                                  {player.name}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      )}
+
+                      {targetMode === 'location' && (
+                        <Grid item xs={12}>
+                          <FormControl fullWidth required>
+                            <InputLabel>Empresa (Location)</InputLabel>
+                            <Select
+                              value={targetLocationId}
+                              onChange={(e) => setTargetLocationId(e.target.value)}
+                              label="Empresa (Location)"
+                              sx={{
+                                borderRadius: 2,
+                                '&:hover': {
+                                  transform: 'translateY(-2px)',
+                                  transition: 'transform 0.2s ease-in-out',
+                                },
+                              }}
+                            >
+                              {locations.map(loc => (
+                                <MenuItem key={loc.id} value={loc.id}>
+                                  {loc.name} {loc.company ? `- ${loc.company}` : ''}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      )}
+
+                      {targetMode === 'multi' && (
+                        <Grid item xs={12}>
+                          <Autocomplete
+                            multiple
+                            options={players}
+                            getOptionLabel={(option) => option.name || ''}
+                            value={players.filter(p => selectedPlayerIds.includes(p.id))}
+                            onChange={(e, value) => setSelectedPlayerIds(value.map(v => v.id))}
+                            renderInput={(params) => (
+                              <TextField {...params} label="Players" placeholder="Selecione players" />
+                            )}
+                          />
+                        </Grid>
+                      )}
                     </Grid>
                   </CardContent>
                 </Paper>

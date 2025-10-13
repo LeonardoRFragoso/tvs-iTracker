@@ -36,6 +36,7 @@ import {
   Brightness7,
   TrendingUp,
   People as PeopleIcon,
+  CalendarToday,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -130,6 +131,13 @@ const Layout = () => {
       path: '/schedules',
       badge: null,
       description: 'Programação de conteúdo'
+    },
+    { 
+      text: 'Calendário', 
+      icon: <CalendarToday />, 
+      path: '/calendar',
+      badge: null,
+      description: 'Visualização unificada de agendamentos'
     },
   ];
 
@@ -580,7 +588,7 @@ const Layout = () => {
       </Box>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 2, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
+        sx={{ flexGrow: 1, p: 1.5, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
       >
         <Toolbar />
         <Outlet />

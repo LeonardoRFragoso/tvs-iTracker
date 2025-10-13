@@ -20,6 +20,8 @@ import {
   RssFeed as EditorialIcon,
   People as UsersIcon,
   Analytics as AnalyticsIcon,
+  Business as CompanyIcon,
+  Settings as SettingsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -35,19 +37,19 @@ const Sidebar = ({ open, onClose }) => {
       text: 'Dashboard',
       icon: <DashboardIcon />,
       path: '/dashboard',
-      roles: ['admin', 'manager', 'user', 'hr'],
+      roles: ['admin', 'manager', 'user', 'rh'],
     },
     {
       text: 'Conteúdo',
       icon: <ContentIcon />,
       path: '/content',
-      roles: ['admin', 'manager', 'user', 'hr'],
+      roles: ['admin', 'manager', 'user', 'rh'],
     },
     {
       text: 'Campanhas',
       icon: <CampaignIcon />,
       path: '/campaigns',
-      roles: ['admin', 'manager', 'user', 'hr'],
+      roles: ['admin', 'manager', 'user', 'rh'],
     },
     {
       text: 'Players',
@@ -59,6 +61,12 @@ const Sidebar = ({ open, onClose }) => {
       text: 'Agendamentos',
       icon: <ScheduleIcon />,
       path: '/schedules',
+      roles: ['admin', 'manager'],
+    },
+    {
+      text: 'Empresas',
+      icon: <CompanyIcon />,
+      path: '/locations',
       roles: ['admin', 'manager'],
     },
     {
@@ -84,6 +92,12 @@ const Sidebar = ({ open, onClose }) => {
       icon: <AnalyticsIcon />,
       path: '/admin/traffic-monitor',
       roles: ['admin', 'manager'],
+    },
+    {
+      text: 'Configurações',
+      icon: <SettingsIcon />,
+      path: '/settings',
+      roles: ['admin', 'manager', 'user', 'rh'],
     },
   ];
 
@@ -151,7 +165,7 @@ const Sidebar = ({ open, onClose }) => {
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {user?.role === 'admin' ? 'Administrador' : 
-           user?.role === 'manager' ? 'Gerente' : user?.role === 'hr' ? 'RH' : 'Usuário'}
+           user?.role === 'manager' ? 'Gerente' : user?.role === 'rh' ? 'RH' : 'Usuário'}
         </Typography>
       </Box>
     </Box>

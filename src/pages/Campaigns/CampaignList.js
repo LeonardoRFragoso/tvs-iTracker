@@ -284,6 +284,7 @@ const CampaignList = () => {
       <PageTitle 
         title="Gerenciar Campanhas"
         subtitle="Organize e controle suas campanhas de conteúdo"
+        icon={<CampaignIcon />}
         actions={
           <Button
             variant="contained"
@@ -445,16 +446,16 @@ const CampaignList = () => {
       </Grow>
 
       {/* Campaigns Grid */}
-      <Grid container spacing={3}>
+      <Grid container spacing={1.5}>
         {loading ? (
-          Array.from({ length: 6 }).map((_, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
+          Array.from({ length: 10 }).map((_, index) => (
+            <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
               <CampaignCardSkeleton delay={index} />
             </Grid>
           ))
         ) : campaigns.length > 0 ? (
           campaigns.map((campaign, index) => (
-            <Grid item xs={12} sm={6} md={4} key={campaign.id}>
+            <Grid item xs={12} sm={6} md={4} lg={2} key={campaign.id}>
               <Grow in={true} timeout={1400 + index * 100}>
                 <Card
                   sx={{

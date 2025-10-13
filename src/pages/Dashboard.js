@@ -24,10 +24,6 @@ import {
   Snackbar,
   AlertTitle,
   Button,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
 } from '@mui/material';
 import {
   VideoLibrary as ContentIcon,
@@ -43,7 +39,6 @@ import {
   Timeline as TimelineIcon,
   Add as AddIcon,
   Keyboard as KeyboardIcon,
-  FileDownload as ExportIcon,
   Upload as UploadIcon,
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
@@ -190,14 +185,14 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
           },
         }}
       >
-        <CardContent sx={{ position: 'relative', zIndex: 1, p: 2 }}>
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
+        <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Avatar
               sx={{
                 bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)',
                 color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : 'white',
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 border: (theme) => theme.palette.mode === 'dark' ? '2px solid rgba(255, 152, 0, 0.3)' : '2px solid rgba(255, 255, 255, 0.3)',
               }}
             >
@@ -241,23 +236,24 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
             )}
           </Box>
           <Typography 
-            variant="h4" 
+            variant="h5" 
             component="div" 
             fontWeight="bold" 
-            mb={0.5}
+            mb={0.25}
             sx={{
               textShadow: (theme) => theme.palette.mode === 'dark' ? 'none' : '0 2px 4px rgba(0,0,0,0.3)',
               transition: 'all 0.3s ease',
               color: (theme) => theme.palette.mode === 'dark' ? theme.palette.text.primary : 'inherit',
+              fontSize: '1.5rem',
             }}
           >
             {value}
           </Typography>
-          <Typography variant="subtitle1" mb={0.5} sx={{ opacity: 0.95, fontSize: '1rem' }}>
+          <Typography variant="body1" mb={0.25} sx={{ opacity: 0.95, fontSize: '0.9rem', fontWeight: 500 }}>
             {title}
           </Typography>
           {subtitle && (
-            <Typography variant="body2" sx={{ opacity: 0.85, fontSize: '0.85rem' }}>
+            <Typography variant="body2" sx={{ opacity: 0.85, fontSize: '0.75rem' }}>
               {subtitle}
             </Typography>
           )}
@@ -278,9 +274,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [notifications, setNotifications] = useState([]);
-  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
@@ -291,18 +285,7 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    let interval;
-    if (autoRefresh && user) {
-      interval = setInterval(() => {
-        loadDashboardData(true); // Silent refresh
-      }, 30000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [autoRefresh, user]);
+  // Auto-refresh removido - apenas refresh manual
 
   useEffect(() => {
     const handleKeyPress = (event) => {
@@ -312,10 +295,6 @@ const Dashboard = () => {
             event.preventDefault();
             loadDashboardData();
             showNotification('Dashboard atualizado!', 'success');
-            break;
-          case 'e':
-            event.preventDefault();
-            exportData('json');
             break;
           case 'h':
             event.preventDefault();
@@ -369,56 +348,7 @@ const Dashboard = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Export data functionality
-  const exportData = (format) => {
-    try {
-      const exportData = {
-        stats,
-        // Removido: alerts
-        performance,
-        health,
-        traffic,
-        timestamp: new Date().toISOString(),
-      };
-
-      if (format === 'json') {
-        const dataStr = JSON.stringify(exportData, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        const exportFileDefaultName = `dashboard-data-${new Date().toISOString().split('T')[0]}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-        
-        showNotification('Dados exportados com sucesso!', 'success');
-      } else if (format === 'csv') {
-        // Simple CSV export for stats
-        const csvContent = [
-          ['Métrica', 'Valor'],
-          ['Total de Conteúdos', stats?.overview.total_content || 0],
-          ['Total de Campanhas', stats?.overview.total_campaigns || 0],
-          ['Players Online', `${stats?.overview.online_players || 0}/${stats?.overview.total_players || 0}`],
-          ['Armazenamento Usado', `${stats?.storage.percentage?.toFixed(1) || 0}%`],
-          ['Status do Sistema', health?.status || 'N/A'],
-          ['Saúde Geral', `${health?.overall_health || 0}%`],
-        ].map(row => row.join(',')).join('\n');
-        
-        const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-        const exportFileDefaultName = `dashboard-stats-${new Date().toISOString().split('T')[0]}.csv`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-        
-        showNotification('Relatório CSV exportado!', 'success');
-      }
-    } catch (error) {
-      showNotification('Erro ao exportar dados', 'error');
-    }
-    setExportMenuAnchor(null);
-  };
+  // Função de exportação removida - apenas refresh manual disponível
 
   const loadDashboardData = async (silent = false) => {
     try {
@@ -692,7 +622,7 @@ const Dashboard = () => {
     <Box>
       {/* Header com PageTitle */}
       <PageTitle 
-        title="Dashboard"
+        title="Painel de Controle"
         subtitle="Visão geral do sistema e estatísticas em tempo real"
         icon={<DashboardIcon />}
         actions={
@@ -709,38 +639,6 @@ const Dashboard = () => {
                 }}
               >
                 <KeyboardIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Exportar dados">
-              <IconButton 
-                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
-                sx={{
-                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'secondary.main',
-                  color: (theme) => theme.palette.mode === 'dark' ? 'white' : 'white',
-                  '&:hover': {
-                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'secondary.dark',
-                  },
-                }}
-              >
-                <ExportIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
-              <IconButton 
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                sx={{
-                  bgcolor: (theme) => theme.palette.mode === 'dark' 
-                    ? (autoRefresh ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)')
-                    : (autoRefresh ? 'success.main' : 'action.disabled'),
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: (theme) => theme.palette.mode === 'dark'
-                      ? (autoRefresh ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)')
-                      : (autoRefresh ? 'success.dark' : 'action.hover'),
-                  },
-                }}
-              >
-                <PlayIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Atualizar dados">
@@ -764,8 +662,8 @@ const Dashboard = () => {
       />
 
       {/* Estatísticas */}
-      <Grid container spacing={2} mb={3}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={1.5} mb={2.5}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<ContentIcon />}
             title="Conteúdos"
@@ -778,7 +676,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<CampaignIcon />}
             title="Campanhas"
@@ -791,7 +689,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<PlayIcon />}
             title="Players Reproduzindo"
@@ -804,7 +702,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<StorageIcon />}
             title="Armazenamento"
@@ -818,7 +716,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Status dos Players */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<PlayerIcon />}
             title="Status dos Players"
@@ -826,13 +724,13 @@ const Dashboard = () => {
             subtitle={`${playbackStatus?.summary?.idle_players || 0} parados, ${playbackStatus?.summary?.offline_players || 0} offline`}
             color="info"
             trend={`${((playbackStatus?.summary?.online_players || 0) / Math.max(playbackStatus?.summary?.total_players || 1, 1) * 100).toFixed(0)}% online`}
-            delay={3}
+            delay={4}
             navigateTo="/players"
           />
         </Grid>
 
         {/* KPI: Uso de Rede (detecção de sobreuso) */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           {(() => {
             const overuseCount = traffic?.overuse_players?.length || 0;
             const recentPlayers = traffic?.recent?.players || {};
@@ -849,7 +747,7 @@ const Dashboard = () => {
                 subtitle={subtitle}
                 color={overuseCount > 0 ? 'warning' : 'info'}
                 trend={overuseCount > 0 ? `↑ ${overuseCount}` : 'OK'}
-                delay={4}
+                delay={5}
                 navigateTo="/admin/traffic-monitor"
               />
             );
@@ -857,16 +755,16 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      <Grid container spacing={2}>
+      <Grid container spacing={1.5}>
         {/* Gráfico de Performance */}
         <Grid item xs={12} md={8}>
           <Fade in={true} timeout={1200}>
             <Paper
               elevation={0}
               sx={{
-                p: 2.5,
+                p: 2,
                 borderRadius: 3,
-                height: 350,
+                height: 300,
                 background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
                 border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
                 position: 'relative',
@@ -882,25 +780,25 @@ const Dashboard = () => {
                 },
               }}
             >
-              <Box display="flex" alignItems="center" gap={2} mb={3}>
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
-                  <TimelineIcon />
+              <Box display="flex" alignItems="center" gap={1.5} mb={2}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+                  <TimelineIcon sx={{ fontSize: '1.2rem' }} />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="subtitle1" fontWeight="bold">
                     Atividade Recente
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary">
                     Evolução de conteúdo e campanhas
                   </Typography>
                 </Box>
               </Box>
               {chartData ? (
-                <Box height={280}>
+                <Box height={240}>
                   <Line options={chartOptions} data={chartData} />
                 </Box>
               ) : (
-                <Box height={280} display="flex" alignItems="center" justifyContent="center">
+                <Box height={240} display="flex" alignItems="center" justifyContent="center">
                   <Typography variant="body2" color="text.secondary">
                     {performance ? 'Processando dados do gráfico...' : 'Carregando dados de atividade...'}
                   </Typography>
@@ -1099,35 +997,6 @@ const Dashboard = () => {
         </Snackbar>
       ))}
 
-      {/* Export Menu */}
-      <Menu
-        anchorEl={exportMenuAnchor}
-        open={Boolean(exportMenuAnchor)}
-        onClose={() => setExportMenuAnchor(null)}
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            minWidth: 200,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
-          },
-        }}
-      >
-        <MenuItem onClick={() => exportData('json')}>
-          <ListItemIcon>
-            <ExportIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Exportar JSON" secondary="Dados completos" />
-        </MenuItem>
-        <MenuItem onClick={() => exportData('csv')}>
-          <ListItemIcon>
-            <ExportIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Exportar CSV" secondary="Relatório resumido" />
-        </MenuItem>
-      </Menu>
 
       {/* Keyboard Shortcuts Dialog */}
       <Snackbar
@@ -1156,7 +1025,6 @@ const Dashboard = () => {
           <AlertTitle>Atalhos do Teclado</AlertTitle>
           <Box component="ul" sx={{ m: 0, pl: 2 }}>
             <li><strong>Ctrl+R:</strong> Atualizar dashboard</li>
-            <li><strong>Ctrl+E:</strong> Exportar dados (JSON)</li>
             <li><strong>Ctrl+H:</strong> Mostrar atalhos</li>
             <li><strong>Ctrl+1:</strong> Novo conteúdo</li>
             <li><strong>Ctrl+2:</strong> Nova campanha</li>

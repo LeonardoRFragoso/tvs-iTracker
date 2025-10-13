@@ -348,8 +348,8 @@ const LocationList = () => {
 
       {/* Statistics Cards */}
       <Fade in={true} timeout={1200}>
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
+        <Grid container spacing={1.5} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1000}>
               <Card 
                 sx={{
@@ -384,31 +384,31 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {locations.length}
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Total de Empresas
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <LocationIcon fontSize="large" />
+                      <LocationIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1200}>
               <Card 
                 sx={{
@@ -443,33 +443,33 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {Object.values(stats).reduce((acc, stat) => 
                           acc + (stat?.player_stats?.total_players || 0), 0
                         )}
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Total de Players
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <ComputerIcon fontSize="large" />
+                      <ComputerIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1400}>
               <Card 
                 sx={{
@@ -504,33 +504,33 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {Object.values(stats).reduce((acc, stat) => 
                           acc + (stat?.player_stats?.online_players || 0), 0
                         )}
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Players Online
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <WifiIcon fontSize="large" />
+                      <WifiIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1600}>
               <Card 
                 sx={{
@@ -565,26 +565,26 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {Object.values(stats).reduce((acc, stat) => 
                           acc + (stat?.storage_stats?.total_storage_gb || 0), 0
                         ).toFixed(1)} GB
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Armazenamento Total
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <StorageIcon fontSize="large" />
+                      <StorageIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>

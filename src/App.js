@@ -28,6 +28,9 @@ import ChangePassword from './pages/ChangePassword';
 import PendingUsers from './pages/Admin/PendingUsers';
 import TrafficMonitor from './pages/Admin/TrafficMonitor';
 import UsersSummary from './pages/Admin/UsersSummary';
+import ScheduleCalendar from './pages/Schedules/ScheduleCalendar';
+import SchedulesCalendar from './pages/Schedules/SchedulesCalendar';
+import Calendar from './pages/Calendar';
 
 function App() {
   return (
@@ -76,6 +79,11 @@ function App() {
           <Route path="schedules" element={<ScheduleList />} />
           <Route path="schedules/new" element={<ScheduleForm />} />
           <Route path="schedules/:id/edit" element={<ScheduleForm />} />
+          <Route path="schedules/calendar" element={<SchedulesCalendar />} />
+          <Route path="players/:id/calendar" element={<ScheduleCalendar />} />
+          
+          {/* Unified Calendar route */}
+          <Route path="calendar" element={<Calendar />} />
           
           <Route path="settings" element={<Settings />} />
           

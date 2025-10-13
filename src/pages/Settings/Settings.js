@@ -42,6 +42,7 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 // Componente otimizado para o campo de texto do nome da empresa
 const CompanyNameField = memo(({ value, onChange, theme }) => {
@@ -273,38 +274,13 @@ const Settings = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Grow in={true} timeout={1000}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <Box display="flex" alignItems="center">
-            <Avatar
-              sx={{
-                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
-                mr: 2,
-                width: 40,
-                height: 40,
-              }}
-            >
-              <SettingsIcon />
-            </Avatar>
-            <Box>
-              <Typography 
-                variant="h5" 
-                component="h1"
-                sx={{
-                  fontWeight: 700,
-                  color: 'text.primary',
-                }}
-              >
-                Configurações
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Gerencie as configurações do sistema e preferências
-              </Typography>
-            </Box>
-          </Box>
-          <Box display="flex" gap={2}>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Configurações do Sistema"
+        subtitle="Gerencie as configurações do sistema e preferências"
+        icon={<SettingsIcon />}
+        actions={
+          <>
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -346,9 +322,9 @@ const Settings = () => {
             >
               {saving ? 'Salvando...' : 'Salvar'}
             </Button>
-          </Box>
-        </Box>
-      </Grow>
+          </>
+        }
+      />
 
       {/* Alerts */}
       {error && (

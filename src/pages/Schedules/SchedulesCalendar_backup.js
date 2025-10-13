@@ -46,9 +46,9 @@ const isoDate = (d) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-// FunÃ§Ã£o para verificar sobreposiÃ§Ã£o de horÃ¡rios entre dois agendamentos
+// Função para verificar sobreposição de horários entre dois agendamentos
 function hasTimeOverlap(schedule1, schedule2) {
-  // Verificar se os perÃ­odos de data se sobrepÃµem
+  // Verificar se os períodos de data se sobrepõem
   const parseBrDate = (dateStr) => {
     const [datePart] = dateStr.split(' ');
     const [day, month, year] = datePart.split('/');
@@ -60,12 +60,12 @@ function hasTimeOverlap(schedule1, schedule2) {
   const start2 = parseBrDate(schedule2.start_date);
   const end2 = parseBrDate(schedule2.end_date);
   
-  // Verificar sobreposiÃ§Ã£o de datas
+  // Verificar sobreposição de datas
   if (end1 < start2 || end2 < start1) {
     return false;
   }
   
-  // Verificar sobreposiÃ§Ã£o de dias da semana
+  // Verificar sobreposição de dias da semana
   const days1 = (schedule1.days_of_week || '1,2,3,4,5').split(',').map(d => parseInt(d.trim()));
   const days2 = (schedule2.days_of_week || '1,2,3,4,5').split(',').map(d => parseInt(d.trim()));
   
@@ -74,13 +74,13 @@ function hasTimeOverlap(schedule1, schedule2) {
     return false;
   }
   
-  // Verificar sobreposiÃ§Ã£o de horÃ¡rios
+  // Verificar sobreposição de horários
   const time1Start = schedule1.start_time || '00:00:00';
   const time1End = schedule1.end_time || '23:59:59';
   const time2Start = schedule2.start_time || '00:00:00';
   const time2End = schedule2.end_time || '23:59:59';
   
-  // Converter para minutos para facilitar comparaÃ§Ã£o
+  // Converter para minutos para facilitar comparação
   const timeToMinutes = (timeStr) => {
     const [h, m] = timeStr.split(':').map(n => parseInt(n));
     return h * 60 + m;
@@ -91,25 +91,89 @@ function hasTimeOverlap(schedule1, schedule2) {
   const start2Min = timeToMinutes(time2Start);
   const end2Min = timeToMinutes(time2End);
   
-  // Verificar sobreposiÃ§Ã£o de horÃ¡rios (considerando overnight)
-  if (end1Min < start1Min) { // schedule1 Ã© overnight
-    if (end2Min < start2Min) { // schedule2 tambÃ©m Ã© overnight
-      return true; // Ambos overnight sempre se sobrepÃµem
+  // Verificar sobreposição de horários (considerando overnight)
+  if (end1Min < start1Min) { // schedule1 é overnight
+    if (end2Min < start2Min) { // schedule2 também é overnight
+      return true; // Ambos overnight sempre se sobrepõem
     } else {
       return start2Min <= end1Min || start1Min <= end2Min;
     }
-  } else if (end2Min < start2Min) { // apenas schedule2 Ã© overnight
+  } else if (end2Min < start2Min) { // apenas schedule2 é overnight
     return start1Min <= end2Min || start2Min <= end1Min;
   } else { // nenhum é overnight
     return start1Min < end2Min && start2Min < end1Min;
   }
 }
 
-// REMOVIDO: detectTimeConflicts() - usando color_index do backend
+// Função para detectar conflitos de horário entre agendamentos do mesmo player
+function detectTimeConflicts(schedules) {
+  const conflictAssignments = new Map();
+  const playerGroups = new Map();
+  
+  // Agrupar agendamentos por player
+  schedules.forEach(schedule => {
+    if (!playerGroups.has(schedule.player_id)) {
+      playerGroups.set(schedule.player_id, []);
+    }
+    playerGroups.get(schedule.player_id).push(schedule);
+  });
+  
+  // Para cada player, detectar conflitos
+  playerGroups.forEach((playerSchedules, playerId) => {
+    const conflictGroups = [];
+    
+    playerSchedules.forEach((schedule, index) => {
+      const conflicts = [];
+      
+      // Verificar conflitos com outros agendamentos do mesmo player
+      playerSchedules.forEach((otherSchedule, otherIndex) => {
+        if (index !== otherIndex && hasTimeOverlap(schedule, otherSchedule)) {
+          conflicts.push(otherSchedule);
+        }
+      });
+      
+      if (conflicts.length > 0) {
+        // Encontrar grupo existente ou criar novo
+        let existingGroup = conflictGroups.find(group => 
+          group.some(s => s.id === schedule.id || conflicts.some(c => c.id === s.id))
+        );
+        
+        if (existingGroup) {
+          // Adicionar ao grupo existente
+          if (!existingGroup.some(s => s.id === schedule.id)) {
+            existingGroup.push(schedule);
+          }
+          conflicts.forEach(conflict => {
+            if (!existingGroup.some(s => s.id === conflict.id)) {
+              existingGroup.push(conflict);
+            }
+          });
+        } else {
+          // Criar novo grupo
+          conflictGroups.push([schedule, ...conflicts]);
+        }
+      }
+    });
+    
+    // Atribuir cores para cada grupo de conflito
+    conflictGroups.forEach(group => {
+      group.forEach((schedule, colorIndex) => {
+        conflictAssignments.set(schedule.id, {
+          hasConflict: true,
+          colorIndex: colorIndex,
+          groupSize: group.length,
+          conflictType: 'time_overlap'
+        });
+      });
+    });
+  });
+  
+  return conflictAssignments;
+}
 
 
-function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
-  // Gera eventos diÃ¡rios dentro do intervalo com base em days_of_week e horÃ¡rios (suporta overnight)
+function expandScheduleToEvents(schedule, rangeStart, rangeEnd, conflictInfo = null) {
+  // Gera eventos diários dentro do intervalo com base em days_of_week e horários (suporta overnight)
   console.log(`[SchedulesCalendar] Expanding schedule "${schedule.name}":`, {
     start_date: schedule.start_date,
     end_date: schedule.end_date,
@@ -166,7 +230,7 @@ function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
     return events;
   }
 
-  // Converter dias da semana do formato do banco (1=Segunda, 2=TerÃ§a, etc.) 
+  // Converter dias da semana do formato do banco (1=Segunda, 2=Terça, etc.) 
   // para o formato JavaScript (0=Domingo, 1=Segunda, etc.)
   const allowedDays = (schedule.days_of_week || '1,2,3,4,5')
     .split(',')
@@ -176,13 +240,13 @@ function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
       // Python: 0=Seg, 1=Ter, 2=Qua, 3=Qui, 4=Sex, 5=Sab, 6=Dom
       // JavaScript: 0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab
       if (day === 0) return 6; // Domingo
-      return day; // Segunda=1, TerÃ§a=2, etc.
+      return day; // Segunda=1, Terça=2, etc.
     })
     .filter((n) => !isNaN(n));
 
   console.log(`[SchedulesCalendar] Allowed days:`, allowedDays);
 
-  // FullCalendar usa 0=Dom..6=Sab. Nosso schedule tambÃ©m (UI). JÃ¡ vindo como 0..6.
+  // FullCalendar usa 0=Dom..6=Sab. Nosso schedule também (UI). Já vindo como 0..6.
   const isAllDay = schedule.start_time === '00:00:00' && schedule.end_time === '23:59:59';
   const [sh, sm, ss] = (schedule.start_time || '00:00:00').split(':').map((v) => parseInt(v, 10) || 0);
   const [eh, em, es] = (schedule.end_time || '23:59:59').split(':').map((v) => parseInt(v, 10) || 0);
@@ -206,116 +270,49 @@ function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
         start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0),
         end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59),
         allDay: true,
-        backgroundColor: (() => {
-          console.log(`[DEBUG] Aplicando cores para "${schedule.name}" - color_index:`, schedule.color_index, 'conflict_type:', schedule.conflict_type);
-          
+        color: (() => {
           // Array de cores para diferenciar agendamentos conflitantes
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
+          const conflictColors = ['#1976d2', '#ff5722', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4', '#795548', '#607d8b'];
           
           // Overlay sempre roxo
           if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            console.log(`[DEBUG] Aplicando cor overlay para "${schedule.name}"`);
             return '#6c63ff';
           }
           
-          // Se tem color_index do backend (agendamentos sobrepostos), usar cores diferenciadas
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            console.log(`[DEBUG] Aplicando cor de conflito para "${schedule.name}":`, colorObj.name, colorObj.bg);
-            return colorObj.bg;
+          // Conflitos críticos sempre vermelho
+          if (schedule.conflict_type === 'conflict') {
+            return '#ff5722';
           }
           
-          // Conflitos críticos sempre vermelho (só se não tem color_index)
-          if (schedule.conflict_type === 'conflict') {
-            console.log(`[DEBUG] Aplicando cor de conflito crítico para "${schedule.name}"`);
-            return '#ff5722';
+          // Se h� conflito de hor�rio detectado, usar cores diferenciadas
+          if (conflictInfo && conflictInfo.hasConflict) {
+            return conflictColors[conflictInfo.colorIndex % conflictColors.length];
+          }
+          
+          // Se tem color_index (agendamentos sobrepostos), usar cores diferenciadas
+          if (schedule.color_index !== undefined && schedule.color_index > 0) {
+            return conflictColors[schedule.color_index % conflictColors.length];
           }
           
           // Cores baseadas na prioridade de sobreposição
           if (schedule.overlap_priority === 'overlap_top') {
-            console.log(`[DEBUG] Aplicando cor de prioridade alta para "${schedule.name}"`);
             return '#4caf50'; // Verde para prioridade alta
           }
           
           if (schedule.overlap_priority === 'overlap_bottom') {
-            console.log(`[DEBUG] Aplicando cor de prioridade baixa para "${schedule.name}"`);
             return '#ff9800'; // Laranja para prioridade baixa
           }
           
           // Cor padrão
-          console.log(`[DEBUG] Usando cor padrão para "${schedule.name}"`);
           return '#1976d2';
-        })(),
-        borderColor: (() => {
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
-          
-          if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            return '#5a4fcf';
-          }
-          
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            return colorObj.border;
-          }
-          
-          if (schedule.conflict_type === 'conflict') {
-            return '#e64a19';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_top') {
-            return '#388e3c';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_bottom') {
-            return '#f57c00';
-          }
-          
-          return '#1565c0';
         })(),
         extendedProps: {
           player_id: schedule.player_id,
           player_name: schedule.player_name,
           content_type: schedule.content_type,
           has_conflicts: schedule.has_conflicts,
-          conflict_type: schedule.conflict_type,
-          campaign_name: schedule.campaign_name,
-          start_date: schedule.start_date,
-          end_date: schedule.end_date,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time,
-          days_of_week: schedule.days_of_week,
-          priority: schedule.priority,
-          is_persistent: schedule.is_persistent,
-          location_name: schedule.location_name,
-          colorIndex: schedule.color_index
-        },
-        classNames: schedule.color_index > 0 ? [`color-index-${schedule.color_index}`] : []
+          conflict_type: schedule.conflict_type
+        }
       });
     } else if (sh <= eh) {
       // Janela no mesmo dia
@@ -325,116 +322,49 @@ function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
         start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm, ss),
         end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), eh, em, es),
         allDay: false,
-        backgroundColor: (() => {
-          console.log(`[DEBUG] Aplicando cores para "${schedule.name}" - color_index:`, schedule.color_index, 'conflict_type:', schedule.conflict_type);
-          
+        color: (() => {
           // Array de cores para diferenciar agendamentos conflitantes
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
+          const conflictColors = ['#1976d2', '#ff5722', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4', '#795548', '#607d8b'];
           
           // Overlay sempre roxo
           if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            console.log(`[DEBUG] Aplicando cor overlay para "${schedule.name}"`);
             return '#6c63ff';
           }
           
-          // Se tem color_index do backend (agendamentos sobrepostos), usar cores diferenciadas
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            console.log(`[DEBUG] Aplicando cor de conflito para "${schedule.name}":`, colorObj.name, colorObj.bg);
-            return colorObj.bg;
+          // Conflitos críticos sempre vermelho
+          if (schedule.conflict_type === 'conflict') {
+            return '#ff5722';
           }
           
-          // Conflitos críticos sempre vermelho (só se não tem color_index)
-          if (schedule.conflict_type === 'conflict') {
-            console.log(`[DEBUG] Aplicando cor de conflito crítico para "${schedule.name}"`);
-            return '#ff5722';
+          // Se h� conflito de hor�rio detectado, usar cores diferenciadas
+          if (conflictInfo && conflictInfo.hasConflict) {
+            return conflictColors[conflictInfo.colorIndex % conflictColors.length];
+          }
+          
+          // Se tem color_index (agendamentos sobrepostos), usar cores diferenciadas
+          if (schedule.color_index !== undefined && schedule.color_index > 0) {
+            return conflictColors[schedule.color_index % conflictColors.length];
           }
           
           // Cores baseadas na prioridade de sobreposição
           if (schedule.overlap_priority === 'overlap_top') {
-            console.log(`[DEBUG] Aplicando cor de prioridade alta para "${schedule.name}"`);
             return '#4caf50'; // Verde para prioridade alta
           }
           
           if (schedule.overlap_priority === 'overlap_bottom') {
-            console.log(`[DEBUG] Aplicando cor de prioridade baixa para "${schedule.name}"`);
             return '#ff9800'; // Laranja para prioridade baixa
           }
           
           // Cor padrão
-          console.log(`[DEBUG] Usando cor padrão para "${schedule.name}"`);
           return '#1976d2';
-        })(),
-        borderColor: (() => {
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
-          
-          if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            return '#5a4fcf';
-          }
-          
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            return colorObj.border;
-          }
-          
-          if (schedule.conflict_type === 'conflict') {
-            return '#e64a19';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_top') {
-            return '#388e3c';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_bottom') {
-            return '#f57c00';
-          }
-          
-          return '#1565c0';
         })(),
         extendedProps: {
           player_id: schedule.player_id,
           player_name: schedule.player_name,
           content_type: schedule.content_type,
           has_conflicts: schedule.has_conflicts,
-          conflict_type: schedule.conflict_type,
-          campaign_name: schedule.campaign_name,
-          start_date: schedule.start_date,
-          end_date: schedule.end_date,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time,
-          days_of_week: schedule.days_of_week,
-          priority: schedule.priority,
-          is_persistent: schedule.is_persistent,
-          location_name: schedule.location_name,
-          colorIndex: schedule.color_index
-        },
-        classNames: schedule.color_index > 0 ? [`color-index-${schedule.color_index}`] : []
+          conflict_type: schedule.conflict_type
+        }
       });
     } else {
       // Overnight: parte 1 no dia D
@@ -444,116 +374,49 @@ function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
         start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), sh, sm, ss),
         end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59),
         allDay: false,
-        backgroundColor: (() => {
-          console.log(`[DEBUG] Aplicando cores para "${schedule.name}" - color_index:`, schedule.color_index, 'conflict_type:', schedule.conflict_type);
-          
+        color: (() => {
           // Array de cores para diferenciar agendamentos conflitantes
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
+          const conflictColors = ['#1976d2', '#ff5722', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4', '#795548', '#607d8b'];
           
           // Overlay sempre roxo
           if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            console.log(`[DEBUG] Aplicando cor overlay para "${schedule.name}"`);
             return '#6c63ff';
           }
           
-          // Se tem color_index do backend (agendamentos sobrepostos), usar cores diferenciadas
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            console.log(`[DEBUG] Aplicando cor de conflito para "${schedule.name}":`, colorObj.name, colorObj.bg);
-            return colorObj.bg;
+          // Conflitos críticos sempre vermelho
+          if (schedule.conflict_type === 'conflict') {
+            return '#ff5722';
           }
           
-          // Conflitos críticos sempre vermelho (só se não tem color_index)
-          if (schedule.conflict_type === 'conflict') {
-            console.log(`[DEBUG] Aplicando cor de conflito crítico para "${schedule.name}"`);
-            return '#ff5722';
+          // Se h� conflito de hor�rio detectado, usar cores diferenciadas
+          if (conflictInfo && conflictInfo.hasConflict) {
+            return conflictColors[conflictInfo.colorIndex % conflictColors.length];
+          }
+          
+          // Se tem color_index (agendamentos sobrepostos), usar cores diferenciadas
+          if (schedule.color_index !== undefined && schedule.color_index > 0) {
+            return conflictColors[schedule.color_index % conflictColors.length];
           }
           
           // Cores baseadas na prioridade de sobreposição
           if (schedule.overlap_priority === 'overlap_top') {
-            console.log(`[DEBUG] Aplicando cor de prioridade alta para "${schedule.name}"`);
             return '#4caf50'; // Verde para prioridade alta
           }
           
           if (schedule.overlap_priority === 'overlap_bottom') {
-            console.log(`[DEBUG] Aplicando cor de prioridade baixa para "${schedule.name}"`);
             return '#ff9800'; // Laranja para prioridade baixa
           }
           
           // Cor padrão
-          console.log(`[DEBUG] Usando cor padrão para "${schedule.name}"`);
           return '#1976d2';
-        })(),
-        borderColor: (() => {
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
-          
-          if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            return '#5a4fcf';
-          }
-          
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            return colorObj.border;
-          }
-          
-          if (schedule.conflict_type === 'conflict') {
-            return '#e64a19';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_top') {
-            return '#388e3c';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_bottom') {
-            return '#f57c00';
-          }
-          
-          return '#1565c0';
         })(),
         extendedProps: {
           player_id: schedule.player_id,
           player_name: schedule.player_name,
           content_type: schedule.content_type,
           has_conflicts: schedule.has_conflicts,
-          conflict_type: schedule.conflict_type,
-          campaign_name: schedule.campaign_name,
-          start_date: schedule.start_date,
-          end_date: schedule.end_date,
-          start_time: schedule.start_time,
-          end_time: schedule.end_time,
-          days_of_week: schedule.days_of_week,
-          priority: schedule.priority,
-          is_persistent: schedule.is_persistent,
-          location_name: schedule.location_name,
-          colorIndex: schedule.color_index
-        },
-        classNames: schedule.color_index > 0 ? [`color-index-${schedule.color_index}`] : []
+          conflict_type: schedule.conflict_type
+        }
       });
       // Parte 2 no dia D+1
       const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0);
@@ -564,97 +427,41 @@ function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
           start: new Date(next.getFullYear(), next.getMonth(), next.getDate(), 0, 0, 0),
           end: new Date(next.getFullYear(), next.getMonth(), next.getDate(), eh, em, es),
           allDay: false,
-          backgroundColor: (() => {
-          console.log(`[DEBUG] Aplicando cores para "${schedule.name}" - color_index:`, schedule.color_index, 'conflict_type:', schedule.conflict_type);
-          
+          color: (() => {
           // Array de cores para diferenciar agendamentos conflitantes
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
+          const conflictColors = ['#1976d2', '#ff5722', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4', '#795548', '#607d8b'];
           
           // Overlay sempre roxo
           if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            console.log(`[DEBUG] Aplicando cor overlay para "${schedule.name}"`);
             return '#6c63ff';
           }
           
-          // Se tem color_index do backend (agendamentos sobrepostos), usar cores diferenciadas
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            console.log(`[DEBUG] Aplicando cor de conflito para "${schedule.name}":`, colorObj.name, colorObj.bg);
-            return colorObj.bg;
+          // Conflitos críticos sempre vermelho
+          if (schedule.conflict_type === 'conflict') {
+            return '#ff5722';
           }
           
-          // Conflitos críticos sempre vermelho (só se não tem color_index)
-          if (schedule.conflict_type === 'conflict') {
-            console.log(`[DEBUG] Aplicando cor de conflito crítico para "${schedule.name}"`);
-            return '#ff5722';
+          // Se h� conflito de hor�rio detectado, usar cores diferenciadas
+          if (conflictInfo && conflictInfo.hasConflict) {
+            return conflictColors[conflictInfo.colorIndex % conflictColors.length];
+          }
+          
+          // Se tem color_index (agendamentos sobrepostos), usar cores diferenciadas
+          if (schedule.color_index !== undefined && schedule.color_index > 0) {
+            return conflictColors[schedule.color_index % conflictColors.length];
           }
           
           // Cores baseadas na prioridade de sobreposição
           if (schedule.overlap_priority === 'overlap_top') {
-            console.log(`[DEBUG] Aplicando cor de prioridade alta para "${schedule.name}"`);
             return '#4caf50'; // Verde para prioridade alta
           }
           
           if (schedule.overlap_priority === 'overlap_bottom') {
-            console.log(`[DEBUG] Aplicando cor de prioridade baixa para "${schedule.name}"`);
             return '#ff9800'; // Laranja para prioridade baixa
           }
           
           // Cor padrão
-          console.log(`[DEBUG] Usando cor padrão para "${schedule.name}"`);
           return '#1976d2';
-        })(),
-        borderColor: (() => {
-          const conflictColors = [
-            { bg: '#1976d2', border: '#1565c0', text: '#ffffff', name: 'Azul' },
-            { bg: '#e91e63', border: '#c2185b', text: '#ffffff', name: 'Rosa' },
-            { bg: '#4caf50', border: '#388e3c', text: '#ffffff', name: 'Verde' },
-            { bg: '#ff9800', border: '#f57c00', text: '#000000', name: 'Laranja' },
-            { bg: '#9c27b0', border: '#7b1fa2', text: '#ffffff', name: 'Roxo' },
-            { bg: '#00bcd4', border: '#0097a7', text: '#ffffff', name: 'Ciano' },
-            { bg: '#795548', border: '#5d4037', text: '#ffffff', name: 'Marrom' },
-            { bg: '#607d8b', border: '#455a64', text: '#ffffff', name: 'Cinza' },
-            { bg: '#ff5722', border: '#e64a19', text: '#ffffff', name: 'Vermelho' },
-            { bg: '#8bc34a', border: '#689f38', text: '#000000', name: 'Lima' },
-            { bg: '#ffc107', border: '#ffa000', text: '#000000', name: 'Âmbar' },
-            { bg: '#673ab7', border: '#512da8', text: '#ffffff', name: 'Índigo' }
-          ];
-          
-          if (schedule.content_type === 'overlay' || schedule.overlap_priority === 'overlay') {
-            return '#5a4fcf';
-          }
-          
-          if (schedule.color_index !== undefined && schedule.color_index > 0) {
-            const colorObj = conflictColors[schedule.color_index % conflictColors.length];
-            return colorObj.border;
-          }
-          
-          if (schedule.conflict_type === 'conflict') {
-            return '#e64a19';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_top') {
-            return '#388e3c';
-          }
-          
-          if (schedule.overlap_priority === 'overlap_bottom') {
-            return '#f57c00';
-          }
-          
-          return '#1565c0';
         })(),
           extendedProps: {
             player_id: schedule.player_id,
@@ -707,7 +514,7 @@ const SchedulesCalendar = () => {
         is_active: 'true'
       });
 
-      // Se um player especÃ­fico foi selecionado, filtrar por ele
+      // Se um player específico foi selecionado, filtrar por ele
       if (selectedPlayer) {
         params.append('player_id', selectedPlayer);
       }
@@ -719,10 +526,14 @@ const SchedulesCalendar = () => {
       
       setTotalSchedules(schedules.length);
 
-      // Expandir schedules em eventos do calendário (usando color_index do backend)
+      // Detectar conflitos de hor�rio entre agendamentos
+      const conflictInfo = detectTimeConflicts(schedules);
+      console.log('[SchedulesCalendar] Conflict detection results:', conflictInfo);
+      
+      // Expandir schedules em eventos do calendário
       const expanded = schedules.flatMap((s) => {
-        console.log(`[DEBUG] Schedule "${s.name}" color_index do backend:`, s.color_index);
-        const events = expandScheduleToEvents(s, start, end);
+        const conflict = conflictInfo.get(s.id);
+        const events = expandScheduleToEvents(s, start, end, conflict);
         console.log(`[SchedulesCalendar] Schedule "${s.name}" expanded to ${events.length} events:`, events);
         return events;
       });
@@ -730,16 +541,6 @@ const SchedulesCalendar = () => {
       setEvents(expanded);
     } catch (err) {
       console.error('[SchedulesCalendar] Error fetching schedules:', err);
-      
-      // Detectar problemas de autenticação JWT
-      if (err.response?.status === 500 && err.response?.data?.msg === 'Not enough segments') {
-        console.warn('[SchedulesCalendar] JWT token inválido, limpando localStorage');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = '/app/login';
-        return;
-      }
-      
       setError(err.response?.data?.error || err.message || 'Erro ao carregar calendário');
     } finally {
       setLoading(false);
@@ -757,7 +558,7 @@ const SchedulesCalendar = () => {
     fetchRange(start, end);
   };
 
-  // FunÃ§Ã£o para mudar a visualizaÃ§Ã£o do calendÃ¡rio
+  // Função para mudar a visualização do calendário
   const handleViewChange = (newView) => {
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
@@ -766,7 +567,7 @@ const SchedulesCalendar = () => {
     setView(newView);
   };
 
-  // FunÃ§Ã£o para filtrar por player
+  // Função para filtrar por player
   const handlePlayerFilter = (playerId) => {
     setSelectedPlayer(playerId);
     // Recarregar dados com o novo filtro
@@ -785,10 +586,10 @@ const SchedulesCalendar = () => {
   }, []);
 
   return (
-    <Box sx={{ p: 2, backgroundColor: theme.palette.background.default, minHeight: '100vh' }}>
-      {/* CabeÃ§alho Principal */}
-      <Paper elevation={2} sx={{ mb: 2, borderRadius: 2 }}>
-        <CardContent sx={{ pb: 1.5, pt: 2 }}>
+    <Box sx={{ p: 3, backgroundColor: theme.palette.background.default, minHeight: '100vh' }}>
+      {/* Cabeçalho Principal */}
+      <Paper elevation={2} sx={{ mb: 3, borderRadius: 2 }}>
+        <CardContent sx={{ pb: 2 }}>
           <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
             <Box>
               <Typography variant="h4" component="h1" sx={{ 
@@ -799,12 +600,12 @@ const SchedulesCalendar = () => {
                 gap: 1
               }}>
                 <CalendarToday sx={{ fontSize: 32 }} />
-                CalendÃ¡rio Global de Agendamentos
+                Calendário Global de Agendamentos
               </Typography>
               
               <Box sx={{ mt: 1 }}>
                 <Typography variant="h6" sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}>
-                  Visualize agendamentos de todos os players ou filtre por player especÃ­fico
+                  Visualize agendamentos de todos os players ou filtre por player específico
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
                   <Chip 
@@ -827,7 +628,7 @@ const SchedulesCalendar = () => {
             </Box>
 
             <Stack direction="row" spacing={1}>
-              <Tooltip title="Atualizar calendÃ¡rio">
+              <Tooltip title="Atualizar calendário">
                 <IconButton 
                   onClick={() => window.location.reload()} 
                   color="primary"
@@ -886,9 +687,9 @@ const SchedulesCalendar = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Chip 
                   label={
-                    view === 'dayGridMonth' ? 'VisualizaÃ§Ã£o Mensal' :
-                    view === 'timeGridWeek' ? 'VisualizaÃ§Ã£o Semanal' :
-                    'VisualizaÃ§Ã£o DiÃ¡ria'
+                    view === 'dayGridMonth' ? 'Visualização Mensal' :
+                    view === 'timeGridWeek' ? 'Visualização Semanal' :
+                    'Visualização Diária'
                   }
                   color="primary"
                   variant="outlined"
@@ -931,7 +732,7 @@ const SchedulesCalendar = () => {
                     border: '2px solid #ffcdd2'
                   }} />
                   <Typography variant="caption" sx={{ fontSize: '0.7rem' }}>
-                    SobreposiÃ§Ã£o
+                    Sobreposição
                   </Typography>
                 </Box>
                 
@@ -952,7 +753,7 @@ const SchedulesCalendar = () => {
                 >
                   <ToggleButton value="dayGridMonth">
                     <ViewModule sx={{ mr: 1 }} />
-                    MÃªs
+                    Mês
                   </ToggleButton>
                   <ToggleButton value="timeGridWeek">
                     <ViewWeek sx={{ mr: 1 }} />
@@ -1003,7 +804,7 @@ const SchedulesCalendar = () => {
         </Alert>
       )}
 
-      {/* CalendÃ¡rio Principal */}
+      {/* Calendário Principal */}
       <Paper elevation={1} sx={{ borderRadius: 2, overflow: 'hidden' }}>
         <FullCalendar
           ref={calendarRef}
@@ -1046,81 +847,6 @@ const SchedulesCalendar = () => {
             }
             return classes;
           }}
-          // Conteúdo customizado com tooltip rico
-          eventContent={(arg) => {
-            const props = arg.event.extendedProps;
-            const formatDays = (daysStr) => {
-              const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-              return (daysStr || '').split(',').map(d => dayNames[parseInt(d)] || d).join(', ');
-            };
-            
-            const tooltipContent = `
-              ${props.is_persistent ? '📌 Persistente' : ''}
-              ${props.has_conflicts ? '⚠️ TEM CONFLITOS' : '✅ Sem conflitos'}
-              📅 ${arg.event.title}
-              🎯 Campanha: ${props.campaign_name || 'N/A'}
-              📍 Local: ${props.location_name || 'N/A'}
-              🖥️ Player: ${props.player_name || 'N/A'}
-              📺 Tipo: ${props.content_type === 'overlay' ? 'Overlay' : 'Principal'}
-              ⏰ Horário: ${props.start_time} - ${props.end_time}
-              📆 Dias: ${formatDays(props.days_of_week)}
-              🔄 Período: ${props.start_date} até ${props.end_date}
-              ⚡ Prioridade: ${props.priority || 'Normal'}
-            `.trim();
-
-            return (
-              <div 
-                style={{ 
-                  padding: '4px 6px', 
-                  overflow: 'hidden',
-                  height: '100%',
-                  position: 'relative',
-                  cursor: 'pointer'
-                }}
-                title={tooltipContent}
-              >
-                <div style={{ 
-                  fontWeight: props.has_conflicts ? '700' : '600', 
-                  fontSize: '0.8rem',
-                  lineHeight: '1.2',
-                  color: 'inherit'
-                }}>
-                  {arg.event.title}
-                </div>
-                {!arg.event.allDay && (
-                  <div style={{ 
-                    fontSize: '0.7rem', 
-                    opacity: 0.9,
-                    marginTop: '1px'
-                  }}>
-                    {arg.timeText}
-                  </div>
-                )}
-                {props.has_conflicts && (
-                  <div style={{ 
-                    fontSize: '0.65rem', 
-                    marginTop: '1px',
-                    fontWeight: '700',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '2px'
-                  }}>
-                    ⚠️ Conflito
-                  </div>
-                )}
-                {props.content_type === 'overlay' && (
-                  <div style={{ 
-                    fontSize: '0.65rem', 
-                    marginTop: '1px',
-                    fontWeight: '600',
-                    opacity: 0.8
-                  }}>
-                    📌 Overlay
-                  </div>
-                )}
-              </div>
-            );
-          }}
           // Configurações de tema
           themeSystem="standard"
           // Configurações de texto
@@ -1132,7 +858,7 @@ const SchedulesCalendar = () => {
           }}
           // Configurações de dia da semana
           dayHeaderFormat={{ weekday: 'short' }}
-          // ConfiguraÃ§Ãµes de slot
+          // Configurações de slot
           slotLabelFormat={{
             hour: '2-digit',
             minute: '2-digit',
@@ -1253,103 +979,6 @@ const SchedulesCalendar = () => {
           color: white !important;
         }
         
-        /* Cores suaves e harmoniosas para conflitos - Paleta profissional */
-        .fc .fc-event.color-index-1,
-        .fc-daygrid-event.color-index-1,
-        .fc-timegrid-event.color-index-1 {
-          background-color: #64b5f6 !important;
-          background: linear-gradient(135deg, #64b5f6, #42a5f5) !important;
-          border-color: #1976d2 !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3) !important;
-        }
-        
-        .fc .fc-event.color-index-2,
-        .fc-daygrid-event.color-index-2,
-        .fc-timegrid-event.color-index-2 {
-          background-color: #81c784 !important;
-          background: linear-gradient(135deg, #81c784, #66bb6a) !important;
-          border-color: #388e3c !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(56, 142, 60, 0.3) !important;
-        }
-        
-        .fc .fc-event.color-index-3,
-        .fc-daygrid-event.color-index-3,
-        .fc-timegrid-event.color-index-3 {
-          background-color: #ffb74d !important;
-          background: linear-gradient(135deg, #ffb74d, #ffa726) !important;
-          border-color: #f57c00 !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(245, 124, 0, 0.3) !important;
-        }
-        
-        .fc .fc-event.color-index-4,
-        .fc-daygrid-event.color-index-4,
-        .fc-timegrid-event.color-index-4 {
-          background-color: #ba68c8 !important;
-          background: linear-gradient(135deg, #ba68c8, #ab47bc) !important;
-          border-color: #7b1fa2 !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(123, 31, 162, 0.3) !important;
-        }
-        
-        .fc .fc-event.color-index-5,
-        .fc-daygrid-event.color-index-5,
-        .fc-timegrid-event.color-index-5 {
-          background-color: #4dd0e1 !important;
-          background: linear-gradient(135deg, #4dd0e1, #26c6da) !important;
-          border-color: #0097a7 !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(0, 151, 167, 0.3) !important;
-        }
-        
-        .fc .fc-event.color-index-6,
-        .fc-daygrid-event.color-index-6,
-        .fc-timegrid-event.color-index-6 {
-          background-color: #a1887f !important;
-          background: linear-gradient(135deg, #a1887f, #8d6e63) !important;
-          border-color: #5d4037 !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(93, 64, 55, 0.3) !important;
-        }
-        
-        .fc .fc-event.color-index-7,
-        .fc-daygrid-event.color-index-7,
-        .fc-timegrid-event.color-index-7 {
-          background-color: #90a4ae !important;
-          background: linear-gradient(135deg, #90a4ae, #78909c) !important;
-          border-color: #455a64 !important;
-          color: white !important;
-          box-shadow: 0 2px 4px rgba(69, 90, 100, 0.3) !important;
-        }
-        
-        /* Sobrescrever elementos internos dos eventos com gradientes suaves */
-        .fc-event.color-index-1 .fc-event-main,
-        .fc-event.color-index-1 .fc-event-title {
-          background: linear-gradient(135deg, #64b5f6, #42a5f5) !important;
-        }
-        
-        .fc-event.color-index-2 .fc-event-main,
-        .fc-event.color-index-2 .fc-event-title {
-          background: linear-gradient(135deg, #81c784, #66bb6a) !important;
-        }
-        
-        .fc-event.color-index-3 .fc-event-main,
-        .fc-event.color-index-3 .fc-event-title {
-          background: linear-gradient(135deg, #ffb74d, #ffa726) !important;
-        }
-        
-        .fc-event.color-index-4 .fc-event-main,
-        .fc-event.color-index-4 .fc-event-title {
-          background: linear-gradient(135deg, #ba68c8, #ab47bc) !important;
-        }
-        
-        .fc-event.color-index-5 .fc-event-main,
-        .fc-event.color-index-5 .fc-event-title {
-          background: linear-gradient(135deg, #4dd0e1, #26c6da) !important;
-        }
-        
         .fc-event:hover {
           transform: translateY(-1px);
           box-shadow: ${theme.palette.mode === 'dark' 
@@ -1424,7 +1053,7 @@ const SchedulesCalendar = () => {
           color: ${theme.palette.text.secondary};
         }
         
-        /* Estilos especÃ­ficos para visualizaÃ§Ã£o de mÃªs */
+        /* Estilos específicos para visualização de mês */
         .fc-daygrid-day-frame {
           background-color: ${theme.palette.background.paper};
           border-color: ${theme.palette.divider};
@@ -1442,17 +1071,17 @@ const SchedulesCalendar = () => {
         .fc-daygrid-event {
           margin: 1px 0;
           border-radius: 4px;
-          font-size: 0.7rem;
-          padding: 1px 3px;
+          font-size: 0.75rem;
+          padding: 2px 4px;
         }
         
         .fc-daygrid-event-harness {
           margin: 1px 0;
         }
         
-        /* Estilos especÃ­ficos para visualizaÃ§Ã£o de dia */
+        /* Estilos específicos para visualização de dia */
         .fc-timegrid-slot {
-          height: ${view === 'timeGridDay' ? '1.8em' : '2.2em'} !important;
+          height: ${view === 'timeGridDay' ? '2em' : '2.5em'} !important;
         }
         
         .fc-timegrid-slot-minor {
@@ -1460,14 +1089,14 @@ const SchedulesCalendar = () => {
         }
         
         .fc-timegrid-slot-label {
-          font-size: ${view === 'timeGridDay' ? '0.75rem' : '0.85rem'};
+          font-size: ${view === 'timeGridDay' ? '0.8rem' : '0.9rem'};
           color: ${theme.palette.text.secondary};
         }
         
-        /* Melhorar aparÃªncia dos eventos em todas as visualizaÃ§Ãµes */
+        /* Melhorar aparência dos eventos em todas as visualizações */
         .fc-event-title {
           font-weight: 500;
-          font-size: 0.8rem;
+          font-size: 0.85rem;
         }
         
         .fc-event-time {
@@ -1475,7 +1104,7 @@ const SchedulesCalendar = () => {
           font-size: 0.75rem;
         }
         
-        /* Estilos para popover de eventos extras no mÃªs */
+        /* Estilos para popover de eventos extras no mês */
         .fc-popover {
           background-color: ${theme.palette.background.paper};
           border: 1px solid ${theme.palette.divider};

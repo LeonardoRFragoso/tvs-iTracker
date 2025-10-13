@@ -396,16 +396,16 @@ const ContentList = () => {
       </Fade>
 
       {/* Grid de Conteúdos */}
-      <Grid container spacing={2}>
+      <Grid container spacing={1.5}>
         {loading ? (
-          Array.from({ length: 12 }, (_, index) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
+          Array.from({ length: 15 }, (_, index) => (
+            <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
               <ContentCardSkeleton delay={index} />
             </Grid>
           ))
         ) : (
           contents.map((content, index) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={content.id}>
+            <Grid item xs={12} sm={6} md={4} lg={2} key={content.id}>
               <Grow in={true} timeout={1200 + index * 100}>
                 <Card 
                   sx={{ 
@@ -440,7 +440,7 @@ const ContentList = () => {
                 >
                   <CardMedia
                     sx={{
-                      height: 160,
+                      height: 120,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -519,17 +519,17 @@ const ContentList = () => {
                     </Box>
                   </CardMedia>
                   
-                  <CardContent sx={{ flexGrow: 1, position: 'relative', zIndex: 2 }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                  <CardContent sx={{ flexGrow: 1, position: 'relative', zIndex: 2, p: 1.5 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={0.5}>
                       <Typography 
-                        variant="h6" 
+                        variant="subtitle1" 
                         component="h3" 
                         noWrap 
                         sx={{ 
                           flexGrow: 1, 
                           mr: 1,
-                          fontWeight: 'bold',
-                          fontSize: '1.1rem',
+                          fontWeight: 600,
+                          fontSize: '0.95rem',
                         }}
                       >
                         {content.title}

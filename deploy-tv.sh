@@ -52,13 +52,10 @@ export REACT_APP_SOCKET_URL=same-origin
 
 # 2) Build do React
 step "[2/4] Fazendo build da aplicação React"
-if [ -f package-lock.json ]; then
-  echo "[INFO] Instalando dependências com npm ci..."
-  npm ci
-else
-  echo "[INFO] Instalando dependências com npm install..."
-  npm install
-fi
+echo "[INFO] Limpando cache do npm..."
+npm cache clean --force 2>/dev/null || true
+echo "[INFO] Instalando dependências com npm install..."
+npm install --legacy-peer-deps
 npm run build
 
 # 3) Copiar build para backend/build

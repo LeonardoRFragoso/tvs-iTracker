@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { formatBRDateTime } from '../../utils/dateFormatter';
 import {
   Box,
   Card,
@@ -743,11 +744,10 @@ const CampaignForm = () => {
         setCompileStatus(s);
         if (s === 'ready') {
           const videoInfo = {
-            url: computeCompiledUrl(data.compiled_video_url),
             duration: data.duration,
             resolution: data.resolution,
             fps: data.fps,
-            updatedAt: new Date().toISOString(),
+            updatedAt: formatBRDateTime(),
           };
           setCompileInfo(videoInfo);
           setCompileStale(false);

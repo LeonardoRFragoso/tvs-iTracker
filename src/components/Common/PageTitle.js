@@ -22,11 +22,11 @@ const PageTitle = ({ title, subtitle, icon, backTo, actions, sx = {} }) => {
     <Fade in timeout={800}>
       <Box 
         sx={{ 
-          mb: 3, 
+          mb: 2, 
           display: 'flex', 
           flexDirection: { xs: 'column', sm: 'row' },
           alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 2,
+          gap: 1.5,
           ...sx
         }}
       >
@@ -58,31 +58,32 @@ const PageTitle = ({ title, subtitle, icon, backTo, actions, sx = {} }) => {
         )}
         
         <Box sx={{ flex: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             {icon && (
               <Box
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 40,
-                  height: 40,
-                  borderRadius: '12px',
+                  width: 36,
+                  height: 36,
+                  borderRadius: '10px',
                   background: (theme) => theme.palette.mode === 'dark' 
                     ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
                     : 'linear-gradient(45deg, #2196F3, #21CBF3)',
                   color: 'white',
-                  fontSize: '20px',
+                  fontSize: '18px',
                 }}
               >
                 {icon}
               </Box>
             )}
             <Typography 
-              variant="h4" 
+              variant="h5" 
               component="h1"
               sx={{
                 fontWeight: 600,
+                fontSize: '1.5rem',
                 background: (theme) => theme.palette.mode === 'dark' 
                   ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
                   : 'linear-gradient(45deg, #2196F3, #21CBF3)',
@@ -97,9 +98,9 @@ const PageTitle = ({ title, subtitle, icon, backTo, actions, sx = {} }) => {
           
           {subtitle && (
             <Typography 
-              variant="subtitle1" 
+              variant="body2" 
               color="text.secondary"
-              sx={{ mt: 0.5 }}
+              sx={{ mt: 0.25, fontSize: '0.875rem' }}
             >
               {subtitle}
             </Typography>

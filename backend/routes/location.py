@@ -32,7 +32,7 @@ def list_locations():
             )
         
         # HR can only see their company's locations
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             query = query.filter(Location.company == current_user.company)
         
         query = query.order_by(Location.created_at.desc())
@@ -128,7 +128,7 @@ def get_location(location_id):
         if not location:
             return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
             return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         return jsonify({'location': location.to_dict()}), 200
@@ -237,7 +237,7 @@ def get_location_players(location_id):
         if not location:
             return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
             return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = [player.to_dict() for player in location.players]
@@ -263,7 +263,7 @@ def get_location_stats(location_id):
         if not location:
             return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
             return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = location.players
@@ -348,7 +348,7 @@ def debug_location_players(location_id):
         if not location:
             return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
             return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = location.players
@@ -392,7 +392,7 @@ def force_location_players_online(location_id):
         if not location:
             return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
             return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = location.players

@@ -44,8 +44,8 @@ import {
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
   Event as EventIcon,
-  Schedule as ScheduleIcon,
   ContentCopy as DuplicateIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../config/axios';
@@ -81,7 +81,7 @@ const parseDateTimeFlexible = (value) => {
 const ScheduleList = () => {
   const navigate = useNavigate();
   // Use ThemeContext hook exactly once to respect Rules of Hooks
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, theme } = useTheme();
   
   const [schedules, setSchedules] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
@@ -110,6 +110,7 @@ const ScheduleList = () => {
   // Delete dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [scheduleToDelete, setScheduleToDelete] = useState(null);
+  
 
   useEffect(() => {
     loadSchedules();
@@ -281,6 +282,7 @@ const ScheduleList = () => {
     handleMenuClose();
   };
 
+
   const ScheduleRowSkeleton = ({ delay = 0 }) => (
     <Grow in={true} timeout={1000 + delay * 100}>
       <TableRow>
@@ -301,12 +303,13 @@ const ScheduleList = () => {
     </Grow>
   );
 
-  return (
+  const renderSchedulesList = () => (
     <Box>
       {/* Header com PageTitle */}
       <PageTitle 
         title="Agendamentos"
         subtitle="Gerencie os horários de exibição de conteúdo"
+        icon={<ScheduleIcon />}
         actions={
           <Button
             variant="contained"
@@ -899,6 +902,8 @@ const ScheduleList = () => {
       </Dialog>
     </Box>
   );
+
+  return renderSchedulesList();
 };
 
 export default ScheduleList;

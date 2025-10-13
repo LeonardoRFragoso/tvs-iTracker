@@ -87,7 +87,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Novo: criar usuário (admin)
-  const registerUser = async ({ username, email, password, role = 'hr', company = 'iTracker' }) => {
+  const registerUser = async ({ username, email, password, role = 'rh', company = 'iTracker' }) => {
     try {
       const response = await axios.post('/auth/register', {
         username,
@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Novo: cadastro público (sem senha, fica pendente)
-  const publicRegister = async ({ username, email, role = 'hr', company = 'iTracker' }) => {
+  const publicRegister = async ({ username, email, role = 'rh', company = 'iTracker' }) => {
     try {
       const response = await axios.post('/auth/public-register', {
         username,
@@ -237,7 +237,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     isAdmin: user?.role === 'admin',
     isManager: user?.role === 'manager' || user?.role === 'admin',
-    isHR: user?.role === 'hr',
+    isHR: user?.role === 'rh',
     // Expose new admin helpers
     listUsers,
     updateUser,

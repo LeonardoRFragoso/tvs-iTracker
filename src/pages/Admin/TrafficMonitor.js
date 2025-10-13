@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { formatBRDateTime } from '../../utils/dateFormatter';
 import {
   Box,
   Grid,
@@ -172,8 +173,8 @@ const TrafficMonitor = () => {
     if (period === '1h') from.setHours(now.getHours() - 1);
     else if (period === '24h') from.setDate(now.getDate() - 1);
     else if (period === '7d') from.setDate(now.getDate() - 7);
-    const toISO = now.toISOString();
-    const fromISO = from.toISOString();
+    const toISO = formatBRDateTime(now);
+    const fromISO = formatBRDateTime(from);
     const group_by = period === '7d' ? 'hour' : 'minute';
     return { fromISO, toISO, group_by };
   }, [period]);

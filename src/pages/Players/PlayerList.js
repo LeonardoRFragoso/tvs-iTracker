@@ -44,6 +44,7 @@ import {
   Stop as StopIcon,
   Sync as SyncIcon,
   PowerSettingsNew as PowerIcon,
+  Tv,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -279,12 +280,14 @@ const PlayerList = () => {
     }
   };
 
-  return (
+
+  const renderPlayersList = () => (
     <Box>
       {/* Header com PageTitle */}
       <PageTitle 
         title="Gerenciar Players"
         subtitle="Monitore e controle todos os dispositivos de exibição"
+        icon={<Tv />}
         actions={
           <Button
             variant="contained"
@@ -466,16 +469,16 @@ const PlayerList = () => {
       </Grow>
 
       {/* Players Grid */}
-      <Grid container spacing={3}>
+      <Grid container spacing={1.5}>
         {loading ? (
-          Array.from({ length: 6 }).map((_, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
+          Array.from({ length: 9 }).map((_, index) => (
+            <Grid item xs={12} sm={6} md={4} lg={4} key={index}>
               <PlayerCardSkeleton delay={index} />
             </Grid>
           ))
         ) : players.length > 0 ? (
           players.map((player, index) => (
-            <Grid item xs={12} sm={6} md={4} key={player.id}>
+            <Grid item xs={12} sm={6} md={4} lg={4} key={player.id}>
               <Grow in={true} timeout={1400 + index * 100}>
                 <Card
                   sx={{
@@ -942,6 +945,8 @@ const PlayerList = () => {
       </Dialog>
     </Box>
   );
+
+  return renderPlayersList();
 };
 
 export default PlayerList;

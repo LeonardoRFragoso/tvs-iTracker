@@ -95,7 +95,7 @@ def public_register():
         data = request.get_json() or {}
         username = (data.get('username') or '').strip()
         email = (data.get('email') or '').strip().lower()
-        role = 'hr'  # Forçar RH para cadastro público
+        role = 'rh'  # Forçar RH para cadastro público
         company = data.get('company', 'iTracker')
         
         if not username or not email:
@@ -380,7 +380,7 @@ def users_summary():
         pending_by_company = { (c or 'unknown'): int(cnt or 0) for c, cnt in pend_rows }
         
         # Lista de usuários RH por empresa (dados básicos)
-        hr_users = User.query.filter(User.role == 'hr').all()
+        hr_users = User.query.filter(User.role == 'rh').all()
         hr_by_company = {}
         for u in hr_users:
             comp = u.company or 'unknown'
