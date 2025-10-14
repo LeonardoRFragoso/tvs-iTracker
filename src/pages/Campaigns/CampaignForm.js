@@ -385,7 +385,8 @@ const CampaignForm = () => {
   // Helpers to normalize content fields
   const getTypeFor = (content) => {
     if (!content) return null;
-    return content.type || content.content_type || null;
+    // Backend retorna 'content_type', mas alguns lugares podem usar 'type'
+    return content.content_type || content.type || null;
   };
   const getThumbUrlFor = (content) => {
     if (!content) return null;
@@ -906,7 +907,11 @@ const CampaignForm = () => {
     return (availableContents || [])
       .filter(content => getTypeFor(content) !== 'audio')
       .filter(content => !campaignContents.find(cc => cc.id === content.id))
-      .filter(content => !typeFilter || (getTypeFor(content) === typeFilter))
+      .filter(content => {
+        if (!typeFilter) return true;
+        const contentType = getTypeFor(content);
+        return contentType === typeFilter;
+      })
       .filter(content => {
         if (!contentSearch) return true;
         const q = contentSearch.toLowerCase();
@@ -1429,6 +1434,27 @@ const CampaignForm = () => {
                           <MenuItem value="image">Imagem</MenuItem>
                         </Select>
                       </FormControl>
+                      {/* Botão Voltar quando há filtro ativo */}
+                      {(typeFilter || contentSearch) && (
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          onClick={() => {
+                            setTypeFilter('');
+                            setContentSearch('');
+                          }}
+                          sx={{
+                            borderColor: '#ff7730',
+                            color: '#ff7730',
+                            '&:hover': {
+                              borderColor: '#ff9800',
+                              background: 'rgba(255, 119, 48, 0.05)',
+                            },
+                          }}
+                        >
+                          Limpar Filtros
+                        </Button>
+                      )}
                     </Box>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                       <Button size="small" variant="outlined" onClick={selectAllVisible}>Selecionar todos</Button>
