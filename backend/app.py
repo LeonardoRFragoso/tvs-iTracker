@@ -126,7 +126,7 @@ from routes.settings import settings_bp
 # Registrar blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(location_bp, url_prefix='/api/locations')
-app.register_blueprint(content_bp)  
+app.register_blueprint(content_bp, url_prefix='/api/content')  
 app.register_blueprint(campaign_bp, url_prefix='/api/campaigns')
 app.register_blueprint(campaign_content_bp)  
 app.register_blueprint(player_bp, url_prefix='/api/players')

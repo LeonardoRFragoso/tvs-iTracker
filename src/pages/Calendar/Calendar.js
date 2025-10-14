@@ -208,6 +208,7 @@ const expandScheduleToEvents = (schedule, rangeStart, rangeEnd) => {
       backgroundColor: colors.bg,
       borderColor: colors.border,
       extendedProps: {
+        schedule_id: schedule.id,
         player_id: schedule.player_id,
         player_name: schedule.player_name,
         content_type: schedule.content_type,
@@ -716,9 +717,10 @@ const Calendar = () => {
           dayMaxEvents={view === 'dayGridMonth' ? 4 : false}
           moreLinkClick={view === 'dayGridMonth' ? 'popover' : undefined}
           eventClick={(info) => {
-            const playerId = info.event.extendedProps?.player_id;
-            if (playerId) {
-              navigate(`/players/${playerId}`);
+            const scheduleId = info.event.extendedProps?.schedule_id 
+              || (info.event.id ? String(info.event.id).split('-')[0] : null);
+            if (scheduleId) {
+              navigate(`/schedules/${scheduleId}/edit`);
             } else {
               navigate('/schedules');
             }

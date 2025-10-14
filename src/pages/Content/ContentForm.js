@@ -95,9 +95,9 @@ const ContentForm = () => {
       
       // Set preview using the correct backend endpoints
       if (content.thumbnail_path) {
-        setPreview(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/thumbnails/${content.thumbnail_path}`);
+        setPreview(`${axios.defaults.baseURL}/content/thumbnails/${content.thumbnail_path}`);
       } else if (content.filename && content.content_type?.startsWith('image/')) {
-        setPreview(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${content.filename}`);
+        setPreview(`${axios.defaults.baseURL}/content/media/${content.filename}`);
       }
     } catch (err) {
       console.error('Load content error:', err);

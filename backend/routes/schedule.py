@@ -540,6 +540,7 @@ def create_schedules_bulk():
             return jsonify({'error': 'Apenas administradores, gerentes e RH podem criar agendamentos'}), 403
 
         data = request.get_json() or {}
+        on_conflict = str(data.get('on_conflict', 'skip')).lower()  # skip | replace | ignore
 
         # Campos obrigatórios comuns
         required_fields = ['name', 'campaign_id', 'start_date', 'end_date']
@@ -612,7 +613,7 @@ def create_schedules_bulk():
 
         # Função utilitária local para checar conflito com lógica alinhada ao endpoint /conflicts
         def has_conflict_for_player(player_id):
-            new_content_type = _get_schedule_content_type(campaign.id)
+            new_content_type = data.get('content_type') or _get_schedule_content_type(campaign.id)
             query = Schedule.query.filter(
                 Schedule.player_id == player_id,
                 Schedule.is_active == True,
@@ -627,10 +628,10 @@ def create_schedules_bulk():
                 if a_start > a_end and b_start <= b_end:
                     return a_start <= b_end or a_end >= b_start
                 if a_start <= a_end and b_start > b_end:
-                    return b_start <= a_end or b_end >= a_start
+                    return b_start <= a_end ou b_end >= a_start
                 return True
             for sch in existing:
-                existing_content_type = _get_schedule_content_type(sch.campaign_id)
+                existing_content_type = getattr(sch, 'content_type', None) or _get_schedule_content_type(sch.campaign_id)
                 if existing_content_type != new_content_type:
                     continue
                 existing_days = set(int(d) for d in sch.days_of_week.split(',') if d.strip()) if sch.days_of_week else set()
@@ -643,15 +644,60 @@ def create_schedules_bulk():
                 return True
             return False
 
+        def list_conflicts_for_player(player_id):
+            new_content_type = data.get('content_type') or _get_schedule_content_type(campaign.id)
+            query = Schedule.query.filter(
+                Schedule.player_id == player_id,
+                Schedule.is_active == True,
+                Schedule.start_date <= end_date,
+                Schedule.end_date >= start_date
+            )
+            existing = query.all()
+            conflicts = []
+            def overlaps(a_start, a_end, b_start, b_end):
+                if a_start <= a_end and b_start <= b_end:
+                    return a_start < b_end and a_end > b_start
+                if a_start > a_end and b_start <= b_end:
+                    return a_start <= b_end or a_end >= b_start
+                if a_start <= a_end and b_start > b_end:
+                    return b_start <= a_end or b_end >= a_start
+                return True
+            for sch in existing:
+                existing_content_type = getattr(sch, 'content_type', None) or _get_schedule_content_type(sch.campaign_id)
+                if existing_content_type != new_content_type:
+                    continue
+                existing_days = set(int(d) for d in sch.days_of_week.split(',') if d.strip()) if sch.days_of_week else set()
+                new_days = set(int(d) for d in days_of_week.split(',') if d.strip()) if days_of_week else set()
+                if existing_days and new_days and not existing_days.intersection(new_days):
+                    continue
+                if sch.start_time and sch.end_time and start_time and end_time:
+                    if not overlaps(start_time, end_time, sch.start_time, sch.end_time):
+                        continue
+                conflicts.append(sch)
+            return conflicts
+
         created = []
         skipped = []
+        replaced = []
         errors = []
 
         for player in target_players:
             try:
                 if check_conflicts and has_conflict_for_player(player.id):
-                    skipped.append({'player_id': player.id, 'reason': 'Conflito detectado'})
-                    continue
+                    if on_conflict == 'replace':
+                        # Desativar agendamentos conflitantes antes de criar
+                        conflicts = list_conflicts_for_player(player.id)
+                        for sch in conflicts:
+                            sch.is_active = False
+                            sch.updated_at = datetime.utcnow()
+                            replaced.append({'player_id': player.id, 'schedule_id': str(sch.id)})
+                        # prosseguir com criação após desativar
+                    elif on_conflict == 'ignore':
+                        # prosseguir sem alterações
+                        pass
+                    else:
+                        skipped.append({'player_id': player.id, 'reason': 'Conflito detectado'})
+                        continue
 
                 schedule = Schedule(
                     name=data['name'],
@@ -697,6 +743,7 @@ def create_schedules_bulk():
             'message': 'Agendamentos criados com sucesso',
             'created': len(created),
             'skipped': len(skipped),
+            'replaced': len(replaced),
             'errors': errors,
             'schedules': [s.to_dict() for s in created],
         }), 201
@@ -1190,7 +1237,7 @@ def check_schedule_conflicts():
         exclude_schedule_id = data.get('exclude_schedule_id')
         
         # Determinar tipo de conteúdo do novo agendamento
-        new_content_type = _get_schedule_content_type(campaign_id)
+        new_content_type = data.get('content_type') or _get_schedule_content_type(campaign_id)
         print(f"[DEBUG] New content type: {new_content_type}")
         
         # Buscar agendamentos que podem conflitar
@@ -1211,7 +1258,7 @@ def check_schedule_conflicts():
         
         for schedule in existing_schedules:
             # Determinar tipo de conteúdo do agendamento existente
-            existing_content_type = _get_schedule_content_type(schedule.campaign_id)
+            existing_content_type = getattr(schedule, 'content_type', None) or _get_schedule_content_type(schedule.campaign_id)
             print(f"[DEBUG] Existing content type: {existing_content_type}")
             
             # Se são tipos diferentes (overlay + main), não há conflito

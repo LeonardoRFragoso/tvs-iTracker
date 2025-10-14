@@ -300,30 +300,23 @@ const Dashboard = () => {
             event.preventDefault();
             setKeyboardShortcutsOpen(true);
             break;
-          case '1':
-            event.preventDefault();
-            window.location.href = '/content/new';
-            break;
-          case '2':
-            event.preventDefault();
-            window.location.href = '/campaigns/new';
-            break;
-          case '3':
-            event.preventDefault();
-            window.location.href = '/players/new';
-            break;
-          case '4':
-            event.preventDefault();
-            window.location.href = '/schedules/new';
-            break;
           default:
             break;
         }
       }
     };
 
+    const handleShowShortcuts = () => {
+      setKeyboardShortcutsOpen(true);
+    };
+
     window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+    window.addEventListener('showKeyboardShortcuts', handleShowShortcuts);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      window.removeEventListener('showKeyboardShortcuts', handleShowShortcuts);
+    };
   }, []);
 
   // Show notification function

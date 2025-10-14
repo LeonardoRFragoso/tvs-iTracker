@@ -465,7 +465,7 @@ const ContentList = () => {
                   >
                     {content.thumbnail_path ? (
                       <img
-                        src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/thumbnails/${content.thumbnail_path}`}
+                        src={`${axios.defaults.baseURL}/content/thumbnails/${content.thumbnail_path}`}
                         alt={content.title}
                         style={{
                           width: '100%',
@@ -772,7 +772,7 @@ const ContentList = () => {
           Editar
         </MenuItem>
         <MenuItem onClick={() => {
-          window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${selectedContent?.file_path}`, '_blank');
+          window.open(`${axios.defaults.baseURL}/content/media/${selectedContent?.file_path}`, '_blank');
           handleMenuClose();
         }}>
           <DownloadIcon sx={{ mr: 1 }} />
@@ -836,7 +836,7 @@ const ContentList = () => {
         <DialogContent>
           {previewDialog.content?.content_type === 'video' && (
             <video
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               controls
               style={{
                 width: '100%',
@@ -846,7 +846,7 @@ const ContentList = () => {
           )}
           {previewDialog.content?.content_type === 'image' && (
             <img
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               alt={previewDialog.content?.title}
               style={{
                 width: '100%',
@@ -857,14 +857,14 @@ const ContentList = () => {
           )}
           {previewDialog.content?.content_type === 'audio' && (
             <audio
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               controls
               style={{ width: '100%' }}
             />
           )}
           {previewDialog.content?.content_type === 'html' && (
             <iframe
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               title={previewDialog.content?.title}
               style={{
                 width: '100%',
@@ -892,7 +892,7 @@ const ContentList = () => {
         </DialogContent>
         <DialogActions>
           <Button 
-            onClick={() => window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`, '_blank')}
+            onClick={() => window.open(`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`, '_blank')}
             startIcon={<DownloadIcon />}
           >
             Download

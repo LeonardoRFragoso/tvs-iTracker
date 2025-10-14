@@ -89,6 +89,62 @@ const Layout = () => {
     didFetchBadgesRef.current = true;
   }, []);
 
+  // Atalhos globais de teclado
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      // Verificar se não está em um input/textarea/select
+      const activeElement = document.activeElement;
+      const isInputActive = activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.tagName === 'SELECT' ||
+        activeElement.contentEditable === 'true'
+      );
+
+      if (isInputActive) return; // Não executar atalhos se estiver digitando
+
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key) {
+          case 'h':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+H - Navegando para dashboard');
+            // Navegar para dashboard e mostrar atalhos
+            navigate('/dashboard');
+            // Pequeno delay para garantir que a página carregou
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('showKeyboardShortcuts'));
+            }, 100);
+            break;
+          case '1':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+1 - Navegando para /content/new');
+            navigate('/content/new');
+            break;
+          case '2':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+2 - Navegando para /campaigns/new');
+            navigate('/campaigns/new');
+            break;
+          case '3':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+3 - Navegando para /players/new');
+            navigate('/players/new');
+            break;
+          case '4':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+4 - Navegando para /schedules/new');
+            navigate('/schedules/new');
+            break;
+          default:
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [navigate]);
+
   const menuItems = [
     { 
       text: 'Dashboard', 

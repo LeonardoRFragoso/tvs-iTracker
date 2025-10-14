@@ -437,6 +437,7 @@ def get_playback_status():
         from datetime import datetime, timezone, timedelta
         
         current_time = datetime.now(timezone.utc)
+        ten_minutes_ago = datetime.utcnow() - timedelta(minutes=10)
         
         # Calcular estatísticas de reprodução
         total_players = Player.query.count()
@@ -483,12 +484,15 @@ def get_playback_status():
             if is_playing and not heartbeat_fresh:
                 is_playing = False
             
-            if is_playing and heartbeat_fresh:
-                status = 'playing'
-                playing_players += 1
+            if is_online:
+                if is_playing and heartbeat_fresh:
+                    status = 'playing'
+                    playing_players += 1
+                else:
+                    status = 'idle'
+                    idle_players += 1
             else:
-                status = 'idle'
-                idle_players += 1
+                status = 'offline'
             
             player_details.append({
                 'id': player.id,
@@ -525,26 +529,81 @@ def get_playback_status():
             # Verificar se nunca enviou heartbeat ou há muito tempo
             last_heartbeat = player.last_playback_heartbeat
             
+            reasons = []
+            heartbeat_age_sec = None
             if not last_heartbeat:
-                # Player online mas nunca enviou heartbeat de reprodução
+                reasons.append('Nunca iniciou reprodução')
+            else:
+                try:
+                    heartbeat_age_sec = (datetime.utcnow() - last_heartbeat).total_seconds()
+                    if heartbeat_age_sec >= 600:
+                        reasons.append(f"Sem reprodução há {int(heartbeat_age_sec // 60)} min")
+                except Exception:
+                    pass
+
+            # Diagnóstico adicional: verificar se existe agendamento ativo agora
+            try:
+                now_dt = datetime.utcnow()
+                schedules = Schedule.query.filter(
+                    Schedule.player_id == player_id,
+                    Schedule.is_active == True,
+                    Schedule.start_date <= now_dt,
+                    Schedule.end_date >= now_dt
+                ).all()
+                # Compatibilidade por tipo de dispositivo
+                try:
+                    if getattr(player, 'device_type', None):
+                        schedules = [s for s in schedules if s.is_compatible_with_device_type(player.device_type)]
+                except Exception:
+                    pass
+
+                active_now = []
+                for s in schedules:
+                    try:
+                        if s.is_active_now():
+                            active_now.append(s)
+                    except Exception:
+                        continue
+
+                active_main = [s for s in active_now if (s.content_type or 'main') != 'overlay']
+                active_overlay = [s for s in active_now if (s.content_type or 'main') == 'overlay']
+
+                if not active_now:
+                    reasons.append('Sem agendamento ativo para este horário')
+                else:
+                    # Verificar conteúdos das campanhas para os MAIN
+                    empty_campaign = 0
+                    compiled_not_ready = 0
+                    for s in active_main:
+                        camp = getattr(s, 'campaign', None)
+                        if not camp:
+                            empty_campaign += 1
+                            continue
+                        try:
+                            contents = s.get_filtered_contents() or []
+                            if len(contents) == 0:
+                                empty_campaign += 1
+                        except Exception:
+                            pass
+                        try:
+                            if getattr(camp, 'compiled_video_status', None) != 'ready' or getattr(camp, 'compiled_stale', False):
+                                compiled_not_ready += 1
+                        except Exception:
+                            pass
+                    if empty_campaign and 'Sem agendamento ativo para este horário' not in reasons:
+                        reasons.append('Campanha sem conteúdos ativos')
+                    if compiled_not_ready and 'Sem agendamento ativo para este horário' not in reasons:
+                        reasons.append('Vídeo compilado indisponível')
+            except Exception:
+                pass
+
+            # Incluir na lista de fantasmas somente se de fato nunca iniciou ou está há >=10min sem heartbeat
+            if (not last_heartbeat) or (heartbeat_age_sec is not None and heartbeat_age_sec >= 600):
                 ghost_players.append({
                     'id': player.id,
                     'name': player.name,
-                    'reason': 'Nunca iniciou reprodução'
+                    'reason': ' • '.join(reasons) if reasons else 'Sem telemetria recente'
                 })
-            else:
-                try:
-                    heartbeat_time = datetime.fromisoformat(last_heartbeat.replace('Z', '+00:00'))
-                    if heartbeat_time < ten_minutes_ago:
-                        player = Player.query.get(player_id)
-                        if player:
-                            ghost_players.append({
-                                'id': player.id,
-                                'name': player.name,
-                                'reason': f'Sem reprodução há {int((current_time - heartbeat_time).total_seconds() / 60)} minutos'
-                            })
-                except:
-                    pass
         
         result = {
             'summary': {

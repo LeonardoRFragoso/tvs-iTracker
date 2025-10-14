@@ -49,7 +49,7 @@ import axios from '../../config/axios';
 import PlaybackPreview from './PlaybackPreview';
 import { useSocket } from '../../contexts/SocketContext';
 
-const API_HOST = axios.defaults.baseURL.replace(/\/api$/, '');
+const API_HOST = axios.defaults.baseURL;
 
 const MultiContentManager = ({ campaignId, onContentChange }) => {
   const [campaignContents, setCampaignContents] = useState([]);
@@ -474,7 +474,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
                 size="small" 
                 color="warning" 
                 label="Não salvo" 
-                icon={<WarningAmber />}
+                icon={<StaleIcon />}
               />
             )}
             {bgAudioId && bgAudioId === campaignBgAudioId && (
@@ -482,7 +482,7 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
                 size="small" 
                 color="success" 
                 label="✓ Configurado" 
-                icon={<CloudDone />}
+                icon={<ReadyIcon />}
               />
             )}
           </Box>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Avatar,
   Box,
@@ -153,6 +153,7 @@ const ScheduleForm = () => {
   const [targetMode, setTargetMode] = useState('single'); // single | location | multi
   const [targetLocationId, setTargetLocationId] = useState('');
   const [selectedPlayerIds, setSelectedPlayerIds] = useState([]);
+  const originalPlayerIdRef = useRef('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [error, setError] = useState('');
@@ -239,6 +240,8 @@ const ScheduleForm = () => {
         // Forçar compatibilidade única: legado (recursos mínimos)
         device_type_compatibility: 'legacy',
       });
+      setSelectedPlayerIds([schedule.player_id || '']);
+      originalPlayerIdRef.current = schedule.player_id || '';
     } catch (err) {
       setError('Erro ao carregar agendamento');
       console.error('Load schedule error:', err);
@@ -388,7 +391,24 @@ const ScheduleForm = () => {
 
       let response;
       if (isEdit) {
-        response = await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
+        if (targetMode === 'multi') {
+          const selected = (selectedPlayerIds && selectedPlayerIds.length > 0) ? selectedPlayerIds : [formData.player_id].filter(Boolean);
+          const basePlayerId = (selected.includes(originalPlayerIdRef.current) ? originalPlayerIdRef.current : selected[0]) || formData.player_id;
+          await axios.put(`/schedules/${id}`, { ...submitData, player_id: basePlayerId });
+          const otherPlayers = selected.filter(pid => pid && pid !== basePlayerId);
+          if (otherPlayers.length > 0) {
+            await axios.post('/schedules/bulk', { ...submitData, player_ids: otherPlayers, check_conflicts: true });
+          }
+          response = { status: 200 };
+        } else if (targetMode === 'location') {
+          await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
+          if (targetLocationId) {
+            await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId, check_conflicts: true });
+          }
+          response = { status: 200 };
+        } else {
+          response = await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
+        }
       } else {
         if (targetMode === 'single') {
           response = await axios.post('/schedules', { ...submitData, player_id: formData.player_id });

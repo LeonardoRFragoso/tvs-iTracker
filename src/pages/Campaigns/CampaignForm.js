@@ -84,7 +84,7 @@ import { useSocket } from '../../contexts/SocketContext';
 import MultiContentManager from '../../components/Campaign/MultiContentManager';
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
-const API_HOST = axios.defaults.baseURL.replace(/\/api$/, '');
+const API_HOST = axios.defaults.baseURL;
 
 // BR datetime helpers
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -390,16 +390,16 @@ const CampaignForm = () => {
   const getThumbUrlFor = (content) => {
     if (!content) return null;
     const t = content.thumbnail_path || content.thumbnail;
-    if (t) return `${API_HOST}/api/content/thumbnails/${encodeURIComponent(t)}`;
+    if (t) return `${API_HOST}/content/thumbnails/${encodeURIComponent(t)}`;
     const fp = content.file_path || content.path;
     const type = getTypeFor(content);
-    if (fp && type === 'image') return `${API_HOST}/api/content/media/${encodeURIComponent(fp)}`;
+    if (fp && type === 'image') return `${API_HOST}/content/media/${encodeURIComponent(fp)}`;
     return null;
   };
   const getMediaUrlFor = (content) => {
     if (!content) return null;
     const fp = content.file_path || content.path;
-    if (fp) return `${API_HOST}/api/content/media/${encodeURIComponent(fp)}`;
+    if (fp) return `${API_HOST}/content/media/${encodeURIComponent(fp)}`;
     return null;
   };
   const formatDuration = (seconds) => {
