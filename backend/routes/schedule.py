@@ -628,7 +628,7 @@ def create_schedules_bulk():
                 if a_start > a_end and b_start <= b_end:
                     return a_start <= b_end or a_end >= b_start
                 if a_start <= a_end and b_start > b_end:
-                    return b_start <= a_end ou b_end >= a_start
+                    return b_start <= a_end or b_end >= a_start
                 return True
             for sch in existing:
                 existing_content_type = getattr(sch, 'content_type', None) or _get_schedule_content_type(sch.campaign_id)

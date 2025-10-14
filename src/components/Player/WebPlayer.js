@@ -146,6 +146,91 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     };
   }, [playerId, socket]);
 
+  // Escutar comandos remotos via Socket.IO
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRemoteCommand = (data) => {
+      console.log('[WebPlayer] Comando remoto recebido:', data);
+      
+      const { command, data: commandData } = data;
+      
+      switch (command) {
+        case 'stop':
+          console.log('[WebPlayer] Executando comando stop...');
+          // Parar reprodução atual
+          setIsPlaying(false);
+          setCurrentContent(null);
+          setCurrentIndex(0);
+          
+          // Parar mídia se estiver reproduzindo
+          if (mediaRef.current) {
+            mediaRef.current.pause();
+            mediaRef.current.currentTime = 0;
+          }
+          
+          // Parar áudio de fundo
+          if (backgroundAudioRef.current) {
+            backgroundAudioRef.current.pause();
+            backgroundAudioRef.current.currentTime = 0;
+          }
+          
+          // Limpar playlist
+          setPlaylist([]);
+          
+          // Enviar evento de telemetria
+          sendPlaybackEvent('playback_end', {
+            content_id: null,
+            content_title: 'Reprodução parada remotamente',
+            content_type: 'remote_stop',
+            duration_actual: 0
+          });
+          
+          console.log('[WebPlayer] Comando stop executado');
+          break;
+          
+        case 'pause':
+          console.log('[WebPlayer] Executando comando pause...');
+          setIsPlaying(false);
+          if (mediaRef.current) {
+            mediaRef.current.pause();
+          }
+          if (backgroundAudioRef.current) {
+            backgroundAudioRef.current.pause();
+          }
+          break;
+          
+        case 'start':
+        case 'play':
+          console.log('[WebPlayer] Executando comando play/start...');
+          setIsPlaying(true);
+          if (mediaRef.current) {
+            mediaRef.current.play().catch(console.error);
+          }
+          if (backgroundAudioRef.current && backgroundAudioLoaded) {
+            backgroundAudioRef.current.play().catch(console.error);
+          }
+          break;
+          
+        case 'restart':
+          console.log('[WebPlayer] Executando comando restart...');
+          // Recarregar dados do player
+          loadPlayerData();
+          connectToPlayer();
+          break;
+          
+        default:
+          console.log('[WebPlayer] Comando não reconhecido:', command);
+      }
+    };
+
+    socket.on('remote_command', handleRemoteCommand);
+
+    return () => {
+      socket.off('remote_command', handleRemoteCommand);
+    };
+  }, [socket, sendPlaybackEvent, loadPlayerData, connectToPlayer, backgroundAudioLoaded]);
+
   // Overlay de ativação: exibir quando em fullscreen/kiosk
   const [showActivation, setShowActivation] = useState(false);
   useEffect(() => {

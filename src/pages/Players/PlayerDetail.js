@@ -71,6 +71,39 @@ const PlayerDetail = () => {
     loadPlayer();
   }, [id]);
 
+  // Escutar respostas de comandos via Socket.IO
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCommandResponse = (data) => {
+      console.log('[PlayerDetail] Resposta do comando recebida:', data);
+      
+      if (data.success) {
+        // Mostrar mensagem de sucesso (você pode usar um toast/snackbar aqui)
+        console.log(`[PlayerDetail] Comando ${data.command} executado com sucesso: ${data.message}`);
+        
+        // Recarregar dados do player após comando bem-sucedido
+        setTimeout(loadPlayer, 500);
+      } else {
+        setError(`Erro no comando ${data.command}: ${data.message || 'Falha desconhecida'}`);
+      }
+    };
+
+    const handleCommandError = (data) => {
+      console.log('[PlayerDetail] Erro no comando:', data);
+      setError(`Erro: ${data.message || 'Falha ao executar comando'}`);
+    };
+
+    // Escutar eventos de resposta
+    socket.on('player_command_response', handleCommandResponse);
+    socket.on('error', handleCommandError);
+
+    return () => {
+      socket.off('player_command_response', handleCommandResponse);
+      socket.off('error', handleCommandError);
+    };
+  }, [socket]);
+
   const loadPlayer = async () => {
     try {
       setLoading(true);

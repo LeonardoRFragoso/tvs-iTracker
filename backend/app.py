@@ -752,6 +752,140 @@ def handle_playback_event(data):
         print(f"[Playback] Erro ao processar evento: {e}")
         emit('error', {'message': str(e)})
 
+@socketio.on('player_command')
+def handle_player_command(data):
+    """Processa comandos enviados para players via WebSocket"""
+    try:
+        print(f"[PlayerCommand] Comando recebido: {data}")
+        
+        player_id = data.get('player_id')
+        command = data.get('command')
+        command_data = data.get('data', {})
+        
+        if not player_id or not command:
+            print(f"[PlayerCommand] Erro: player_id ou command ausente")
+            emit('error', {'message': 'player_id e command são obrigatórios'})
+            return
+        
+        print(f"[PlayerCommand] Processando comando '{command}' para player {player_id}")
+        
+        # Buscar player no banco de dados
+        from models.player import Player
+        player = Player.query.get(player_id)
+        if not player:
+            print(f"[PlayerCommand] Erro: Player {player_id} não encontrado")
+            emit('error', {'message': f'Player {player_id} não encontrado'})
+            return
+        
+        # Processar diferentes tipos de comando
+        if command == 'stop':
+            # Para comando stop, usar o serviço de Chromecast se disponível
+            if player.chromecast_id:
+                from services.chromecast_service import chromecast_service
+                success = chromecast_service.send_command(player.chromecast_id, 'stop')
+                
+                if success:
+                    # Atualizar status do player
+                    player.is_playing = False
+                    player.current_content_id = None
+                    player.current_content_title = None
+                    player.current_content_type = None
+                    player.current_campaign_id = None
+                    player.current_campaign_name = None
+                    player.playback_start_time = None
+                    db.session.commit()
+                    
+                    print(f"[PlayerCommand] Comando stop executado com sucesso para player {player_id}")
+                    
+                    # Emitir confirmação para o cliente
+                    emit('player_command_response', {
+                        'player_id': player_id,
+                        'command': command,
+                        'success': True,
+                        'message': 'Reprodução parada com sucesso'
+                    })
+                    
+                    # Notificar admins sobre mudança de status
+                    socketio.emit('playback_status_update', {
+                        'player_id': player_id,
+                        'event_type': 'playback_stop',
+                        'status': {'is_playing': False},
+                        'timestamp': datetime.now(timezone.utc).isoformat()
+                    }, room='admin')
+                    
+                else:
+                    print(f"[PlayerCommand] Falha ao executar comando stop para player {player_id}")
+                    emit('error', {'message': 'Falha ao parar reprodução no Chromecast'})
+            else:
+                # Para players sem Chromecast, emitir comando via WebSocket para o player
+                socketio.emit('remote_command', {
+                    'command': command,
+                    'data': command_data,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }, room=f'player_{player_id}')
+                
+                # Atualizar status local
+                player.is_playing = False
+                player.current_content_id = None
+                player.current_content_title = None
+                player.current_content_type = None
+                player.current_campaign_id = None
+                player.current_campaign_name = None
+                player.playback_start_time = None
+                db.session.commit()
+                
+                print(f"[PlayerCommand] Comando stop enviado via WebSocket para player {player_id}")
+                
+                emit('player_command_response', {
+                    'player_id': player_id,
+                    'command': command,
+                    'success': True,
+                    'message': 'Comando enviado para o player'
+                })
+        
+        elif command in ['start', 'pause', 'restart']:
+            # Para outros comandos, usar Chromecast se disponível
+            if player.chromecast_id and command in ['pause']:
+                from services.chromecast_service import chromecast_service
+                success = chromecast_service.send_command(player.chromecast_id, command)
+                
+                if success:
+                    print(f"[PlayerCommand] Comando {command} executado com sucesso para player {player_id}")
+                    emit('player_command_response', {
+                        'player_id': player_id,
+                        'command': command,
+                        'success': True,
+                        'message': f'Comando {command} executado com sucesso'
+                    })
+                else:
+                    emit('error', {'message': f'Falha ao executar comando {command} no Chromecast'})
+            else:
+                # Enviar via WebSocket para o player
+                socketio.emit('remote_command', {
+                    'command': command,
+                    'data': command_data,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }, room=f'player_{player_id}')
+                
+                print(f"[PlayerCommand] Comando {command} enviado via WebSocket para player {player_id}")
+                
+                emit('player_command_response', {
+                    'player_id': player_id,
+                    'command': command,
+                    'success': True,
+                    'message': f'Comando {command} enviado para o player'
+                })
+        
+        else:
+            print(f"[PlayerCommand] Comando não suportado: {command}")
+            emit('error', {'message': f'Comando não suportado: {command}'})
+            
+    except Exception as e:
+        print(f"[PlayerCommand] Erro ao processar comando: {e}")
+        import traceback
+        traceback.print_exc()
+        emit('error', {'message': str(e)})
+
 # =========================
 # Rotas HTTP consolidadas
 # =========================
