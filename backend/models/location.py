@@ -18,7 +18,7 @@ class Location(db.Model):
     __tablename__ = 'locations'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name = db.Column(db.String(100), nullable=False)  # "Sede São Paulo"
+    name = db.Column(db.String(100), nullable=False)  # "Empresa São Paulo"
     city = db.Column(db.String(50), nullable=False)
     state = db.Column(db.String(2), nullable=False)
     address = db.Column(db.Text)

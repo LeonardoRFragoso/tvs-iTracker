@@ -36,12 +36,13 @@ import {
   Brightness7,
   TrendingUp,
   People as PeopleIcon,
+  CalendarToday,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import axios from '../../config/axios';
 
-const drawerWidth = 240;
+const drawerWidth = 220;
 
 const Layout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -88,6 +89,62 @@ const Layout = () => {
     didFetchBadgesRef.current = true;
   }, []);
 
+  // Atalhos globais de teclado
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      // Verificar se não está em um input/textarea/select
+      const activeElement = document.activeElement;
+      const isInputActive = activeElement && (
+        activeElement.tagName === 'INPUT' ||
+        activeElement.tagName === 'TEXTAREA' ||
+        activeElement.tagName === 'SELECT' ||
+        activeElement.contentEditable === 'true'
+      );
+
+      if (isInputActive) return; // Não executar atalhos se estiver digitando
+
+      if (event.ctrlKey || event.metaKey) {
+        switch (event.key) {
+          case 'h':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+H - Navegando para dashboard');
+            // Navegar para dashboard e mostrar atalhos
+            navigate('/dashboard');
+            // Pequeno delay para garantir que a página carregou
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('showKeyboardShortcuts'));
+            }, 100);
+            break;
+          case '1':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+1 - Navegando para /content/new');
+            navigate('/content/new');
+            break;
+          case '2':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+2 - Navegando para /campaigns/new');
+            navigate('/campaigns/new');
+            break;
+          case '3':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+3 - Navegando para /players/new');
+            navigate('/players/new');
+            break;
+          case '4':
+            event.preventDefault();
+            console.log('[Atalho] Ctrl+4 - Navegando para /schedules/new');
+            navigate('/schedules/new');
+            break;
+          default:
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [navigate]);
+
   const menuItems = [
     { 
       text: 'Dashboard', 
@@ -103,10 +160,10 @@ const Layout = () => {
       badge: badges.content > 0 ? badges.content.toString() : null,
       description: 'Gerenciar mídias'
     },
-    { 
-      text: 'Sedes', 
-      icon: <LocationOn />, 
-      path: '/locations',
+      { 
+        text: 'Empresas', 
+        icon: <LocationOn />, 
+        path: '/locations',
       badge: badges.locations > 0 ? badges.locations.toString() : null,
       description: 'Localizações ativas'
     },
@@ -130,6 +187,13 @@ const Layout = () => {
       path: '/schedules',
       badge: null,
       description: 'Programação de conteúdo'
+    },
+    { 
+      text: 'Calendário', 
+      icon: <CalendarToday />, 
+      path: '/calendar',
+      badge: null,
+      description: 'Visualização unificada de agendamentos'
     },
   ];
 
@@ -226,8 +290,8 @@ const Layout = () => {
           <Avatar
             sx={{
               bgcolor: 'rgba(255, 255, 255, 0.2)',
-              width: 40,
-              height: 40,
+              width: 28,
+              height: 28,
               border: '2px solid rgba(255, 255, 255, 0.3)',
             }}
           >
@@ -244,7 +308,7 @@ const Layout = () => {
         </Box>
       </Toolbar>
 
-      <Box sx={{ p: 2, position: 'relative', zIndex: 1, flexShrink: 0 }}>
+      <Box sx={{ p: 1.5, position: 'relative', zIndex: 1, flexShrink: 0 }}>
         <Chip
           label={`Bem-vindo, ${user?.username || 'Usuário'}`}
           avatar={<Avatar sx={{ bgcolor: 'primary.main' }}><AccountCircle /></Avatar>}
@@ -252,7 +316,7 @@ const Layout = () => {
           sx={{
             width: '100%',
             justifyContent: 'flex-start',
-            mb: 2,
+            mb: 1.5,
             bgcolor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
             borderColor: isDarkMode ? 'rgba(255, 152, 0, 0.3)' : 'rgba(25, 118, 210, 0.3)',
             '&:hover': {
@@ -283,7 +347,7 @@ const Layout = () => {
           },
         }}
       >
-        <List sx={{ px: 1, pt: 2, pb: 4 }}>
+        <List sx={{ px: 1, pt: 1.5, pb: 3 }}>
           {computedMenuItems.map((item, index) => {
             const isActive = location.pathname === item.path || 
                             (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
@@ -331,7 +395,7 @@ const Layout = () => {
                         position: 'relative',
                         overflow: 'hidden',
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        minHeight: 48,
+                        minHeight: 42,
                         '&::before': {
                           content: '""',
                           position: 'absolute',
@@ -377,7 +441,7 @@ const Layout = () => {
                           color: isActive ? (isDarkMode ? '#ff9800' : '#1976d2') : 'inherit',
                           transition: 'all 0.3s ease',
                           transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                          minWidth: 40,
+                          minWidth: 36,
                         }}
                       >
                         {item.icon}
@@ -405,8 +469,8 @@ const Layout = () => {
                                 sx={{
                                   '& .MuiBadge-badge': {
                                     fontSize: '0.7rem',
-                                    minWidth: 18,
-                                    height: 18,
+                                    minWidth: 16,
+                                    height: 16,
                                     bgcolor: isDarkMode ? '#ff9800' : '#1976d2',
                                   },
                                 }}
@@ -421,7 +485,7 @@ const Layout = () => {
                               color: 'text.secondary',
                               opacity: isActive ? 1 : 0.7,
                               transition: 'opacity 0.3s ease',
-                              fontSize: '0.75rem',
+                              fontSize: '0.7rem',
                             }}
                           >
                             {item.description}
@@ -580,7 +644,7 @@ const Layout = () => {
       </Box>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
+        sx={{ flexGrow: 1, p: 1.5, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
       >
         <Toolbar />
         <Outlet />

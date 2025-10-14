@@ -29,8 +29,6 @@ import {
   LocationOn as LocationIcon,
   ArrowBack as BackIcon,
   Business as BusinessIcon,
-  NetworkWifi as NetworkIcon,
-  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -53,9 +51,6 @@ const LocationForm = () => {
     address: '',
     company: DEFAULT_COMPANIES[0],
     timezone: 'America/Sao_Paulo',
-    network_bandwidth_mbps: 100,
-    peak_hours_start: '08:00',
-    peak_hours_end: '18:00',
     is_active: true
   });
 
@@ -117,13 +112,10 @@ const LocationForm = () => {
         address: location.address || '',
         company: location.company || DEFAULT_COMPANIES[0],
         timezone: location.timezone || 'America/Sao_Paulo',
-        network_bandwidth_mbps: location.network_bandwidth_mbps || 100,
-        peak_hours_start: location.peak_hours_start || '08:00',
-        peak_hours_end: location.peak_hours_end || '18:00',
         is_active: location.is_active !== undefined ? location.is_active : true
       });
     } catch (err) {
-      setError('Erro ao carregar sede: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao carregar empresa: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -163,16 +155,15 @@ const LocationForm = () => {
       setError('');
       
       const payload = {
-        ...formData,
-        network_bandwidth_mbps: Number(formData.network_bandwidth_mbps)
+        ...formData
       };
 
       if (isEdit) {
         await axios.put(`/locations/${id}`, payload);
-        setSuccess('Sede atualizada com sucesso!');
+        setSuccess('Empresa atualizada com sucesso!');
       } else {
         await axios.post('/locations/', payload);
-        setSuccess('Sede criada com sucesso!');
+        setSuccess('Empresa criada com sucesso!');
       }
       
       setTimeout(() => {
@@ -180,7 +171,7 @@ const LocationForm = () => {
       }, 1500);
       
     } catch (err) {
-      setError('Erro ao salvar sede: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao salvar empresa: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -204,8 +195,8 @@ const LocationForm = () => {
     >
       {/* Header com PageTitle */}
       <PageTitle 
-        title={isEdit ? 'Editar Sede' : 'Nova Sede'}
-        subtitle={isEdit ? 'Atualize as informações da sede' : 'Cadastre uma nova sede no sistema'}
+        title={isEdit ? 'Editar Empresa' : 'Nova Empresa'}
+        subtitle={isEdit ? 'Atualize as informações da empresa' : 'Cadastre uma nova empresa no sistema'}
         backTo="/locations"
       />
 
@@ -238,7 +229,7 @@ const LocationForm = () => {
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             {/* Informações Básicas */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12}>
               <Grow in timeout={1000}>
                 <Paper
                   elevation={0}
@@ -281,7 +272,7 @@ const LocationForm = () => {
                         <TextField
                           fullWidth
                           required
-                          label="Nome da Sede"
+                          label="Nome da Empresa"
                           value={formData.name}
                           onChange={handleChange('name')}
                           placeholder="Ex: Matriz São Paulo"
@@ -381,52 +372,6 @@ const LocationForm = () => {
                           }}
                         />
                       </Grid>
-                    </Grid>
-                  </CardContent>
-                </Paper>
-              </Grow>
-            </Grid>
-
-            {/* Configurações de Rede */}
-            <Grid item xs={12} md={6}>
-              <Grow in timeout={1200}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    borderRadius: 3,
-                    backgroundColor: (theme) => theme.palette.background.paper,
-                    backdropFilter: 'blur(10px)',
-                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                    overflow: 'hidden',
-                    position: 'relative',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '4px',
-                      background: (theme) => theme.palette.primary.main,
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 3 }}>
-                    <Box display="flex" alignItems="center" mb={3}>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'primary.main',
-                          color: '#000',
-                          mr: 2,
-                        }}
-                      >
-                        <NetworkIcon />
-                      </Avatar>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Configurações de Rede
-                      </Typography>
-                    </Box>
-                    
-                    <Grid container spacing={3}>
                       <Grid item xs={12}>
                         <FormControl fullWidth>
                           <InputLabel>Fuso Horário</InputLabel>
@@ -451,114 +396,7 @@ const LocationForm = () => {
                         </FormControl>
                       </Grid>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Largura de Banda (Mbps)"
-                          value={formData.network_bandwidth_mbps}
-                          onChange={handleChange('network_bandwidth_mbps')}
-                          inputProps={{ min: 1, max: 1000 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Paper>
-              </Grow>
-            </Grid>
-
-            {/* Horários de Pico */}
-            <Grid item xs={12}>
-              <Grow in timeout={1400}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    borderRadius: 3,
-                    backgroundColor: (theme) => theme.palette.background.paper,
-                    backdropFilter: 'blur(10px)',
-                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                    overflow: 'hidden',
-                    position: 'relative',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '4px',
-                      background: (theme) => theme.palette.primary.main,
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 3 }}>
-                    <Box display="flex" alignItems="center" mb={3}>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'primary.main',
-                          color: '#000',
-                          mr: 2,
-                        }}
-                      >
-                        <ScheduleIcon />
-                      </Avatar>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Horários de Pico
-                      </Typography>
-                    </Box>
-                    
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      Defina o horário comercial da sede para otimização de conteúdo
-                    </Typography>
-                    
-                    <Grid container spacing={3}>
-                      <Grid item xs={12} md={4}>
-                        <TextField
-                          fullWidth
-                          type="time"
-                          label="Início do Horário de Pico"
-                          value={formData.peak_hours_start}
-                          onChange={handleChange('peak_hours_start')}
-                          InputLabelProps={{ shrink: true }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <TextField
-                          fullWidth
-                          type="time"
-                          label="Fim do Horário de Pico"
-                          value={formData.peak_hours_end}
-                          onChange={handleChange('peak_hours_end')}
-                          InputLabelProps={{ shrink: true }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} md={4}>
-                        <Box display="flex" alignItems="center" height="100%">
+                        <Box display="flex" alignItems="center" justifyContent="center">
                           <FormControlLabel
                             control={
                               <Switch
@@ -566,7 +404,7 @@ const LocationForm = () => {
                                 onChange={handleChange('is_active')}
                               />
                             }
-                            label="Sede ativa"
+                            label="Empresa ativa"
                           />
                         </Box>
                       </Grid>
@@ -575,6 +413,10 @@ const LocationForm = () => {
                 </Paper>
               </Grow>
             </Grid>
+
+            {/* Removido: Configurações de Rede */}
+
+            {/* Removido: Horários de Pico */}
 
             {/* Actions */}
             <Grid item xs={12}>

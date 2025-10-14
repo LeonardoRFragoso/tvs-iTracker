@@ -113,6 +113,7 @@ class Player(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    location = db.relationship('Location', lazy=True)
     schedules = db.relationship('Schedule', lazy=True)
     distributions = db.relationship('ContentDistribution', lazy=True)
     

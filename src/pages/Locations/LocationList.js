@@ -147,7 +147,7 @@ const LocationList = () => {
       setStats(statsMap);
       
     } catch (err) {
-      setError('Erro ao carregar sedes: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao carregar empresas: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ const LocationList = () => {
       setDeleteDialog({ open: false, location: null });
       fetchLocations();
     } catch (err) {
-      setError('Erro ao deletar sede: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao deletar empresa: ' + (err.response?.data?.error || err.message));
     }
   };
 
@@ -212,11 +212,12 @@ const LocationList = () => {
   }
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: 2 }}>
       {/* Header com PageTitle */}
       <PageTitle 
-        title="Gerenciamento de Sedes"
+        title="Gerenciamento de Empresas"
         subtitle="Administre as localizações e seus dispositivos"
+        icon={<BusinessIcon />}
         actions={
           <>
             <Tooltip title="Atualizar dados">
@@ -256,7 +257,7 @@ const LocationList = () => {
                 transition: 'all 0.3s ease',
               }}
             >
-              Nova Sede
+              Nova Empresa
             </Button>
           </>
         }
@@ -293,10 +294,10 @@ const LocationList = () => {
             </Avatar>
             <Box>
               <Typography variant="h6" fontWeight="bold">
-                Buscar Sedes
+                Buscar Empresas
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Encontre sedes por nome, cidade, estado ou empresa
+                Encontre empresas por nome, cidade, estado ou empresa
               </Typography>
             </Box>
           </Box>
@@ -304,7 +305,7 @@ const LocationList = () => {
             <Grid item xs={12} md={8}>
               <TextField
                 fullWidth
-                placeholder="Buscar sedes por nome, cidade ou estado..."
+                placeholder="Buscar empresas por nome, cidade ou estado..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
@@ -347,8 +348,8 @@ const LocationList = () => {
 
       {/* Statistics Cards */}
       <Fade in={true} timeout={1200}>
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
+        <Grid container spacing={1.5} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1000}>
               <Card 
                 sx={{
@@ -383,31 +384,31 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {locations.length}
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
-                        Total de Sedes
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
+                        Total de Empresas
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <LocationIcon fontSize="large" />
+                      <LocationIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1200}>
               <Card 
                 sx={{
@@ -442,33 +443,33 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {Object.values(stats).reduce((acc, stat) => 
                           acc + (stat?.player_stats?.total_players || 0), 0
                         )}
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Total de Players
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <ComputerIcon fontSize="large" />
+                      <ComputerIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1400}>
               <Card 
                 sx={{
@@ -503,33 +504,33 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {Object.values(stats).reduce((acc, stat) => 
                           acc + (stat?.player_stats?.online_players || 0), 0
                         )}
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Players Online
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <WifiIcon fontSize="large" />
+                      <WifiIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={4} lg={3}>
             <Grow in={true} timeout={1600}>
               <Card 
                 sx={{
@@ -564,26 +565,26 @@ const LocationList = () => {
                   },
                 }}
               >
-                <CardContent sx={{ position: 'relative', zIndex: 1 }}>
+                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
                   <Box display="flex" alignItems="center" justifyContent="space-between">
                     <Box>
-                      <Typography variant="h3" fontWeight="bold" mb={1}>
+                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
                         {Object.values(stats).reduce((acc, stat) => 
                           acc + (stat?.storage_stats?.total_storage_gb || 0), 0
                         ).toFixed(1)} GB
                       </Typography>
-                      <Typography variant="h6" sx={{ opacity: 0.9 }}>
+                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
                         Armazenamento Total
                       </Typography>
                     </Box>
                     <Avatar
                       sx={{
                         bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 56,
-                        height: 56,
+                        width: 40,
+                        height: 40,
                       }}
                     >
-                      <StorageIcon fontSize="large" />
+                      <StorageIcon fontSize="medium" />
                     </Avatar>
                   </Box>
                 </CardContent>
@@ -864,7 +865,7 @@ const LocationList = () => {
       {filteredLocations.length === 0 && (
         <Box textAlign="center" py={4}>
           <Typography variant="body1" color="text.secondary">
-            {searchTerm ? 'Nenhuma sede encontrada para a busca.' : 'Nenhuma sede cadastrada.'}
+            {searchTerm ? 'Nenhuma empresa encontrada para a busca.' : 'Nenhuma empresa cadastrada.'}
           </Typography>
           {!searchTerm && (
             <Button
@@ -873,7 +874,7 @@ const LocationList = () => {
               onClick={() => navigate('/locations/new')}
               sx={{ mt: 2 }}
             >
-              Cadastrar Primeira Sede
+              Cadastrar Primeira Empresa
             </Button>
           )}
         </Box>
@@ -887,7 +888,7 @@ const LocationList = () => {
         <DialogTitle>Confirmar Exclusão</DialogTitle>
         <DialogContent>
           <Typography>
-            Tem certeza que deseja deletar a sede "{deleteDialog.location?.name}"?
+            Tem certeza que deseja deletar a empresa "{deleteDialog.location?.name}"?
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             Esta ação não pode ser desfeita.

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { formatBRDateTime } from '../utils/dateFormatter';
 
 const SocketContext = createContext();
 
@@ -196,7 +197,7 @@ export const SocketProvider = ({ children }) => {
     setNotifications(prev => [
       {
         id: Date.now(),
-        timestamp: new Date().toISOString(),
+        timestamp: formatBRDateTime(),
         ...notification
       },
       ...prev.slice(0, 49)

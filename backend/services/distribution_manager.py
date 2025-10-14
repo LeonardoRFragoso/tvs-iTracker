@@ -11,7 +11,7 @@ from flask_socketio import emit
 import pytz
 
 class ContentDistributionManager:
-    """Gerenciador inteligente de distribuição de conteúdo para múltiplas sedes"""
+    """Gerenciador inteligente de distribuição de conteúdo para múltiplas empresas"""
     
     def __init__(self, socketio=None):
         self.socketio = socketio
@@ -149,11 +149,11 @@ class ContentDistributionManager:
             self._send_distribution_notification(distribution, distribution.scheduled_for)
             return True
         
-        # Verifica horário de pico na sede
+        # Verifica horário de pico na empresa
         now = datetime.now()
         current_time = now.time()
         
-        # Converte para timezone da sede
+        # Converte para timezone da empresa
         if location.timezone:
             tz = pytz.timezone(location.timezone)
             local_now = datetime.now(tz)

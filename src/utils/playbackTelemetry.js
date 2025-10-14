@@ -1,27 +1,24 @@
 // Utilitário para telemetria de reprodução em tempo real
-export class PlaybackTelemetry {
-  constructor(socket, playerId) {
-    this.socket = socket;
+import { formatBRDateTime } from './dateFormatter';
+
+class PlaybackTelemetry {
+  constructor(playerId) {
     this.playerId = playerId;
     this.currentSession = null;
     this.heartbeatInterval = null;
-    this.lastTelemetry = null;
   }
 
   // Enviar evento de telemetria
   sendEvent(eventType, data = {}) {
-    if (!this.socket || !this.playerId) return;
-    
     const telemetryData = {
       player_id: this.playerId,
       event_type: eventType,
-      timestamp: new Date().toISOString(),
+      timestamp: formatBRDateTime(),
       session_id: this.currentSession,
       ...data
     };
     
     try {
-      this.socket.emit('playback_telemetry', telemetryData);
       this.lastTelemetry = Date.now();
       console.log('[PlaybackTelemetry]', eventType, telemetryData);
     } catch (error) {
@@ -31,7 +28,7 @@ export class PlaybackTelemetry {
 
   // Iniciar sessão de reprodução
   startSession(content) {
-    this.currentSession = new Date().toISOString();
+    this.currentSession = formatBRDateTime();
     
     this.sendEvent('playback_start', {
       content_id: content?.id,

@@ -81,7 +81,7 @@ const AdminUsers = () => {
   // Dialogs
   const [approveDialog, setApproveDialog] = useState({ open: false, userId: null, tempPass: '' });
   const [resetDialog, setResetDialog] = useState({ open: false, userId: null, newPass: '', mustChange: false });
-  const [createDialog, setCreateDialog] = useState({ open: false, username: '', email: '', role: 'hr', company: 'iTracker', password: '' });
+  const [createDialog, setCreateDialog] = useState({ open: false, username: '', email: '', role: 'rh', company: 'iTracker', password: '' });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, userId: null, name: '' });
 
   const loadCompanies = useCallback(async () => {
@@ -213,8 +213,8 @@ const AdminUsers = () => {
     }
   };
 
-  const openCreate = () => setCreateDialog({ open: true, username: '', email: '', role: 'hr', company: companies[0] || 'iTracker', password: '' });
-  const closeCreate = () => setCreateDialog({ open: false, username: '', email: '', role: 'hr', company: companies[0] || 'iTracker', password: '' });
+  const openCreate = () => setCreateDialog({ open: true, username: '', email: '', role: 'rh', company: companies[0] || 'iTracker', password: '' });
+  const closeCreate = () => setCreateDialog({ open: false, username: '', email: '', role: 'rh', company: companies[0] || 'iTracker', password: '' });
   const handleCreate = async () => {
     setError('');
     setSuccess('');
@@ -268,7 +268,7 @@ const AdminUsers = () => {
         actions={
           <Button
             variant="contained"
-            onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'hr', company: companies[0] || 'iTracker', password: '' })}
+            onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'rh', company: companies[0] || 'iTracker', password: '' })}
             sx={{
               borderRadius: 2,
               px: 3,
@@ -390,12 +390,12 @@ const AdminUsers = () => {
               <MenuItem value="">Todos</MenuItem>
               <MenuItem value="admin">Admin</MenuItem>
               <MenuItem value="manager">Manager</MenuItem>
-              <MenuItem value="hr">RH</MenuItem>
+              <MenuItem value="rh">RH</MenuItem>
               <MenuItem value="user">User</MenuItem>
             </TextField>
             <Button variant="outlined" onClick={fetchUsers} disabled={loadingUsers}>Atualizar</Button>
             <Box sx={{ flex: 1 }} />
-            <Button variant="contained" onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'hr', company: companies[0] || 'iTracker', password: '' })}>Novo Usuário</Button>
+            <Button variant="contained" onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'rh', company: companies[0] || 'iTracker', password: '' })}>Novo Usuário</Button>
           </Toolbar>
 
           <Paper>
@@ -436,7 +436,7 @@ const AdminUsers = () => {
                             >
                               <MenuItem value="admin">Admin</MenuItem>
                               <MenuItem value="manager">Manager</MenuItem>
-                              <MenuItem value="hr">RH</MenuItem>
+                              <MenuItem value="rh">RH</MenuItem>
                               <MenuItem value="user">User</MenuItem>
                             </Select>
                           </FormControl>
@@ -551,7 +551,7 @@ const AdminUsers = () => {
                 <Select label="Papel" value={createDialog.role} onChange={(e) => setCreateDialog({ ...createDialog, role: e.target.value })}>
                   <MenuItem value="admin">Admin</MenuItem>
                   <MenuItem value="manager">Manager</MenuItem>
-                  <MenuItem value="hr">RH</MenuItem>
+                  <MenuItem value="rh">RH</MenuItem>
                   <MenuItem value="user">User</MenuItem>
                 </Select>
               </FormControl>

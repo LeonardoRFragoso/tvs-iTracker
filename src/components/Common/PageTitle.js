@@ -10,22 +10,23 @@ import { useNavigate } from 'react-router-dom';
  * @param {Object} props - Propriedades do componente
  * @param {string} props.title - Título principal da página
  * @param {string} [props.subtitle] - Subtítulo opcional da página
+ * @param {React.ReactNode} [props.icon] - Ícone a ser exibido ao lado do título
  * @param {string} [props.backTo] - Caminho para navegação do botão voltar (se não fornecido, o botão não será exibido)
  * @param {React.ReactNode} [props.actions] - Ações adicionais a serem exibidas no cabeçalho (botões, etc)
  * @param {Object} [props.sx] - Estilos adicionais para o container
  */
-const PageTitle = ({ title, subtitle, backTo, actions, sx = {} }) => {
+const PageTitle = ({ title, subtitle, icon, backTo, actions, sx = {} }) => {
   const navigate = useNavigate();
 
   return (
     <Fade in timeout={800}>
       <Box 
         sx={{ 
-          mb: 4, 
+          mb: 2, 
           display: 'flex', 
           flexDirection: { xs: 'column', sm: 'row' },
           alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 2,
+          gap: 1.5,
           ...sx
         }}
       >
@@ -57,27 +58,49 @@ const PageTitle = ({ title, subtitle, backTo, actions, sx = {} }) => {
         )}
         
         <Box sx={{ flex: 1 }}>
-          <Typography 
-            variant="h3" 
-            component="h1"
-            sx={{
-              fontWeight: 600,
-              background: (theme) => theme.palette.mode === 'dark' 
-                ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
-                : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            {title}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {icon && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 36,
+                  height: 36,
+                  borderRadius: '10px',
+                  background: (theme) => theme.palette.mode === 'dark' 
+                    ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                    : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                  color: 'white',
+                  fontSize: '18px',
+                }}
+              >
+                {icon}
+              </Box>
+            )}
+            <Typography 
+              variant="h5" 
+              component="h1"
+              sx={{
+                fontWeight: 600,
+                fontSize: '1.5rem',
+                background: (theme) => theme.palette.mode === 'dark' 
+                  ? 'linear-gradient(45deg, #ff7730, #ff9800)' 
+                  : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              {title}
+            </Typography>
+          </Box>
           
           {subtitle && (
             <Typography 
-              variant="subtitle1" 
+              variant="body2" 
               color="text.secondary"
-              sx={{ mt: 0.5 }}
+              sx={{ mt: 0.25, fontSize: '0.875rem' }}
             >
               {subtitle}
             </Typography>

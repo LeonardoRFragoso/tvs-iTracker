@@ -32,7 +32,7 @@ def list_locations():
             )
         
         # HR can only see their company's locations
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             query = query.filter(Location.company == current_user.company)
         
         query = query.order_by(Location.created_at.desc())
@@ -61,7 +61,7 @@ def create_location():
         user = User.query.get(user_id)
         
         if user.role not in ['admin', 'manager']:
-            return jsonify({'error': 'Apenas administradores e gerentes podem criar sedes'}), 403
+            return jsonify({'error': 'Apenas administradores e gerentes podem criar empresas'}), 403
         
         data = request.get_json()
         
@@ -108,7 +108,7 @@ def create_location():
         db.session.commit()
         
         return jsonify({
-            'message': 'Sede criada com sucesso',
+            'message': 'Empresa criada com sucesso',
             'location': location.to_dict()
         }), 201
         
@@ -126,10 +126,10 @@ def get_location(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
-            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         return jsonify({'location': location.to_dict()}), 200
         
@@ -145,10 +145,10 @@ def update_location(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
         if user.role not in ['admin', 'manager']:
-            return jsonify({'error': 'Sem permissão para editar sedes'}), 403
+            return jsonify({'error': 'Sem permissão para editar empresas'}), 403
         
         data = request.get_json()
         
@@ -188,7 +188,7 @@ def update_location(location_id):
         db.session.commit()
         
         return jsonify({
-            'message': 'Sede atualizada com sucesso',
+            'message': 'Empresa atualizada com sucesso',
             'location': location.to_dict()
         }), 200
         
@@ -205,21 +205,21 @@ def delete_location(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
         if user.role != 'admin':
-            return jsonify({'error': 'Apenas administradores podem deletar sedes'}), 403
+            return jsonify({'error': 'Apenas administradores podem deletar empresas'}), 403
         
         # Verifica se há players associados
         if location.players:
             return jsonify({
-                'error': f'Não é possível deletar sede com {len(location.players)} players associados'
+                'error': f'Não é possível deletar empresa com {len(location.players)} players associados'
             }), 400
         
         db.session.delete(location)
         db.session.commit()
         
-        return jsonify({'message': 'Sede deletada com sucesso'}), 200
+        return jsonify({'message': 'Empresa deletada com sucesso'}), 200
         
     except Exception as e:
         db.session.rollback()
@@ -235,10 +235,10 @@ def get_location_players(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
-            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = [player.to_dict() for player in location.players]
         
@@ -261,10 +261,10 @@ def get_location_stats(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
-            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = location.players
         total_players = len(players)
@@ -346,10 +346,10 @@ def debug_location_players(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
-            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = location.players
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
@@ -390,10 +390,10 @@ def force_location_players_online(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
-        if current_user and current_user.role == 'hr' and location.company != current_user.company:
-            return jsonify({'error': 'Acesso negado a sedes de outra empresa'}), 403
+        if current_user and current_user.role == 'rh' and location.company != current_user.company:
+            return jsonify({'error': 'Acesso negado a empresas de outra empresa'}), 403
         
         players = location.players
         updated_players = []
@@ -411,7 +411,7 @@ def force_location_players_online(location_id):
         db.session.commit()
         
         return jsonify({
-            'message': f'Todos os {len(players)} players da sede forçados para online',
+            'message': f'Todos os {len(players)} players da empresa forçados para online',
             'location': location.name,
             'updated_players': updated_players
         }), 200

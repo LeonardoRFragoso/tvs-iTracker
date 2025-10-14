@@ -339,7 +339,7 @@ def sync_location_content(location_id):
         location = Location.query.get(location_id)
         
         if not location:
-            return jsonify({'error': 'Sede não encontrada'}), 404
+            return jsonify({'error': 'Empresa não encontrada'}), 404
         
         data = request.get_json()
         force_sync = data.get('force_sync', False)

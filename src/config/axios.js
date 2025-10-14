@@ -124,6 +124,18 @@ axios.interceptors.response.use(
         return axios(cfg);
       }
 
+      // Handle JWT token errors (500 with "Not enough segments")
+      if (error.response?.status === 500 && error.response?.data?.msg === 'Not enough segments') {
+        console.warn('[Axios] JWT token inválido detectado, limpando localStorage');
+        if (isBrowser) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          const base = window.location.pathname.startsWith('/app') ? '/app' : '';
+          window.location.href = `${base}/login`;
+        }
+        return Promise.reject(error);
+      }
+
       // Centralized 401 handling com exceção para o modo Kiosk/TV
       if (error.response?.status === 401) {
         const cfg = error.config || {};

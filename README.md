@@ -26,7 +26,7 @@ Uma plataforma completa de sinalização digital para substituir a Wiplay, desen
 - Gestão de múltiplas localizações
 - Distribuição inteligente de conteúdo
 - Configuração de horários de pico
-- Estatísticas por sede
+- Estatísticas por empresa
 
 ### Dashboard e Monitoramento
 - Estatísticas em tempo real

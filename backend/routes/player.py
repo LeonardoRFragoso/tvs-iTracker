@@ -67,7 +67,7 @@ def list_players():
             current_user = User.query.get(user_id)
             print(f"[DEBUG] User encontrado: {current_user is not None}")
             
-            if current_user and current_user.role == 'hr':
+            if current_user and current_user.role == 'rh':
                 print(f"[DEBUG] Filtrando por company: {current_user.company}")
                 sql_select += " JOIN locations l ON p.location_id = l.id"
                 sql_count += " JOIN locations l ON p.location_id = l.id"
@@ -155,7 +155,7 @@ def create_player():
         print(f"[DEBUG] User: {user.username if user else 'None'}")
         
         # Permissões: admin e manager podem criar em qualquer empresa; RH pode criar somente na própria empresa
-        if user.role not in ['admin', 'manager', 'hr']:
+        if user.role not in ['admin', 'manager', 'rh']:
             return jsonify({'error': 'Sem permissão para criar players'}), 403
         
         data = request.get_json()
@@ -170,10 +170,10 @@ def create_player():
             return jsonify({'error': 'location_id é obrigatório'}), 400
         location = Location.query.get(loc_id)
         if not location:
-            return jsonify({'error': 'Sede (location) não encontrada'}), 404
+            return jsonify({'error': 'Empresa (location) não encontrada'}), 404
         
         # HR só pode criar players na própria empresa
-        if user.role == 'hr':
+        if user.role == 'rh':
             user_company = getattr(user, 'company', None)
             location_company = getattr(location, 'company', None)
             if not user_company or not location_company or user_company != location_company:
@@ -246,7 +246,7 @@ def get_player(player_id):
             return jsonify({'error': 'Player não encontrado'}), 404
         
         # HR can only access players from their company
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             location = Location.query.get(player.location_id)
             if not location or location.company != current_user.company:
                 return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
@@ -278,7 +278,7 @@ def update_player(player_id):
         if 'location_id' in data and data['location_id']:
             new_loc = Location.query.get(data['location_id'])
             if not new_loc:
-                return jsonify({'error': 'Sede (location) não encontrada'}), 404
+                return jsonify({'error': 'Empresa (location) não encontrada'}), 404
         
         # Atualizar campos do player
         if 'name' in data:
@@ -374,8 +374,11 @@ def player_ping(player_id):
         player.status = 'online'
         player.last_ping = datetime.utcnow()
         
-        if 'storage_used' in data:
-            player.storage_used = data['storage_used']
+        if 'storage_used_gb' in data:
+            player.storage_used_gb = data['storage_used_gb']
+        elif 'storage_used' in data:
+            # Compatibilidade com versões antigas que enviam 'storage_used'
+            player.storage_used_gb = data['storage_used']
         
         db.session.commit()
         
@@ -487,7 +490,7 @@ def sync_player(player_id):
             print(f"[SYNC] Player {player_id} não encontrado")
             return jsonify({'error': 'Player não encontrado'}), 404
         
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             location = Location.query.get(player.location_id)
             if not location or location.company != current_user.company:
                 return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
@@ -641,7 +644,7 @@ def force_player_online(player_id):
         if not player:
             return jsonify({'error': 'Player não encontrado'}), 404
         
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             location = Location.query.get(player.location_id)
             if not location or location.company != current_user.company:
                 return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
@@ -674,7 +677,7 @@ def get_player_locations():
             current_user = User.query.get(user_id)
             print(f"[DEBUG] User encontrado: {current_user is not None}")
             
-            if current_user and current_user.role == 'hr':
+            if current_user and current_user.role == 'rh':
                 print(f"[DEBUG] Filtrando por company: {current_user.company}")
                 locations = Location.query.filter(Location.is_active == True, Location.company == current_user.company).all()
             else:
@@ -715,7 +718,7 @@ def get_player_stats():
         
         # Base queries
         q_all = Player.query
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             q_all = q_all.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
         
         threshold = datetime.utcnow() - timedelta(minutes=5)
@@ -730,7 +733,7 @@ def get_player_stats():
             Player.platform,
             db.func.count(Player.id).label('count')
         )
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             stats_by_platform_q = stats_by_platform_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
         stats_by_platform = stats_by_platform_q.group_by(Player.platform).all()
         
@@ -738,7 +741,7 @@ def get_player_stats():
             Player.region,
             db.func.count(Player.id).label('count')
         ).filter(Player.region != '')
-        if current_user and current_user.role == 'hr':
+        if current_user and current_user.role == 'rh':
             stats_by_region_q = stats_by_region_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
         stats_by_region = stats_by_region_q.group_by(Player.region).all()
         

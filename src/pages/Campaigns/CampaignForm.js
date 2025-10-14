@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { formatBRDateTime } from '../../utils/dateFormatter';
 import {
   Box,
   Card,
@@ -83,7 +84,7 @@ import { useSocket } from '../../contexts/SocketContext';
 import MultiContentManager from '../../components/Campaign/MultiContentManager';
 import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
-const API_HOST = axios.defaults.baseURL.replace(/\/api$/, '');
+const API_HOST = axios.defaults.baseURL;
 
 // BR datetime helpers
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -168,6 +169,10 @@ const CampaignForm = () => {
   // Draft campaign id to enable compile inside modal without leaving the page
   const [draftCampaignId, setDraftCampaignId] = useState(null);
   const effectiveCampaignId = id || draftCampaignId;
+  // Estado para controlar se a campanha foi salva e compilada
+  const [campaignSavedAndCompiled, setCampaignSavedAndCompiled] = useState(false);
+  // Estado para controlar se deve abrir preview do vídeo compilado
+  const [shouldShowCompiledVideo, setShouldShowCompiledVideo] = useState(false);
   // Helpers for ordered selection inside the modal
   const getSelectedContentObjects = () =>
     selectedContents
@@ -223,6 +228,10 @@ const CampaignForm = () => {
     // Sempre que o modal fechar ou a seleção zerar, volta para a aba de seleção
     if (!contentDialog || selectedContents.length === 0) {
       setContentModalTab('selection');
+    }
+    // Resetar estado de compilação quando modal fechar
+    if (!contentDialog) {
+      setShouldShowCompiledVideo(false);
     }
   }, [contentDialog, selectedContents.length]);
 
@@ -335,7 +344,14 @@ const CampaignForm = () => {
   }, [previewIndex]);
 
   // Add: Add selected contents to campaign respecting the chosen order
+  // BLOQUEADO: Agora só permite adicionar após salvar e compilar
   const handleAddContents = () => {
+    // Verificar se a campanha foi salva e compilada
+    if (!campaignSavedAndCompiled) {
+      setError('Você deve ir para a aba Preview, salvar a campanha e compilar o vídeo antes de adicionar os conteúdos.');
+      return;
+    }
+
     const contentsToAdd = selectedContents
       .map(id => availableContents.find(c => c.id === id))
       .filter(content => content && !campaignContents.find(cc => cc.id === content.id));
@@ -353,6 +369,11 @@ const CampaignForm = () => {
     setCampaignContents(prev => [...prev, ...newCampaignContents]);
     setSelectedContents([]);
     setContentDialog(false);
+    
+    // Abrir preview do vídeo compilado
+    if (compileInfo?.url) {
+      setShouldShowCompiledVideo(true);
+    }
   };
 
   // DnD sensors for campaign content reordering (inline list)
@@ -369,16 +390,16 @@ const CampaignForm = () => {
   const getThumbUrlFor = (content) => {
     if (!content) return null;
     const t = content.thumbnail_path || content.thumbnail;
-    if (t) return `${API_HOST}/api/content/thumbnails/${encodeURIComponent(t)}`;
+    if (t) return `${API_HOST}/content/thumbnails/${encodeURIComponent(t)}`;
     const fp = content.file_path || content.path;
     const type = getTypeFor(content);
-    if (fp && type === 'image') return `${API_HOST}/api/content/media/${encodeURIComponent(fp)}`;
+    if (fp && type === 'image') return `${API_HOST}/content/media/${encodeURIComponent(fp)}`;
     return null;
   };
   const getMediaUrlFor = (content) => {
     if (!content) return null;
     const fp = content.file_path || content.path;
-    if (fp) return `${API_HOST}/api/content/media/${encodeURIComponent(fp)}`;
+    if (fp) return `${API_HOST}/content/media/${encodeURIComponent(fp)}`;
     return null;
   };
   const formatDuration = (seconds) => {
@@ -626,6 +647,8 @@ const CampaignForm = () => {
             fps: r.data?.compiled_video_fps,
             updatedAt: r.data?.compiled_video_updated_at,
           });
+          // Marcar como salva e compilada
+          setCampaignSavedAndCompiled(true);
           clearInterval(compilePollRef.current);
           compilePollRef.current = null;
         } else if (s === 'error' || s === 'failed') {
@@ -656,6 +679,8 @@ const CampaignForm = () => {
           fps: r.data?.compiled_video_fps,
           updatedAt: r.data?.compiled_video_updated_at,
         });
+        // Marcar como salva e compilada
+        setCampaignSavedAndCompiled(true);
       } else if (s === 'processing') {
         // Se já estiver processando, iniciar polling para acompanhar
         setCompileMessage('Processando...');
@@ -687,6 +712,15 @@ const CampaignForm = () => {
       setCompileError(err?.response?.data?.error || 'Falha ao iniciar compilação');
     }
   };
+
+  // Função para abrir preview do vídeo compilado
+  const openCompiledVideoPreview = () => {
+    if (compileInfo?.url) {
+      // Abrir em nova aba
+      window.open(compileInfo.url, '_blank', 'noopener,noreferrer');
+      setShouldShowCompiledVideo(false);
+    }
+  };
   // Escutar progresso da compilação via Socket.IO
   useEffect(() => {
     if (!socket) return;
@@ -709,16 +743,19 @@ const CampaignForm = () => {
         const s = data.status || 'ready';
         setCompileStatus(s);
         if (s === 'ready') {
-          setCompileInfo({
-            url: computeCompiledUrl(data.compiled_video_url),
+          const videoInfo = {
             duration: data.duration,
             resolution: data.resolution,
             fps: data.fps,
-            updatedAt: new Date().toISOString(),
-          });
+            updatedAt: formatBRDateTime(),
+          };
+          setCompileInfo(videoInfo);
           setCompileStale(false);
           setCompileProgress(100);
           setCompileMessage(data.message || 'Compilação concluída');
+          // Marcar como salva e compilada
+          setCampaignSavedAndCompiled(true);
+          setSuccess('Vídeo compilado com sucesso! Agora você pode adicionar os conteúdos à campanha.');
         } else if (s === 'failed' || s === 'error') {
           setCompileError(data.message || 'Erro na compilação');
         }
@@ -743,6 +780,17 @@ const CampaignForm = () => {
       fetchCompileStatusOnce();
     }
   }, [contentDialog, contentModalTab, effectiveCampaignId]);
+
+  // Efeito para abrir automaticamente o preview do vídeo compilado
+  useEffect(() => {
+    if (shouldShowCompiledVideo && compileInfo?.url) {
+      // Aguardar um pouco para garantir que o modal foi fechado
+      const timer = setTimeout(() => {
+        openCompiledVideoPreview();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldShowCompiledVideo, compileInfo?.url]);
 
   // Quick save inside modal: create draft campaign with current form fields and selected contents
   const handleQuickSaveDraft = async () => {
@@ -795,7 +843,16 @@ const CampaignForm = () => {
       const newId = resp?.data?.campaign?.id;
       if (newId) {
         setDraftCampaignId(newId);
-        setSuccess('Campanha salva. Agora você pode compilar.');
+        setSuccess('Campanha salva. Agora compile o vídeo para habilitar o botão Adicionar.');
+        // Atualizar dados do formulário com os dados salvos
+        setFormData(prev => ({
+          ...prev,
+          name,
+          description: submitData.description,
+          start_date: sd,
+          end_date: ed,
+          is_active: submitData.is_active
+        }));
       }
     } catch (err) {
       const msg = err?.response?.data?.error || 'Erro ao salvar campanha (rascunho)';
@@ -918,12 +975,12 @@ const CampaignForm = () => {
             ? theme.palette.background.default
             : 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
           minHeight: '100vh',
-          p: 3,
+          p: 2,
         }}
       >
         {/* Enhanced Header */}
         <Fade in timeout={800}>
-          <Box display="flex" alignItems="center" mb={4}>
+          <Box display="flex" alignItems="center" mb={3}>
             <IconButton 
               onClick={() => navigate('/campaigns')} 
               sx={{ 
@@ -1603,7 +1660,23 @@ const CampaignForm = () => {
                             variant={compileStatus ? 'filled' : 'outlined'}
                           />
                           {compileInfo?.url && (
-                            <Button size="small" href={compileInfo.url} target="_blank" rel="noopener">Ver vídeo</Button>
+                            <Button 
+                              size="small" 
+                              onClick={openCompiledVideoPreview}
+                              variant="contained"
+                              color="success"
+                              sx={{ 
+                                mr: 1,
+                                animation: campaignSavedAndCompiled ? 'pulse 2s infinite' : 'none',
+                                '@keyframes pulse': {
+                                  '0%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0.7)' },
+                                  '70%': { boxShadow: '0 0 0 10px rgba(76, 175, 80, 0)' },
+                                  '100%': { boxShadow: '0 0 0 0 rgba(76, 175, 80, 0)' }
+                                }
+                              }}
+                            >
+                              🎬 Ver Vídeo Compilado
+                            </Button>
                           )}
                           <Box sx={{ flexGrow: 1 }} />
                           {/* (Apenas Preview e ações) */}
@@ -1614,8 +1687,9 @@ const CampaignForm = () => {
                                 variant="contained"
                                 onClick={startCompile}
                                 disabled={!effectiveCampaignId || selectedContents.length === 0 || compileStatus === 'processing' || (compileStatus === 'ready' && !compileStale)}
+                                color={compileStatus === 'ready' ? 'success' : 'primary'}
                               >
-                                {compileStatus === 'ready' && !compileStale ? 'Pronto' : 'Compilar'}
+                                {compileStatus === 'ready' && !compileStale ? '✅ Pronto' : '🎬 Compilar'}
                               </Button>
                             </span>
                           </Tooltip>
@@ -1803,7 +1877,7 @@ const CampaignForm = () => {
               <Button
                 onClick={handleAddContents}
                 variant="contained"
-                disabled={selectedContents.length === 0}
+                disabled={selectedContents.length === 0 || !campaignSavedAndCompiled}
                 sx={{
                   borderRadius: '12px',
                   px: 4,
@@ -1822,15 +1896,16 @@ const CampaignForm = () => {
                     color: 'rgba(0, 0, 0, 0.26)',
                   },
                 }}
+                title={!campaignSavedAndCompiled ? 'Vá para a aba Preview, salve a campanha e compile o vídeo primeiro' : ''}
               >
-                Adicionar {selectedContents.length > 0 && `(${selectedContents.length})`}
+                {!campaignSavedAndCompiled ? 'Salve e Compile Primeiro' : `Adicionar ${selectedContents.length > 0 ? `(${selectedContents.length})` : ''}`}
               </Button>
             </Box>
           </DialogActions>
         </Dialog>
 
         {/* Tabs */}
-        <Paper sx={{ mt: 3 }}>
+        <Paper sx={{ mt: 2 }}>
           <Tabs 
             value={currentTab} 
             onChange={(e, newValue) => setCurrentTab(newValue)}
@@ -1845,7 +1920,7 @@ const CampaignForm = () => {
         {/* Tab Content */}
         {currentTab === 0 && (
           <form onSubmit={handleSubmit}>
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
               {/* Informações Básicas */}
               <Grid item xs={12}>
                 <Card>
@@ -1853,7 +1928,7 @@ const CampaignForm = () => {
                     <Typography variant="h6" gutterBottom>
                       Informações Básicas
                     </Typography>
-                    <Grid container spacing={2}>
+                    <Grid container spacing={1.5}>
                       <Grid item xs={12} md={6}>
                         <TextField
                           fullWidth

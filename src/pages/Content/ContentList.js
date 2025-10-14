@@ -223,6 +223,7 @@ const ContentList = () => {
       <PageTitle 
         title="Gerenciar Conteúdo"
         subtitle="Gerencie e organize sua biblioteca de mídia"
+        icon={<VideoIcon />}
         actions={
           <>
             <Tooltip title="Atualizar lista">
@@ -280,8 +281,8 @@ const ContentList = () => {
         <Paper
           elevation={0}
           sx={{
-            mb: 4,
-            p: 3,
+            mb: 3,
+            p: 2,
             borderRadius: 3,
             background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
             border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
@@ -292,7 +293,7 @@ const ContentList = () => {
             },
           }}
         >
-          <Box display="flex" alignItems="center" gap={2} mb={3}>
+          <Box display="flex" alignItems="center" gap={2} mb={2}>
             <Avatar sx={{ bgcolor: 'primary.main' }}>
               <FilterIcon />
             </Avatar>
@@ -305,7 +306,7 @@ const ContentList = () => {
               </Typography>
             </Box>
           </Box>
-          <Grid container spacing={3} alignItems="center">
+          <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
@@ -394,17 +395,17 @@ const ContentList = () => {
         </Paper>
       </Fade>
 
-      {/* Lista de Conteúdos */}
-      <Grid container spacing={3}>
+      {/* Grid de Conteúdos */}
+      <Grid container spacing={1.5}>
         {loading ? (
-          Array.from({ length: 12 }, (_, index) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
+          Array.from({ length: 15 }, (_, index) => (
+            <Grid item xs={12} sm={6} md={4} lg={2} key={index}>
               <ContentCardSkeleton delay={index} />
             </Grid>
           ))
         ) : (
           contents.map((content, index) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={content.id}>
+            <Grid item xs={12} sm={6} md={4} lg={2} key={content.id}>
               <Grow in={true} timeout={1200 + index * 100}>
                 <Card 
                   sx={{ 
@@ -439,7 +440,7 @@ const ContentList = () => {
                 >
                   <CardMedia
                     sx={{
-                      height: 200,
+                      height: 120,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -464,7 +465,7 @@ const ContentList = () => {
                   >
                     {content.thumbnail_path ? (
                       <img
-                        src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/thumbnails/${content.thumbnail_path}`}
+                        src={`${axios.defaults.baseURL}/content/thumbnails/${content.thumbnail_path}`}
                         alt={content.title}
                         style={{
                           width: '100%',
@@ -518,17 +519,17 @@ const ContentList = () => {
                     </Box>
                   </CardMedia>
                   
-                  <CardContent sx={{ flexGrow: 1, position: 'relative', zIndex: 2 }}>
-                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={1}>
+                  <CardContent sx={{ flexGrow: 1, position: 'relative', zIndex: 2, p: 1.5 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={0.5}>
                       <Typography 
-                        variant="h6" 
+                        variant="subtitle1" 
                         component="h3" 
                         noWrap 
                         sx={{ 
                           flexGrow: 1, 
                           mr: 1,
-                          fontWeight: 'bold',
-                          fontSize: '1.1rem',
+                          fontWeight: 600,
+                          fontSize: '0.95rem',
                         }}
                       >
                         {content.title}
@@ -771,7 +772,7 @@ const ContentList = () => {
           Editar
         </MenuItem>
         <MenuItem onClick={() => {
-          window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${selectedContent?.file_path}`, '_blank');
+          window.open(`${axios.defaults.baseURL}/content/media/${selectedContent?.file_path}`, '_blank');
           handleMenuClose();
         }}>
           <DownloadIcon sx={{ mr: 1 }} />
@@ -835,7 +836,7 @@ const ContentList = () => {
         <DialogContent>
           {previewDialog.content?.content_type === 'video' && (
             <video
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               controls
               style={{
                 width: '100%',
@@ -845,7 +846,7 @@ const ContentList = () => {
           )}
           {previewDialog.content?.content_type === 'image' && (
             <img
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               alt={previewDialog.content?.title}
               style={{
                 width: '100%',
@@ -856,14 +857,14 @@ const ContentList = () => {
           )}
           {previewDialog.content?.content_type === 'audio' && (
             <audio
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               controls
               style={{ width: '100%' }}
             />
           )}
           {previewDialog.content?.content_type === 'html' && (
             <iframe
-              src={`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`}
+              src={`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`}
               title={previewDialog.content?.title}
               style={{
                 width: '100%',
@@ -891,7 +892,7 @@ const ContentList = () => {
         </DialogContent>
         <DialogActions>
           <Button 
-            onClick={() => window.open(`${axios.defaults.baseURL.replace(/\/api$/, '')}/content/media/${previewDialog.content?.file_path}`, '_blank')}
+            onClick={() => window.open(`${axios.defaults.baseURL}/content/media/${previewDialog.content?.file_path}`, '_blank')}
             startIcon={<DownloadIcon />}
           >
             Download

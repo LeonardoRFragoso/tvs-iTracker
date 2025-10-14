@@ -8,10 +8,6 @@ import {
   CircularProgress,
   Alert,
   Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   IconButton,
   Tooltip,
   LinearProgress,
@@ -22,16 +18,12 @@ import {
   Divider,
   Fab,
   Skeleton,
-  Badge,
   SpeedDial,
   SpeedDialAction,
   SpeedDialIcon,
   Snackbar,
   AlertTitle,
   Button,
-  Menu,
-  MenuItem,
-  ListItemButton,
 } from '@mui/material';
 import {
   VideoLibrary as ContentIcon,
@@ -39,25 +31,21 @@ import {
   Tv as PlayerIcon,
   Schedule as ScheduleIcon,
   RssFeed as EditorialIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Remove,
   Storage as StorageIcon,
-  CheckCircle as CheckCircleIcon,
   Timeline as TimelineIcon,
   Add as AddIcon,
   Keyboard as KeyboardIcon,
-  FileDownload as ExportIcon,
   Upload as UploadIcon,
   PlayArrow as PlayIcon,
   Pause as PauseIcon,
   LocationOn as LocationIcon,
-  Visibility as VisibilityIcon,
+  Settings as SettingsIcon,
   MoreVert as MoreVertIcon,
+  Dashboard as DashboardIcon,
   Close as CloseIcon,
   ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
@@ -93,14 +81,14 @@ ChartJS.register(
 // Skeleton loading component for stat cards
 const StatCardSkeleton = ({ delay = 0 }) => (
   <Grow in={true} timeout={1000 + delay * 200}>
-    <Card sx={{ height: '100%', p: 2 }}>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Skeleton variant="circular" width={56} height={56} />
+    <Card sx={{ height: '100%', p: 1.5 }}>
+      <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5}>
+        <Skeleton variant="circular" width={44} height={44} />
         <Skeleton variant="text" width={60} height={20} />
       </Box>
-      <Skeleton variant="text" width="80%" height={40} sx={{ mb: 1 }} />
-      <Skeleton variant="text" width="60%" height={24} sx={{ mb: 1 }} />
-      <Skeleton variant="text" width="40%" height={16} />
+      <Skeleton variant="text" width="80%" height={32} sx={{ mb: 0.5 }} />
+      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 0.5 }} />
+      <Skeleton variant="text" width="40%" height={14} />
     </Card>
   </Grow>
 );
@@ -197,14 +185,14 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
           },
         }}
       >
-        <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+        <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Avatar
               sx={{
                 bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.1)' : 'rgba(255, 255, 255, 0.2)',
                 color: (theme) => theme.palette.mode === 'dark' ? '#ff9800' : 'white',
-                width: 56,
-                height: 56,
+                width: 36,
+                height: 36,
                 border: (theme) => theme.palette.mode === 'dark' ? '2px solid rgba(255, 152, 0, 0.3)' : '2px solid rgba(255, 255, 255, 0.3)',
               }}
             >
@@ -216,7 +204,7 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
               <ChevronRightIcon 
                 sx={{ 
                   color: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 152, 0, 0.7)' : 'rgba(255, 255, 255, 0.7)',
-                  fontSize: 20,
+                  fontSize: 18,
                   opacity: 0.8,
                   transition: 'all 0.3s ease',
                   '&:hover': {
@@ -233,9 +221,9 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
                 gap={0.5}
                 sx={{
                   bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                  borderRadius: 2,
-                  px: 1,
-                  py: 0.5,
+                  borderRadius: 1.5,
+                  px: 0.75,
+                  py: 0.25,
                 }}
               >
                 <Box sx={{ color: getTrendColor() }}>
@@ -248,23 +236,24 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
             )}
           </Box>
           <Typography 
-            variant="h3" 
+            variant="h5" 
             component="div" 
             fontWeight="bold" 
-            mb={1}
+            mb={0.25}
             sx={{
               textShadow: (theme) => theme.palette.mode === 'dark' ? 'none' : '0 2px 4px rgba(0,0,0,0.3)',
               transition: 'all 0.3s ease',
               color: (theme) => theme.palette.mode === 'dark' ? theme.palette.text.primary : 'inherit',
+              fontSize: '1.5rem',
             }}
           >
             {value}
           </Typography>
-          <Typography variant="h6" mb={1} sx={{ opacity: 0.95 }}>
+          <Typography variant="body1" mb={0.25} sx={{ opacity: 0.95, fontSize: '0.9rem', fontWeight: 500 }}>
             {title}
           </Typography>
           {subtitle && (
-            <Typography variant="body2" sx={{ opacity: 0.85 }}>
+            <Typography variant="body2" sx={{ opacity: 0.85, fontSize: '0.75rem' }}>
               {subtitle}
             </Typography>
           )}
@@ -276,7 +265,8 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
-  const [alerts, setAlerts] = useState([]);
+  // Removido: alertas do sistema não são mais exibidos
+  // const [alerts, setAlerts] = useState([]);
   const [performance, setPerformance] = useState(null);
   const [health, setHealth] = useState(null);
   const [traffic, setTraffic] = useState(null);
@@ -284,9 +274,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [notifications, setNotifications] = useState([]);
-  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
@@ -297,18 +285,7 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    let interval;
-    if (autoRefresh && user) {
-      interval = setInterval(() => {
-        loadDashboardData(true); // Silent refresh
-      }, 30000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [autoRefresh, user]);
+  // Auto-refresh removido - apenas refresh manual
 
   useEffect(() => {
     const handleKeyPress = (event) => {
@@ -319,29 +296,9 @@ const Dashboard = () => {
             loadDashboardData();
             showNotification('Dashboard atualizado!', 'success');
             break;
-          case 'e':
-            event.preventDefault();
-            exportData('json');
-            break;
           case 'h':
             event.preventDefault();
             setKeyboardShortcutsOpen(true);
-            break;
-          case '1':
-            event.preventDefault();
-            window.location.href = '/content/new';
-            break;
-          case '2':
-            event.preventDefault();
-            window.location.href = '/campaigns/new';
-            break;
-          case '3':
-            event.preventDefault();
-            window.location.href = '/players/new';
-            break;
-          case '4':
-            event.preventDefault();
-            window.location.href = '/schedules/new';
             break;
           default:
             break;
@@ -349,8 +306,17 @@ const Dashboard = () => {
       }
     };
 
+    const handleShowShortcuts = () => {
+      setKeyboardShortcutsOpen(true);
+    };
+
     window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+    window.addEventListener('showKeyboardShortcuts', handleShowShortcuts);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      window.removeEventListener('showKeyboardShortcuts', handleShowShortcuts);
+    };
   }, []);
 
   // Show notification function
@@ -375,56 +341,7 @@ const Dashboard = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Export data functionality
-  const exportData = (format) => {
-    try {
-      const exportData = {
-        stats,
-        alerts,
-        performance,
-        health,
-        traffic,
-        timestamp: new Date().toISOString(),
-      };
-
-      if (format === 'json') {
-        const dataStr = JSON.stringify(exportData, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        const exportFileDefaultName = `dashboard-data-${new Date().toISOString().split('T')[0]}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-        
-        showNotification('Dados exportados com sucesso!', 'success');
-      } else if (format === 'csv') {
-        // Simple CSV export for stats
-        const csvContent = [
-          ['Métrica', 'Valor'],
-          ['Total de Conteúdos', stats?.overview.total_content || 0],
-          ['Total de Campanhas', stats?.overview.total_campaigns || 0],
-          ['Players Online', `${stats?.overview.online_players || 0}/${stats?.overview.total_players || 0}`],
-          ['Armazenamento Usado', `${stats?.storage.percentage?.toFixed(1) || 0}%`],
-          ['Status do Sistema', health?.status || 'N/A'],
-          ['Saúde Geral', `${health?.overall_health || 0}%`],
-        ].map(row => row.join(',')).join('\n');
-        
-        const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-        const exportFileDefaultName = `dashboard-stats-${new Date().toISOString().split('T')[0]}.csv`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
-        
-        showNotification('Relatório CSV exportado!', 'success');
-      }
-    } catch (error) {
-      showNotification('Erro ao exportar dados', 'error');
-    }
-    setExportMenuAnchor(null);
-  };
+  // Função de exportação removida - apenas refresh manual disponível
 
   const loadDashboardData = async (silent = false) => {
     try {
@@ -432,7 +349,7 @@ const Dashboard = () => {
 
       const requests = [
         axios.get('/dashboard/stats'),
-        axios.get('/dashboard/alerts'),
+        // Removido: /dashboard/alerts
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
         axios.get('/dashboard/playback-status'),
@@ -444,11 +361,17 @@ const Dashboard = () => {
       }
 
       const results = await Promise.allSettled(requests);
-      const [statsRes, alertsRes, performanceRes, healthRes, playbackRes, trafficRes] = results;
+      const [statsRes, performanceRes, healthRes, playbackRes, trafficRes] = results;
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
-      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
-      if (performanceRes.status === 'fulfilled') setPerformance(performanceRes.value.data);
+      // Removido: atualização de estado de alertas
+      // if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
+      if (performanceRes.status === 'fulfilled') {
+        console.log('[Dashboard] Performance data loaded:', performanceRes.value.data);
+        setPerformance(performanceRes.value.data);
+      } else {
+        console.error('[Dashboard] Failed to load performance data:', performanceRes.reason);
+      }
       if (healthRes.status === 'fulfilled') setHealth(healthRes.value.data);
       
       if (playbackRes.status === 'fulfilled') {
@@ -481,17 +404,7 @@ const Dashboard = () => {
     }
   };
 
-  const getAlertIcon = (type) => {
-    switch (type) {
-      case 'error':
-        return <ErrorIcon color="error" />;
-      case 'warning':
-        return <WarningIcon color="warning" />;
-      case 'info':
-      default:
-        return <InfoIcon color="info" />;
-    }
-  };
+  // Removido: ícones de alerta não são mais utilizados
 
   const getHealthColor = (status) => {
     switch (status) {
@@ -583,32 +496,69 @@ const Dashboard = () => {
     },
   };
 
-  const chartData = performance ? {
-    labels: performance.content_per_day?.map(item => 
-      new Date(item.date).toLocaleDateString('pt-BR', { 
+  const chartData = performance ? (() => {
+    // Criar conjunto unificado de datas de ambos os datasets
+    const allDates = new Set();
+    
+    // Adicionar datas de conteúdo
+    performance.content_per_day?.forEach(item => allDates.add(item.date));
+    
+    // Adicionar datas de campanhas
+    performance.campaigns_per_day?.forEach(item => allDates.add(item.date));
+    
+    // Converter para array ordenado
+    const sortedDates = Array.from(allDates).sort();
+    
+    console.log('[Dashboard] Datas disponíveis:', sortedDates);
+    console.log('[Dashboard] Dados de conteúdo:', performance.content_per_day);
+    console.log('[Dashboard] Dados de campanhas:', performance.campaigns_per_day);
+    
+    // Criar labels formatados
+    const labels = sortedDates.map(date => 
+      new Date(date).toLocaleDateString('pt-BR', { 
         day: '2-digit', 
         month: '2-digit' 
       })
-    ) || [],
-    datasets: [
-      {
-        label: 'Conteúdo Criado',
-        data: performance.content_per_day?.map(item => item.count) || [],
-        borderColor: isDarkMode ? '#ff9800' : '#1976d2',
-        backgroundColor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
-        fill: true,
-        borderWidth: 3,
-      },
-      {
-        label: 'Campanhas Criadas',
-        data: performance.campaigns_per_day?.map(item => item.count) || [],
-        borderColor: isDarkMode ? '#ffffff' : '#dc004e',
-        backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(220, 0, 78, 0.1)',
-        fill: true,
-        borderWidth: 3,
-      },
-    ],
-  } : null;
+    );
+    
+    // Criar dados de conteúdo alinhados com as datas
+    const contentData = sortedDates.map(date => {
+      const item = performance.content_per_day?.find(item => item.date === date);
+      return item ? item.count : 0;
+    });
+    
+    // Criar dados de campanhas alinhados com as datas
+    const campaignData = sortedDates.map(date => {
+      const item = performance.campaigns_per_day?.find(item => item.date === date);
+      return item ? item.count : 0;
+    });
+    
+    console.log('[Dashboard] Labels:', labels);
+    console.log('[Dashboard] Content data:', contentData);
+    console.log('[Dashboard] Campaign data:', campaignData);
+    
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'Conteúdo Criado',
+          data: contentData,
+          borderColor: isDarkMode ? '#ff9800' : '#1976d2',
+          backgroundColor: isDarkMode ? 'rgba(255, 152, 0, 0.1)' : 'rgba(25, 118, 210, 0.1)',
+          fill: true,
+          borderWidth: 3,
+        },
+        {
+          label: 'Campanhas Criadas',
+          data: campaignData,
+          borderColor: isDarkMode ? '#ffffff' : '#dc004e',
+          backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(220, 0, 78, 0.1)',
+          fill: true,
+          borderWidth: 3,
+        },
+      ],
+    };
+  })() : null;
 
   const speedDialActions = [
     { icon: <UploadIcon />, name: 'Novo Conteúdo', onClick: () => window.location.href = '/content/new' },
@@ -634,7 +584,7 @@ const Dashboard = () => {
             </Box>
           </Box>
         </Fade>
-        <Grid container spacing={3}>
+        <Grid container spacing={2}>
           {Array.from({ length: 8 }, (_, index) => (
             <Grid item xs={12} sm={6} md={3} key={index}>
               <StatCardSkeleton delay={index} />
@@ -665,8 +615,9 @@ const Dashboard = () => {
     <Box>
       {/* Header com PageTitle */}
       <PageTitle 
-        title="Dashboard"
+        title="Painel de Controle"
         subtitle="Visão geral do sistema e estatísticas em tempo real"
+        icon={<DashboardIcon />}
         actions={
           <>
             <Tooltip title="Atalhos do teclado (Ctrl+H)">
@@ -681,38 +632,6 @@ const Dashboard = () => {
                 }}
               >
                 <KeyboardIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Exportar dados">
-              <IconButton 
-                onClick={(e) => setExportMenuAnchor(e.currentTarget)}
-                sx={{
-                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'secondary.main',
-                  color: (theme) => theme.palette.mode === 'dark' ? 'white' : 'white',
-                  '&:hover': {
-                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'secondary.dark',
-                  },
-                }}
-              >
-                <ExportIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title={autoRefresh ? 'Desativar atualização automática' : 'Ativar atualização automática'}>
-              <IconButton 
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                sx={{
-                  bgcolor: (theme) => theme.palette.mode === 'dark' 
-                    ? (autoRefresh ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)')
-                    : (autoRefresh ? 'success.main' : 'action.disabled'),
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: (theme) => theme.palette.mode === 'dark'
-                      ? (autoRefresh ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)')
-                      : (autoRefresh ? 'success.dark' : 'action.hover'),
-                  },
-                }}
-              >
-                <PlayIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Atualizar dados">
@@ -736,8 +655,8 @@ const Dashboard = () => {
       />
 
       {/* Estatísticas */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={1.5} mb={2.5}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<ContentIcon />}
             title="Conteúdos"
@@ -750,7 +669,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<CampaignIcon />}
             title="Campanhas"
@@ -763,20 +682,20 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<PlayIcon />}
             title="Players Reproduzindo"
-            value={`${playbackStatus?.summary.playing_players || 0}/${playbackStatus?.summary.online_players || 0}`}
-            subtitle={`Taxa: ${playbackStatus?.summary.playback_rate || 0}%`}
+            value={`${playbackStatus?.summary?.playing_players || 0}/${playbackStatus?.summary?.online_players || 0}`}
+            subtitle={`Taxa: ${playbackStatus?.summary?.playback_rate || 0}%`}
             color="success"
-            trend={playbackStatus?.summary.ghost_players > 0 ? `⚠ ${playbackStatus?.summary.ghost_players} fantasma` : "✓ Normal"}
+            trend={playbackStatus?.summary?.ghost_players > 0 ? `⚠ ${playbackStatus?.summary?.ghost_players} fantasma` : "✓ Normal"}
             delay={2}
             navigateTo="/players"
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<StorageIcon />}
             title="Armazenamento"
@@ -790,21 +709,21 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Status dos Players */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           <StatCard
             icon={<PlayerIcon />}
             title="Status dos Players"
-            value={`${playbackStatus?.summary.online_players || 0}/${playbackStatus?.summary.total_players || 0}`}
-            subtitle={`${playbackStatus?.summary.idle_players || 0} parados, ${playbackStatus?.summary.offline_players || 0} offline`}
+            value={`${playbackStatus?.summary?.online_players || 0}/${playbackStatus?.summary?.total_players || 0}`}
+            subtitle={`${playbackStatus?.summary?.idle_players || 0} parados, ${playbackStatus?.summary?.offline_players || 0} offline`}
             color="info"
-            trend={`${((playbackStatus?.summary.online_players || 0) / Math.max(playbackStatus?.summary.total_players || 1, 1) * 100).toFixed(0)}% online`}
-            delay={3}
+            trend={`${((playbackStatus?.summary?.online_players || 0) / Math.max(playbackStatus?.summary?.total_players || 1, 1) * 100).toFixed(0)}% online`}
+            delay={4}
             navigateTo="/players"
           />
         </Grid>
 
         {/* KPI: Uso de Rede (detecção de sobreuso) */}
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4} lg={2}>
           {(() => {
             const overuseCount = traffic?.overuse_players?.length || 0;
             const recentPlayers = traffic?.recent?.players || {};
@@ -821,7 +740,7 @@ const Dashboard = () => {
                 subtitle={subtitle}
                 color={overuseCount > 0 ? 'warning' : 'info'}
                 trend={overuseCount > 0 ? `↑ ${overuseCount}` : 'OK'}
-                delay={4}
+                delay={5}
                 navigateTo="/admin/traffic-monitor"
               />
             );
@@ -829,16 +748,16 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={1.5}>
         {/* Gráfico de Performance */}
         <Grid item xs={12} md={8}>
           <Fade in={true} timeout={1200}>
             <Paper
               elevation={0}
               sx={{
-                p: 3,
+                p: 2,
                 borderRadius: 3,
-                height: 400,
+                height: 300,
                 background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
                 border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
                 position: 'relative',
@@ -854,121 +773,38 @@ const Dashboard = () => {
                 },
               }}
             >
-              <Box display="flex" alignItems="center" gap={2} mb={3}>
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
-                  <TimelineIcon />
+              <Box display="flex" alignItems="center" gap={1.5} mb={2}>
+                <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32 }}>
+                  <TimelineIcon sx={{ fontSize: '1.2rem' }} />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6" fontWeight="bold">
+                  <Typography variant="subtitle1" fontWeight="bold">
                     Atividade Recente
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary">
                     Evolução de conteúdo e campanhas
                   </Typography>
                 </Box>
               </Box>
-              {chartData && (
-                <Box height={300}>
+              {chartData ? (
+                <Box height={240}>
                   <Line options={chartOptions} data={chartData} />
                 </Box>
+              ) : (
+                <Box height={240} display="flex" alignItems="center" justifyContent="center">
+                  <Typography variant="body2" color="text.secondary">
+                    {performance ? 'Processando dados do gráfico...' : 'Carregando dados de atividade...'}
+                  </Typography>
+                </Box>
               )}
             </Paper>
           </Fade>
         </Grid>
 
-        {/* Alertas do Sistema */}
-        <Grid item xs={12} md={4}>
-          <Fade in={true} timeout={1400}>
-            <Paper
-              elevation={0}
-              sx={{
-                p: 3,
-                borderRadius: 3,
-                height: 400,
-                background: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.paper : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-                border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
-              }}
-            >
-              <Box display="flex" alignItems="center" gap={2} mb={3}>
-                <Badge badgeContent={alerts.length} color="error">
-                  <Avatar sx={{ bgcolor: 'warning.main' }}>
-                    <WarningIcon />
-                  </Avatar>
-                </Badge>
-                <Box>
-                  <Typography variant="h6" fontWeight="bold">
-                    Alertas do Sistema
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Notificações importantes
-                  </Typography>
-                </Box>
-              </Box>
-              <Divider sx={{ mb: 2 }} />
-              {alerts.length === 0 ? (
-                <Box 
-                  display="flex" 
-                  flexDirection="column" 
-                  alignItems="center" 
-                  justifyContent="center"
-                  height={200}
-                >
-                  <CheckCircleIcon 
-                    sx={{ 
-                      fontSize: 48, 
-                      color: 'success.main',
-                      mb: 2 
-                    }} 
-                  />
-                  <Typography variant="h6" color="success.main" fontWeight="bold">
-                    Tudo funcionando!
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" textAlign="center">
-                    Nenhum alerta no momento
-                  </Typography>
-                </Box>
-              ) : (
-                <List dense sx={{ maxHeight: 280, overflow: 'auto' }}>
-                  {alerts.slice(0, 5).map((alert, index) => (
-                    <Grow in={true} timeout={1000 + index * 100} key={index}>
-                      <ListItem
-                        sx={{
-                          borderRadius: 2,
-                          mb: 1,
-                          bgcolor: isDarkMode ? '#2a2a2a' : '#f5f5f5',
-                          '&:hover': {
-                            bgcolor: isDarkMode ? '#333' : '#e0e0e0',
-                            transform: 'translateX(4px)',
-                          },
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <ListItemIcon>
-                          {getAlertIcon(alert.type)}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              {alert.title}
-                            </Typography>
-                          }
-                          secondary={
-                            <Typography variant="body2" color="text.secondary">
-                              {alert.message}
-                            </Typography>
-                          }
-                        />
-                      </ListItem>
-                    </Grow>
-                  ))}
-                </List>
-              )}
-            </Paper>
-          </Fade>
-        </Grid>
+        {/* Removido: Alertas do Sistema */}
 
         {/* Detalhes dos Players Reproduzindo */}
-        {playbackStatus && playbackStatus.summary.playing_players > 0 && (
+        {playbackStatus && playbackStatus.summary?.playing_players > 0 && (
           <Grid item xs={12}>
             <Fade in={true} timeout={1600}>
               <Paper
@@ -986,7 +822,7 @@ const Dashboard = () => {
                   </Avatar>
                   <Box>
                     <Typography variant="h6" fontWeight="bold">
-                      Players Ativos ({playbackStatus.summary.playing_players})
+                      Players Ativos ({playbackStatus.summary?.playing_players})
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Conteúdo sendo reproduzido em tempo real
@@ -1046,10 +882,10 @@ const Dashboard = () => {
                       </Grid>
                     ))}
                 </Grid>
-                {playbackStatus.summary.playing_players > 6 && (
+                {playbackStatus.summary?.playing_players > 6 && (
                   <Box textAlign="center" mt={2}>
                     <Typography variant="body2" color="text.secondary">
-                      ... e mais {playbackStatus.summary.playing_players - 6} players reproduzindo
+                      ... e mais {playbackStatus.summary?.playing_players - 6} players reproduzindo
                     </Typography>
                   </Box>
                 )}
@@ -1059,7 +895,7 @@ const Dashboard = () => {
         )}
 
         {/* Alertas de Players Fantasma */}
-        {playbackStatus && playbackStatus.ghost_players.length > 0 && (
+        {playbackStatus && playbackStatus.ghost_players?.length > 0 && (
           <Grid item xs={12}>
             <Fade in={true} timeout={1800}>
               <Alert 
@@ -1069,12 +905,12 @@ const Dashboard = () => {
                   '& .MuiAlert-message': { width: '100%' }
                 }}
               >
-                <AlertTitle>⚠️ Players Fantasma Detectados ({playbackStatus.ghost_players.length})</AlertTitle>
+                <AlertTitle>⚠️ Players Fantasma Detectados ({playbackStatus.ghost_players?.length || 0})</AlertTitle>
                 <Typography variant="body2" mb={2}>
                   Os seguintes players estão online mas não estão reproduzindo conteúdo:
                 </Typography>
                 <Grid container spacing={1}>
-                  {playbackStatus.ghost_players.map((ghost, index) => (
+                  {playbackStatus.ghost_players?.map((ghost, index) => (
                     <Grid item xs={12} sm={6} md={4} key={ghost.id}>
                       <Box 
                         sx={{ 
@@ -1154,35 +990,6 @@ const Dashboard = () => {
         </Snackbar>
       ))}
 
-      {/* Export Menu */}
-      <Menu
-        anchorEl={exportMenuAnchor}
-        open={Boolean(exportMenuAnchor)}
-        onClose={() => setExportMenuAnchor(null)}
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            minWidth: 200,
-            background: isDarkMode 
-              ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-              : 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-            border: `1px solid ${isDarkMode ? '#333' : '#e0e0e0'}`,
-          },
-        }}
-      >
-        <MenuItem onClick={() => exportData('json')}>
-          <ListItemIcon>
-            <ExportIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Exportar JSON" secondary="Dados completos" />
-        </MenuItem>
-        <MenuItem onClick={() => exportData('csv')}>
-          <ListItemIcon>
-            <ExportIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Exportar CSV" secondary="Relatório resumido" />
-        </MenuItem>
-      </Menu>
 
       {/* Keyboard Shortcuts Dialog */}
       <Snackbar
@@ -1211,7 +1018,6 @@ const Dashboard = () => {
           <AlertTitle>Atalhos do Teclado</AlertTitle>
           <Box component="ul" sx={{ m: 0, pl: 2 }}>
             <li><strong>Ctrl+R:</strong> Atualizar dashboard</li>
-            <li><strong>Ctrl+E:</strong> Exportar dados (JSON)</li>
             <li><strong>Ctrl+H:</strong> Mostrar atalhos</li>
             <li><strong>Ctrl+1:</strong> Novo conteúdo</li>
             <li><strong>Ctrl+2:</strong> Nova campanha</li>

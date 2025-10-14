@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { formatBRDateTime } from '../../utils/dateFormatter';
 import {
   Box,
   Typography,
@@ -564,7 +565,7 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
       type: eventType,
       data: {
         player_id: playerId,
-        timestamp: new Date().toISOString(),
+        timestamp: formatBRDateTime(),
         ...eventData
       }
     };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Avatar,
   Box,
@@ -137,20 +137,23 @@ const ScheduleForm = () => {
     content_type: 'main',
     is_active: true,
     is_all_day: false,
-    // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
+    // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO (simplificadas)
     playback_mode: 'sequential',
-    content_duration: 10,
-    transition_duration: 1,
     loop_behavior: 'until_next',
     loop_duration_minutes: null,
     content_selection: 'all',
-    shuffle_enabled: false,
+    // auto_skip_errors agora é obrigatório e sempre true
     auto_skip_errors: true,
     device_type_compatibility: 'legacy',
   });
 
   const [campaigns, setCampaigns] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [targetMode, setTargetMode] = useState('single'); // single | location | multi
+  const [targetLocationId, setTargetLocationId] = useState('');
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState([]);
+  const originalPlayerIdRef = useRef('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [error, setError] = useState('');
@@ -176,6 +179,7 @@ const ScheduleForm = () => {
   useEffect(() => {
     loadCampaigns();
     loadPlayers();
+    loadLocations();
     if (isEdit) {
       loadSchedule();
     }
@@ -228,16 +232,16 @@ const ScheduleForm = () => {
         is_all_day: isAllDayDetected,
         // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
         playback_mode: schedule.playback_mode || 'sequential',
-        content_duration: schedule.content_duration || 10,
-        transition_duration: schedule.transition_duration || 1,
         loop_behavior: schedule.loop_behavior || 'until_next',
         loop_duration_minutes: schedule.loop_duration_minutes || null,
         content_selection: schedule.content_selection || 'all',
-        shuffle_enabled: schedule.shuffle_enabled || false,
-        auto_skip_errors: schedule.auto_skip_errors !== false,
+        // embaralhar removido do UI; manter estado interno padrão
+        auto_skip_errors: true, // obrigatório
         // Forçar compatibilidade única: legado (recursos mínimos)
         device_type_compatibility: 'legacy',
       });
+      setSelectedPlayerIds([schedule.player_id || '']);
+      originalPlayerIdRef.current = schedule.player_id || '';
     } catch (err) {
       setError('Erro ao carregar agendamento');
       console.error('Load schedule error:', err);
@@ -264,9 +268,21 @@ const ScheduleForm = () => {
     }
   };
 
+  const loadLocations = async () => {
+    try {
+      const response = await axios.get('/locations');
+      const list = response.data.locations || response.data || [];
+      setLocations(list);
+    } catch (err) {
+      console.error('Load locations error:', err);
+    }
+  };
+
   useEffect(() => {
-    checkConflicts();
-  }, [formData.player_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time, formData.days_of_week]);
+    if (targetMode === 'single') {
+      checkConflicts();
+    }
+  }, [targetMode, formData.player_id, formData.start_date, formData.end_date, formData.start_time, formData.end_time, formData.days_of_week]);
 
   const checkConflicts = async () => {
     if (!formData.player_id || !formData.start_date || !formData.end_date) return;
@@ -325,8 +341,14 @@ const ScheduleForm = () => {
       if (!formData.campaign_id) {
         throw new Error('Campanha é obrigatória');
       }
-      if (!formData.player_id) {
+      if (targetMode === 'single' && !formData.player_id) {
         throw new Error('Player é obrigatório');
+      }
+      if (targetMode === 'location' && !targetLocationId) {
+        throw new Error('Empresa (location) é obrigatória');
+      }
+      if (targetMode === 'multi' && selectedPlayerIds.length === 0) {
+        throw new Error('Selecione ao menos um player');
       }
       if (formData.start_date >= formData.end_date) {
         throw new Error('Data de início deve ser anterior à data de fim');
@@ -338,7 +360,6 @@ const ScheduleForm = () => {
       const submitData = {
         name: formData.name,
         campaign_id: formData.campaign_id,
-        player_id: formData.player_id,
         start_date: toBRDateTime(formData.start_date, { endOfDay: false }),
         end_date: toBRDateTime(formData.end_date, { endOfDay: true }),
         days_of_week: formData.days_of_week.join(','),
@@ -351,13 +372,12 @@ const ScheduleForm = () => {
         is_all_day: formData.is_all_day,
         // CONFIGURAÇÕES UNIFICADAS DE REPRODUÇÃO
         playback_mode: formData.playback_mode,
-        content_duration: parseInt(formData.content_duration, 10) || 10,
-        transition_duration: parseInt(formData.transition_duration, 10) || 1,
         loop_behavior: formData.loop_behavior,
         loop_duration_minutes: formData.loop_duration_minutes ? parseInt(formData.loop_duration_minutes, 10) : null,
         content_selection: formData.content_selection,
-        shuffle_enabled: formData.shuffle_enabled,
-        auto_skip_errors: formData.auto_skip_errors,
+        // Forçar políticas: sem embaralhar e sempre pular conteúdos com erro
+        shuffle_enabled: false,
+        auto_skip_errors: true,
         device_type_compatibility: 'legacy',
       };
 
@@ -371,9 +391,32 @@ const ScheduleForm = () => {
 
       let response;
       if (isEdit) {
-        response = await axios.put(`/schedules/${id}`, submitData);
+        if (targetMode === 'multi') {
+          const selected = (selectedPlayerIds && selectedPlayerIds.length > 0) ? selectedPlayerIds : [formData.player_id].filter(Boolean);
+          const basePlayerId = (selected.includes(originalPlayerIdRef.current) ? originalPlayerIdRef.current : selected[0]) || formData.player_id;
+          await axios.put(`/schedules/${id}`, { ...submitData, player_id: basePlayerId });
+          const otherPlayers = selected.filter(pid => pid && pid !== basePlayerId);
+          if (otherPlayers.length > 0) {
+            await axios.post('/schedules/bulk', { ...submitData, player_ids: otherPlayers, check_conflicts: true });
+          }
+          response = { status: 200 };
+        } else if (targetMode === 'location') {
+          await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
+          if (targetLocationId) {
+            await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId, check_conflicts: true });
+          }
+          response = { status: 200 };
+        } else {
+          response = await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
+        }
       } else {
-        response = await axios.post('/schedules', submitData);
+        if (targetMode === 'single') {
+          response = await axios.post('/schedules', { ...submitData, player_id: formData.player_id });
+        } else if (targetMode === 'location') {
+          response = await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId, check_conflicts: true });
+        } else {
+          response = await axios.post('/schedules/bulk', { ...submitData, player_ids: selectedPlayerIds, check_conflicts: true });
+        }
       }
 
       setSuccess(isEdit ? 'Agendamento atualizado com sucesso!' : 'Agendamento criado com sucesso!');
@@ -629,12 +672,12 @@ const ScheduleForm = () => {
                       </Grid>
                       
                       <Grid item xs={12}>
-                        <FormControl fullWidth required>
-                          <InputLabel>Player</InputLabel>
+                        <FormControl fullWidth>
+                          <InputLabel>Destino</InputLabel>
                           <Select
-                            value={formData.player_id}
-                            onChange={(e) => handleInputChange('player_id', e.target.value)}
-                            label="Player"
+                            value={targetMode}
+                            onChange={(e) => setTargetMode(e.target.value)}
+                            label="Destino"
                             sx={{
                               borderRadius: 2,
                               '&:hover': {
@@ -643,14 +686,79 @@ const ScheduleForm = () => {
                               },
                             }}
                           >
-                            {players.map(player => (
-                              <MenuItem key={player.id} value={player.id}>
-                                {player.name}
-                              </MenuItem>
-                            ))}
+                            <MenuItem value="single">Um player</MenuItem>
+                            <MenuItem value="location">Todos os players de uma empresa</MenuItem>
+                            <MenuItem value="multi">Vários players selecionados</MenuItem>
                           </Select>
                         </FormControl>
                       </Grid>
+
+                      {targetMode === 'single' && (
+                        <Grid item xs={12}>
+                          <FormControl fullWidth required>
+                            <InputLabel>Player</InputLabel>
+                            <Select
+                              value={formData.player_id}
+                              onChange={(e) => handleInputChange('player_id', e.target.value)}
+                              label="Player"
+                              sx={{
+                                borderRadius: 2,
+                                '&:hover': {
+                                  transform: 'translateY(-2px)',
+                                  transition: 'transform 0.2s ease-in-out',
+                                },
+                              }}
+                            >
+                              {players.map(player => (
+                                <MenuItem key={player.id} value={player.id}>
+                                  {player.name}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      )}
+
+                      {targetMode === 'location' && (
+                        <Grid item xs={12}>
+                          <FormControl fullWidth required>
+                            <InputLabel>Empresa (Location)</InputLabel>
+                            <Select
+                              value={targetLocationId}
+                              onChange={(e) => setTargetLocationId(e.target.value)}
+                              label="Empresa (Location)"
+                              sx={{
+                                borderRadius: 2,
+                                '&:hover': {
+                                  transform: 'translateY(-2px)',
+                                  transition: 'transform 0.2s ease-in-out',
+                                },
+                              }}
+                            >
+                              {locations.map(loc => (
+                                <MenuItem key={loc.id} value={loc.id}>
+                                  {loc.name} {loc.company ? `- ${loc.company}` : ''}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                      )}
+
+                      {targetMode === 'multi' && (
+                        <Grid item xs={12}>
+                          <Autocomplete
+                            multiple
+                            options={players}
+                            getOptionLabel={(option) => option.name || ''}
+                            value={players.filter(p => selectedPlayerIds.includes(p.id))}
+                            onChange={(e, value) => setSelectedPlayerIds(value.map(v => v.id))}
+                            renderInput={(params) => (
+                              <TextField {...params} label="Players" placeholder="Selecione players" />
+                            )}
+                          />
+                        </Grid>
+                      )}
                     </Grid>
                   </CardContent>
                 </Paper>
@@ -1114,51 +1222,7 @@ const ScheduleForm = () => {
                         </FormControl>
                       </Grid>
 
-                      <Grid item xs={12} md={4}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Duração por Conteúdo (segundos)"
-                          value={formData.content_duration}
-                          onChange={(e) => handleInputChange('content_duration', parseInt(e.target.value) || 10)}
-                          inputProps={{ min: 1, max: 3600 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                        <FormHelperText>
-                          Tempo padrão de exibição para cada conteúdo
-                        </FormHelperText>
-                      </Grid>
-
-                      <Grid item xs={12} md={4}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Transição entre Conteúdos (segundos)"
-                          value={formData.transition_duration}
-                          onChange={(e) => handleInputChange('transition_duration', parseInt(e.target.value) || 1)}
-                          inputProps={{ min: 0, max: 60 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                        <FormHelperText>
-                          Pausa entre um conteúdo e outro
-                        </FormHelperText>
-                      </Grid>
+                      {/* Duração por Conteúdo e Transição removidos: reprodução usa vídeo compilado da campanha */}
 
                       {formData.loop_behavior === 'time_limited' && (
                         <Grid item xs={12} md={4}>
@@ -1186,27 +1250,11 @@ const ScheduleForm = () => {
                         </Grid>
                       )}
 
+                      {/* Políticas fixas: sem embaralhar; pular conteúdos com erro sempre habilitado */}
                       <Grid item xs={12}>
-                        <Box display="flex" gap={4} flexWrap="wrap">
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={formData.shuffle_enabled}
-                                onChange={(e) => handleInputChange('shuffle_enabled', e.target.checked)}
-                              />
-                            }
-                            label="Embaralhar Conteúdos"
-                          />
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={formData.auto_skip_errors}
-                                onChange={(e) => handleInputChange('auto_skip_errors', e.target.checked)}
-                              />
-                            }
-                            label="Pular Conteúdos com Erro"
-                          />
-                        </Box>
+                        <Typography variant="body2" color="text.secondary">
+                          Este agendamento reproduz o vídeo já compilado da campanha. Embaralhamento não é aplicável e conteúdos com erro serão pulados automaticamente.
+                        </Typography>
                       </Grid>
                     </Grid>
                   </CardContent>

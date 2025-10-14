@@ -70,9 +70,9 @@ def verify_user(conn: sqlite3.Connection, identifier: str, password: str) -> int
 
 
 def reset_hr_passwords(conn: sqlite3.Connection, new_password: str, must_change: bool = True) -> int:
-    """Redefine a senha de TODOS os usuários com papel RH (role='hr')."""
+    """Redefine a senha de TODOS os usuários com papel RH (role='rh')."""
     cur = conn.cursor()
-    cur.execute("SELECT id, username, email FROM users WHERE lower(role) = 'hr'")
+    cur.execute("SELECT id, username, email FROM users WHERE lower(role) = 'rh'")
     rows = cur.fetchall()
     if not rows:
         print("[INFO] Nenhum usuário RH encontrado.")

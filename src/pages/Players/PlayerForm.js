@@ -27,8 +27,6 @@ import {
   Tv as TvIcon,
   Settings as SettingsIcon,
   NetworkWifi as NetworkIcon,
-  DisplaySettings as DisplayIcon,
-  Storage as StorageIcon,
 } from '@mui/icons-material';
 import axios from '../../config/axios';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -50,6 +48,7 @@ const PlayerForm = () => {
     chromecast_name: '',
     platform: 'web',
     device_type: 'modern',
+    // Valores padrão para exibição e armazenamento
     resolution: '1920x1080',
     orientation: 'landscape',
     default_content_duration: 10,
@@ -164,7 +163,7 @@ const PlayerForm = () => {
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
             {/* Informações Básicas */}
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12}>
               <Grow in timeout={1000}>
                 <Paper
                   elevation={0}
@@ -330,13 +329,26 @@ const PlayerForm = () => {
                           }}
                         />
                       </Grid>
+                      <Grid item xs={12}>
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={formData.is_active}
+                                onChange={(e) => handleChange('is_active', e.target.checked)}
+                              />
+                            }
+                            label="Player ativo"
+                          />
+                        </Box>
+                      </Grid>
                     </Grid>
                   </CardContent>
                 </Paper>
               </Grow>
             </Grid>
 
-            {/* Configurações de Rede */}
+            {/* Configurações de Rede (Opcional) */}
             <Grid item xs={12} md={6}>
               <Grow in timeout={1200}>
                 <Paper
@@ -371,7 +383,10 @@ const PlayerForm = () => {
                         <NetworkIcon />
                       </Avatar>
                       <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Configurações de Rede
+                        Configurações de Rede (Opcional)
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                        Essas informações serão coletadas automaticamente quando o player for reproduzido
                       </Typography>
                     </Box>
                     
@@ -379,11 +394,12 @@ const PlayerForm = () => {
                       <Grid item xs={12}>
                         <TextField
                           fullWidth
-                          label="MAC Address"
+                          label="MAC Address (opcional)"
                           value={formData.mac_address || ''}
                           onChange={(e) => handleChange('mac_address', e.target.value)}
-                          placeholder="F4:F5:D8:51:81:20"
+                          placeholder="F4:F5:D8:51:81:20 - será detectado automaticamente"
                           disabled={loading}
+                          helperText="Deixe em branco para detecção automática"
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
@@ -398,11 +414,12 @@ const PlayerForm = () => {
                       <Grid item xs={12}>
                         <TextField
                           fullWidth
-                          label="IP Address"
+                          label="IP Address (opcional)"
                           value={formData.ip_address || ''}
                           onChange={(e) => handleChange('ip_address', e.target.value)}
-                          placeholder="192.168.0.10"
+                          placeholder="192.168.0.10 - será detectado automaticamente"
                           disabled={loading}
+                          helperText="Deixe em branco para detecção automática"
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
@@ -420,233 +437,9 @@ const PlayerForm = () => {
               </Grow>
             </Grid>
 
-            {/* Configurações de Exibição */}
-            <Grid item xs={12} md={6}>
-              <Grow in timeout={1400}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    borderRadius: 3,
-                    backgroundColor: (theme) => theme.palette.background.paper,
-                    backdropFilter: 'blur(10px)',
-                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                    overflow: 'hidden',
-                    position: 'relative',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '4px',
-                      background: (theme) => theme.palette.primary.main,
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 3 }}>
-                    <Box display="flex" alignItems="center" mb={3}>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'primary.main',
-                          color: '#000',
-                          mr: 2,
-                        }}
-                      >
-                        <DisplayIcon />
-                      </Avatar>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Configurações de Exibição
-                      </Typography>
-                    </Box>
-                    
-                    <Grid container spacing={3}>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          select
-                          label="Resolução"
-                          value={formData.resolution}
-                          onChange={(e) => handleChange('resolution', e.target.value)}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        >
-                          <MenuItem value="1920x1080">1920x1080 (Full HD)</MenuItem>
-                          <MenuItem value="1366x768">1366x768 (HD)</MenuItem>
-                          <MenuItem value="1280x720">1280x720 (HD Ready)</MenuItem>
-                          <MenuItem value="3840x2160">3840x2160 (4K)</MenuItem>
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          select
-                          label="Orientação"
-                          value={formData.orientation}
-                          onChange={(e) => handleChange('orientation', e.target.value)}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        >
-                          <MenuItem value="landscape">Paisagem (Horizontal)</MenuItem>
-                          <MenuItem value="portrait">Retrato (Vertical)</MenuItem>
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Duração padrão (segundos)"
-                          value={formData.default_content_duration}
-                          onChange={(e) => handleChange('default_content_duration', parseInt(e.target.value))}
-                          inputProps={{ min: 1, max: 300 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          select
-                          label="Efeito de Transição"
-                          value={formData.transition_effect}
-                          onChange={(e) => handleChange('transition_effect', e.target.value)}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        >
-                          <MenuItem value="fade">Fade</MenuItem>
-                          <MenuItem value="slide">Slide</MenuItem>
-                          <MenuItem value="none">Nenhum</MenuItem>
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Volume (%)"
-                          value={formData.volume_level}
-                          onChange={(e) => handleChange('volume_level', parseInt(e.target.value))}
-                          inputProps={{ min: 0, max: 100 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Paper>
-              </Grow>
-            </Grid>
+            {/* Removido: Configurações de Exibição - valores padrão aplicados automaticamente */}
 
-            {/* Configurações de Armazenamento */}
-            <Grid item xs={12} md={6}>
-              <Grow in timeout={1600}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    borderRadius: 3,
-                    backgroundColor: (theme) => theme.palette.background.paper,
-                    backdropFilter: 'blur(10px)',
-                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                    overflow: 'hidden',
-                    position: 'relative',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: '4px',
-                      background: (theme) => theme.palette.primary.main,
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 3 }}>
-                    <Box display="flex" alignItems="center" mb={3}>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'primary.main',
-                          color: '#000',
-                          mr: 2,
-                        }}
-                      >
-                        <StorageIcon />
-                      </Avatar>
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Configurações de Armazenamento
-                      </Typography>
-                    </Box>
-                    
-                    <Grid container spacing={3}>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="Capacidade de Armazenamento (GB)"
-                          value={formData.storage_capacity_gb}
-                          onChange={(e) => handleChange('storage_capacity_gb', parseInt(e.target.value))}
-                          inputProps={{ min: 1, max: 1000 }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Box display="flex" alignItems="center" height="100%">
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={formData.is_active}
-                                onChange={(e) => handleChange('is_active', e.target.checked)}
-                              />
-                            }
-                            label="Player ativo"
-                          />
-                        </Box>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Paper>
-              </Grow>
-            </Grid>
+            {/* Removido: Configurações de Armazenamento - valores padrão aplicados automaticamente */}
 
             {/* Actions */}
             <Grid item xs={12}>

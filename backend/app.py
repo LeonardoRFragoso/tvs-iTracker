@@ -10,19 +10,23 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.base import SchedulerNotRunningError, SchedulerAlreadyRunningError
 import atexit
-from sqlalchemy import text
+from sqlalchemy import text, func
 from threading import Lock
 import psutil
-from collections import deque
-from time import perf_counter
+from collections import deque, defaultdict
+import json
+import traceback
+import random
+import time
 import math
 
 # Importar instância do banco
 from database import db
+from models.schedule import fmt_br_datetime
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -37,7 +41,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 24)))
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
-app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 104857600))  # 100MB
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 52428800))  # 50MB
 
 # Criar diretório de uploads se não existir
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -71,6 +75,20 @@ CORS(app, resources={
 })
 
 jwt = JWTManager(app)
+
+# JWT Error Handlers - Converter erros 500 de JWT em 401
+@jwt.invalid_token_loader
+def invalid_token_callback(error_string):
+    return jsonify({'msg': 'Token inválido'}), 401
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({'msg': 'Token expirado'}), 401
+
+@jwt.unauthorized_loader
+def missing_token_callback(error_string):
+    return jsonify({'msg': 'Token de autorização necessário'}), 401
+
 socketio = SocketIO(app, cors_allowed_origins="*", 
                   async_mode='threading', logger=False, engineio_logger=False, 
                   ping_timeout=60, ping_interval=30)
@@ -108,7 +126,7 @@ from routes.settings import settings_bp
 # Registrar blueprints
 app.register_blueprint(auth_bp, url_prefix='/api/auth')
 app.register_blueprint(location_bp, url_prefix='/api/locations')
-app.register_blueprint(content_bp)  
+app.register_blueprint(content_bp, url_prefix='/api/content')  
 app.register_blueprint(campaign_bp, url_prefix='/api/campaigns')
 app.register_blueprint(campaign_content_bp)  
 app.register_blueprint(player_bp, url_prefix='/api/players')
@@ -121,7 +139,7 @@ app.register_blueprint(settings_bp)
 # Traffic monitoring memory
 # =========================
 TRAFFIC_STATS = {
-    'since': datetime.now(timezone.utc).isoformat(),
+    'since': fmt_br_datetime(datetime.now()),
     'total_bytes': 0,
     'players': {}
 }
@@ -348,7 +366,7 @@ def _track_upload_traffic(response):
             except Exception:
                 bytes_sent = 0
             category = _categorize_content_type(request.path, getattr(response, 'mimetype', '') or '')
-            ts = datetime.now(timezone.utc).isoformat()
+            ts = fmt_br_datetime(datetime.now())
             
             with TRAFFIC_LOCK:
                 pstats = TRAFFIC_STATS['players'].setdefault(pid, {
@@ -365,7 +383,7 @@ def _track_upload_traffic(response):
                 TRAFFIC_STATS['total_bytes'] += bytes_sent
 
                 # Bucket por minuto
-                minute_key = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
+                minute_key = fmt_br_datetime(datetime.now().replace(second=0, microsecond=0))
                 pminute = TRAFFIC_MINUTE.setdefault(pid, {})
                 bucket = pminute.setdefault(minute_key, {
                     'bytes': 0, 'requests': 0, 
@@ -461,7 +479,7 @@ def handle_join_player(data):
         try:
             CONNECTED_PLAYERS[player_id] = {
                 'sid': request.sid, 
-                'last_seen': datetime.now(timezone.utc).isoformat()
+                'last_seen': fmt_br_datetime(datetime.now())
             }
             SOCKET_SID_TO_PLAYER[request.sid] = player_id
         except Exception:
@@ -504,7 +522,7 @@ def handle_player_sync_request(data):
         emit('sync_response', {
             'player_id': player_id,
             'content_list': content_list,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'timestamp': fmt_br_datetime(datetime.now())
         })
         
     except Exception as e:
@@ -603,7 +621,7 @@ def handle_player_heartbeat(data):
         
         emit('heartbeat_confirmed', {
             'player_id': player_id,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'timestamp': fmt_br_datetime(datetime.now())
         })
         
     except Exception as e:
@@ -1459,7 +1477,7 @@ def monitor_traffic_timeseries():
     try:
         user_id = get_jwt_identity()
         user = db.session.get(User, user_id)
-        if not user or user.role not in ['admin', 'manager', 'hr']:
+        if not user or user.role not in ['admin', 'manager', 'rh']:
             return jsonify({'error': 'Sem permissão'}), 403
 
         try:
@@ -1537,7 +1555,7 @@ def monitor_traffic_top():
     try:
         user_id = get_jwt_identity()
         user = db.session.get(User, user_id)
-        if not user or user.role not in ['admin', 'manager', 'hr']:
+        if not user or user.role not in ['admin', 'manager', 'rh']:
             return jsonify({'error': 'Sem permissão'}), 403
 
         period = (request.args.get('period') or '24h').lower()
@@ -1547,7 +1565,7 @@ def monitor_traffic_top():
         location_id = request.args.get('location_id')
 
         # HR: restringe à própria empresa
-        if user.role == 'hr' and getattr(user, 'company', None):
+        if user.role == 'rh' and getattr(user, 'company', None):
             company = user.company
 
         now = datetime.now(timezone.utc)
@@ -2047,7 +2065,7 @@ def monitor_traffic_accumulated():
     try:
         user_id = get_jwt_identity()
         user = db.session.get(User, user_id)
-        if not user or user.role not in ['admin', 'manager', 'hr']:
+        if not user or user.role not in ['admin', 'manager', 'rh']:
             return jsonify({'error': 'Sem permissão'}), 403
 
         period = (request.args.get('period') or '24h').lower()
@@ -2067,7 +2085,7 @@ def monitor_traffic_accumulated():
         params = {'start': start}
 
         # HR: restringe à própria empresa
-        if user.role == 'hr' and getattr(user, 'company', None):
+        if user.role == 'rh' and getattr(user, 'company', None):
             company = user.company
 
         if player_id:

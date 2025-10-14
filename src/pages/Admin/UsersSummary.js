@@ -24,6 +24,7 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import axios from '../../config/axios';
 import { useAuth } from '../../contexts/AuthContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 const UsersSummary = () => {
   const { isAdmin } = useAuth();
@@ -66,28 +67,27 @@ const UsersSummary = () => {
   return (
     <Container maxWidth="lg">
       <Box sx={{ mt: 4 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
-          <Box display="flex" alignItems="center" gap={2}>
-            <VerifiedUserIcon color="primary" />
-            <Typography variant="h5" fontWeight="bold">
-              Resumo de Usuários por Empresa
-            </Typography>
-            {loading ? (
-              <Chip size="small" label="Carregando..." />
-            ) : (
-              <Chip size="small" color="info" label={`Empresas: ${data?.companies?.length || 0}`} />
-            )}
-          </Box>
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="Atualizar">
-              <span>
-                <IconButton onClick={fetchSummary} disabled={loading} color="primary">
-                  <RefreshIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Stack>
-        </Box>
+        <PageTitle 
+          title="Resumo de Usuários por Empresa"
+          subtitle="Visualize estatísticas de usuários e empresas do sistema"
+          icon={<VerifiedUserIcon />}
+          actions={
+            <>
+              {loading ? (
+                <Chip size="small" label="Carregando..." />
+              ) : (
+                <Chip size="small" color="info" label={`Empresas: ${data?.companies?.length || 0}`} />
+              )}
+              <Tooltip title="Atualizar">
+                <span>
+                  <IconButton onClick={fetchSummary} disabled={loading} color="primary">
+                    <RefreshIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </>
+          }
+        />
 
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>

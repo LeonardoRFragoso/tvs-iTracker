@@ -41,10 +41,12 @@ const PlayerView = () => {
   const playerId = id || searchParams.get('playerId');
 
   useEffect(() => {
-    if (fullscreenParam === 'true') {
-      // Enable fullscreen layout (overlay), but do not request browser fullscreen automatically
+    // Habilita layout em tela cheia (overlay) em duas situações:
+    // - quando a query ?fullscreen=true for usada
+    // - quando estivermos nas rotas de kiosk/legado (acesso via /kiosk, /k/ ou /tv)
+    if (fullscreenParam === 'true' || IS_KIOSK_LEGACY) {
+      // Não requisita fullscreen nativo automaticamente (precisa gesto do usuário)
       setIsFullscreen(true);
-      // The user can press 'F' or click the button to enter real browser fullscreen
     }
   }, [fullscreenParam]);
 
@@ -260,7 +262,7 @@ const PlayerView = () => {
           backgroundColor: '#000',
         }}
       >
-        <WebPlayer playerId={playerId} fullscreen={true} />
+        <WebPlayer playerId={playerId} fullscreen={true} onRequestFullscreen={enterFullscreen} />
         
         {/* Fullscreen Controls (ocultos no modo kiosk/legado) */}
         {!IS_KIOSK_LEGACY && (
@@ -340,7 +342,7 @@ const PlayerView = () => {
         </Alert>
       )}
 
-      <WebPlayer playerId={playerId} fullscreen={false} />
+      <WebPlayer playerId={playerId} fullscreen={false} onRequestFullscreen={enterFullscreen} />
 
       {!IS_KIOSK_LEGACY && (
         <Box mt={2}>

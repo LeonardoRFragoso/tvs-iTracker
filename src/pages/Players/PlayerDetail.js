@@ -264,6 +264,13 @@ const PlayerDetail = () => {
             >
               Agendamentos
             </Button>
+            <Button
+              variant="outlined"
+              startIcon={<ScheduleIcon />}
+              onClick={() => navigate(`/players/${id}/calendar`)}
+            >
+              Calendário
+            </Button>
           </Box>
         </CardContent>
       </Card>

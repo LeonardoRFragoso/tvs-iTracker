@@ -109,7 +109,7 @@ def main():
   - Cadastro e upload de conteúdos (imagens, vídeos, HTML/texto) — `backend/routes/content.py`.
   - Criação de campanhas com múltiplos conteúdos e ordenação — `backend/models/campaign.py` e `backend/routes/campaign.py`.
   - Agendamentos com todas as regras de reprodução (slot main/overlay, duração, modo) — `backend/routes/schedule.py` e `backend/services/schedule_executor.py`.
-  - Players gerenciáveis por empresa/sede, com short-link público para kiosk — `backend/routes/player.py`, `backend/app.py`.
+  - Players gerenciáveis por empresa, com short-link público para kiosk — `backend/routes/player.py`, `backend/app.py`.
   - KPIs de reprodução em tempo real e painel — `backend/routes/dashboard.py` e eventos Socket.IO em `backend/app.py`.
   - Monitoramento de tráfego por player (bytes/tipo/status HTTP) — instrumentação em `/uploads` em `backend/app.py`.
 - **[To-Be]** Aprimorar analytics (relatórios por campanha/player), ampliar suporte a players nativos (Android/Windows), e governança centralizada de parâmetros (limiares de tráfego e retenção) pelo `SystemConfig`.

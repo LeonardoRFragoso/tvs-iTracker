@@ -11,7 +11,12 @@ from models.user import User
 
 content_bp = Blueprint('content', __name__)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'html', 'txt'}
+ALLOWED_EXTENSIONS = {
+    'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp',
+    'mp4', 'avi', 'mov', 'wmv', 'flv',
+    'mp3', 'wav', 'ogg', 'm4a',
+    'html', 'txt'
+}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -22,6 +27,8 @@ def get_content_type(filename):
         return 'image'
     elif ext in ['mp4', 'avi', 'mov', 'wmv', 'flv']:
         return 'video'
+    elif ext in ['mp3', 'wav', 'ogg', 'm4a']:
+        return 'audio'
     elif ext in ['html']:
         return 'html'
     elif ext in ['txt']:
@@ -117,13 +124,9 @@ def serve_media(filename):
     except FileNotFoundError:
         return jsonify({'error': 'Arquivo não encontrado'}), 404
 
-# Alias com prefixo /api para compatibilidade com o frontend
-@content_bp.route('/api/content/media/<filename>')
-def serve_media_api(filename):
-    return serve_media(filename)
 
 # Endpoint para servir thumbnails
-@content_bp.route('/content/thumbnails/<filename>')
+@content_bp.route('/thumbnails/<filename>')
 def serve_thumbnail(filename):
     """Serve thumbnails do diretório de thumbnails"""
     try:
@@ -132,14 +135,10 @@ def serve_thumbnail(filename):
     except FileNotFoundError:
         return jsonify({'error': 'Thumbnail não encontrado'}), 404
 
-# Alias com prefixo /api para compatibilidade com o frontend
-@content_bp.route('/api/content/thumbnails/<filename>')
-def serve_thumbnail_api(filename):
-    return serve_thumbnail(filename)
 
 # Add route without trailing slash to avoid 308 redirects
-@content_bp.route('/api/content', methods=['GET', 'POST'])
-@content_bp.route('/api/content/', methods=['GET', 'POST'])
+@content_bp.route('', methods=['GET', 'POST'])
+@content_bp.route('/', methods=['GET', 'POST'])
 @jwt_required()
 def handle_content():
     if request.method == 'GET':
@@ -147,7 +146,7 @@ def handle_content():
     else:
         return create_content()
 
-@content_bp.route('/api/content/<content_id>', methods=['GET'])
+@content_bp.route('/<content_id>', methods=['GET'])
 @jwt_required()
 def get_content(content_id):
     try:
@@ -166,7 +165,7 @@ def get_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/api/content/<content_id>', methods=['PUT'])
+@content_bp.route('/<content_id>', methods=['PUT'])
 @jwt_required()
 def update_content(content_id):
     try:
@@ -241,6 +240,13 @@ def update_content(content_id):
                             content.duration = int(real_dur_new)
                     except Exception:
                         pass
+                elif content.content_type == 'audio':
+                    try:
+                        real_dur_new = get_video_duration_seconds(file_path)
+                        if real_dur_new and real_dur_new > 0:
+                            content.duration = int(real_dur_new)
+                    except Exception:
+                        pass
         else:
             # JSON puro
             data = request.get_json(force=True, silent=False)
@@ -274,7 +280,7 @@ def update_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/api/content/<content_id>', methods=['DELETE'])
+@content_bp.route('/<content_id>', methods=['DELETE'])
 @jwt_required()
 def delete_content(content_id):
     try:
@@ -342,7 +348,7 @@ def delete_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/api/content/categories', methods=['GET'])
+@content_bp.route('/categories', methods=['GET'])
 @jwt_required()
 def get_categories():
     try:
@@ -359,7 +365,7 @@ def get_categories():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/api/content/stats', methods=['GET'])
+@content_bp.route('/stats', methods=['GET'])
 @jwt_required()
 def get_content_stats():
     try:
@@ -464,6 +470,11 @@ def create_content():
                     real_dur = get_video_duration_seconds(file_path)
                     if real_dur and real_dur > 0:
                         duration = int(real_dur)
+                elif content_type == 'audio':
+                    # Calcular duração real do áudio (ffprobe funciona igualmente)
+                    real_dur = get_video_duration_seconds(file_path)
+                    if real_dur and real_dur > 0:
+                        duration = int(real_dur)
  
                 # Gerar thumbnail
                 thumbnails_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails')
@@ -532,7 +543,7 @@ def create_content():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-@content_bp.route('/api/content/recalc-durations', methods=['POST'])
+@content_bp.route('/recalc-durations', methods=['POST'])
 @jwt_required()
 def recalc_video_durations():
     """Recalcula a duração de todos os vídeos (admin/manager)."""

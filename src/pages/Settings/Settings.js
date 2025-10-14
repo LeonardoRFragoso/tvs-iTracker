@@ -42,6 +42,7 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
+import PageTitle from '../../components/Common/PageTitle';
 
 // Componente otimizado para o campo de texto do nome da empresa
 const CompanyNameField = memo(({ value, onChange, theme }) => {
@@ -273,38 +274,13 @@ const Settings = () => {
 
   return (
     <Box>
-      {/* Header */}
-      <Grow in={true} timeout={1000}>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Box display="flex" alignItems="center">
-            <Avatar
-              sx={{
-                background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
-                mr: 2,
-                width: 48,
-                height: 48,
-              }}
-            >
-              <SettingsIcon />
-            </Avatar>
-            <Box>
-              <Typography 
-                variant="h4" 
-                component="h1"
-                sx={{
-                  fontWeight: 700,
-                  color: 'text.primary',
-                }}
-              >
-                Configurações
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Gerencie as configurações do sistema e preferências
-              </Typography>
-            </Box>
-          </Box>
-          <Box display="flex" gap={2}>
+      {/* Header com PageTitle */}
+      <PageTitle 
+        title="Configurações do Sistema"
+        subtitle="Gerencie as configurações do sistema e preferências"
+        icon={<SettingsIcon />}
+        actions={
+          <>
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -346,9 +322,9 @@ const Settings = () => {
             >
               {saving ? 'Salvando...' : 'Salvar'}
             </Button>
-          </Box>
-        </Box>
-      </Grow>
+          </>
+        }
+      />
 
       {/* Alerts */}
       {error && (
@@ -403,8 +379,8 @@ const Settings = () => {
               <Tabs
                 value={activeTab}
                 onChange={(e, newValue) => setActiveTab(newValue)}
-                variant="scrollable"
-                scrollButtons="auto"
+                variant="fullWidth"
+                centered
                 sx={{
                   px: 2,
                   '& .MuiTab-root': {
@@ -565,166 +541,12 @@ const Settings = () => {
                 </Grow>
               </Grid>
               
-              <Grid item xs={12} md={6}>
-                <Grow in={true} timeout={1600}>
-                  <Card 
-                    sx={{ 
-                      borderRadius: '16px',
-                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
-                      backdropFilter: 'blur(20px)',
-                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
-                    }}
-                  >
-                    <CardContent sx={{ p: 3 }}>
-                      <Box display="flex" alignItems="center" mb={3}>
-                        <Avatar
-                          sx={{
-                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #9c27b0 0%, #ba68c8 100%)',
-                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
-                            mr: 2,
-                            width: 40,
-                            height: 40,
-                          }}
-                        >
-                          <WifiIcon />
-                        </Avatar>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                          Sistema
-                        </Typography>
-                      </Box>
-                      
-                      <SettingSwitch
-                        checked={formSettings['general.auto_sync']}
-                        onChange={(checked) => handleSettingChange('general.auto_sync', checked)}
-                        label="Sincronização Automática"
-                        sx={{ mb: 2, display: 'block' }}
-                        theme={theme}
-                      />
-                      
-                      <SettingSwitch
-                        checked={formSettings['general.auto_update']}
-                        onChange={(checked) => handleSettingChange('general.auto_update', checked)}
-                        label="Atualizações Automáticas"
-                        sx={{ mb: 2, display: 'block' }}
-                        theme={theme}
-                      />
-                      
-                      {isAdmin && (
-                        <SettingSwitch
-                          checked={formSettings['general.debug_mode']}
-                          onChange={(checked) => handleSettingChange('general.debug_mode', checked)}
-                          label="Modo Debug"
-                          sx={{ display: 'block' }}
-                          theme={theme}
-                        />
-                      )}
-                    </CardContent>
-                  </Card>
-                </Grow>
-              </Grid>
             </Grid>
           </TabPanel>
 
           {/* Aba Exibição */}
           <TabPanel value={activeTab} index={1}>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <Grow in={true} timeout={1400}>
-                  <Card 
-                    sx={{ 
-                      borderRadius: '16px',
-                      background: theme.palette.mode === 'dark' ? theme.palette.background.paper : 'rgba(255, 255, 255, 0.9)',
-                      backdropFilter: 'blur(20px)',
-                      border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.2)'}`,
-                      boxShadow: theme.palette.mode === 'dark' ? '0 8px 32px rgba(0, 0, 0, 0.3)' : '0 8px 32px rgba(0, 0, 0, 0.1)',
-                    }}
-                  >
-                    <CardContent sx={{ p: 3 }}>
-                      <Box display="flex" alignItems="center" mb={3}>
-                        <Avatar
-                          sx={{
-                            background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #4caf50 0%, #81c784 100%)',
-                            color: theme.palette.mode === 'dark' ? '#000' : 'inherit',
-                            mr: 2,
-                            width: 40,
-                            height: 40,
-                          }}
-                        >
-                          <DisplayIcon />
-                        </Avatar>
-                        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                          Configurações de Display
-                        </Typography>
-                      </Box>
-                      
-                      {/* Resolução Padrão – ocultada por não ser funcional */}
-                      {false && (
-                        <FormControl fullWidth sx={{ mb: 3 }}>
-                          <InputLabel>Resolução Padrão</InputLabel>
-                          <Select
-                            value={formSettings['display.default_resolution']}
-                            onChange={(e) => handleSettingChange('display.default_resolution', e.target.value)}
-                            label="Resolução Padrão"
-                            sx={{
-                              borderRadius: '12px',
-                              transition: 'all 0.3s ease',
-                              '&:hover': {
-                                transform: 'translateY(-1px)',
-                              }
-                            }}
-                          >
-                            <MenuItem value="1920x1080">Full HD (1920x1080)</MenuItem>
-                            <MenuItem value="1366x768">HD (1366x768)</MenuItem>
-                            <MenuItem value="3840x2160">4K (3840x2160)</MenuItem>
-                            <MenuItem value="2560x1440">2K (2560x1440)</MenuItem>
-                          </Select>
-                        </FormControl>
-                      )}
-                      
-                      <FormControl fullWidth sx={{ mb: 3 }}>
-                        <InputLabel>Orientação</InputLabel>
-                        <Select
-                          value={formSettings['display.default_orientation']}
-                          onChange={(e) => handleSettingChange('display.default_orientation', e.target.value)}
-                          label="Orientação"
-                          sx={{
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                            }
-                          }}
-                        >
-                          <MenuItem value="landscape">Paisagem</MenuItem>
-                          <MenuItem value="portrait">Retrato</MenuItem>
-                        </Select>
-                      </FormControl>
-
-                      <Box sx={{ mb: 3 }}>
-                        <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Volume Padrão: {formSettings['display.default_volume']}%
-                        </Typography>
-                        <Slider
-                          value={formSettings['display.default_volume']}
-                          onChange={(e, value) => handleSettingChange('display.default_volume', value)}
-                          valueLabelDisplay="auto"
-                          min={0}
-                          max={100}
-                          sx={{
-                            '& .MuiSlider-thumb': {
-                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            },
-                            '& .MuiSlider-track': {
-                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            }
-                          }}
-                        />
-                      </Box>
-                    </CardContent>
-                  </Card>
-                </Grow>
-              </Grid>
               
               <Grid item xs={12} md={6}>
                 <Grow in={true} timeout={1600}>
@@ -771,27 +593,6 @@ const Settings = () => {
                         theme={theme}
                       />
 
-                      <Box>
-                        <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Duração das Transições: {transitionDuration}ms
-                        </Typography>
-                        <Slider
-                          value={transitionDuration}
-                          onChange={(e, value) => { handleSettingChange('ui.transition_duration', value); updateTransitionDuration(value); }}
-                          valueLabelDisplay="auto"
-                          min={100}
-                          max={1000}
-                          step={50}
-                          sx={{
-                            '& .MuiSlider-thumb': {
-                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            },
-                            '& .MuiSlider-track': {
-                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            }
-                          }}
-                        />
-                      </Box>
                     </CardContent>
                   </Card>
                 </Grow>
@@ -895,30 +696,8 @@ const Settings = () => {
                           <StorageIcon />
                         </Avatar>
                         <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                          Gerenciamento de Armazenamento
+                          Configurações de Armazenamento
                         </Typography>
-                      </Box>
-                      
-                      <Box sx={{ mb: 3 }}>
-                        <Typography gutterBottom sx={{ fontWeight: 600 }}>
-                          Limite de Armazenamento: {formSettings['storage.max_storage_gb']} GB
-                        </Typography>
-                        <Slider
-                          value={formSettings['storage.max_storage_gb']}
-                          onChange={(e, value) => handleSettingChange('storage.max_storage_gb', value)}
-                          valueLabelDisplay="auto"
-                          min={10}
-                          max={1000}
-                          step={10}
-                          sx={{
-                            '& .MuiSlider-thumb': {
-                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            },
-                            '& .MuiSlider-track': {
-                              background: theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
-                            }
-                          }}
-                        />
                       </Box>
                       
                       <SettingSwitch
@@ -1103,7 +882,7 @@ const Settings = () => {
                           <SecurityIcon />
                         </Avatar>
                         <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                          Configurações de Segurança
+                          Configurações de Sessão
                         </Typography>
                       </Box>
                       
@@ -1128,26 +907,6 @@ const Settings = () => {
                           }}
                         />
                       </Box>
-                      
-                      <FormControl fullWidth>
-                        <InputLabel>Política de Senha</InputLabel>
-                        <Select
-                          value={formSettings['security.password_policy']}
-                          onChange={(e) => handleSettingChange('security.password_policy', e.target.value)}
-                          label="Política de Senha"
-                          sx={{
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                            }
-                          }}
-                        >
-                          <MenuItem value="low">Baixa</MenuItem>
-                          <MenuItem value="medium">Média</MenuItem>
-                          <MenuItem value="high">Alta</MenuItem>
-                        </Select>
-                      </FormControl>
                     </CardContent>
                   </Card>
                 </Grow>
