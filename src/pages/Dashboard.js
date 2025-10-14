@@ -271,6 +271,7 @@ const Dashboard = () => {
   const [health, setHealth] = useState(null);
   const [traffic, setTraffic] = useState(null);
   const [playbackStatus, setPlaybackStatus] = useState(null);
+  const [diskUsage, setDiskUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -353,6 +354,7 @@ const Dashboard = () => {
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
         axios.get('/dashboard/playback-status'),
+        axios.get('/dashboard/disk-usage'),
       ];
 
       const includeTraffic = user?.role === 'admin';
@@ -361,7 +363,7 @@ const Dashboard = () => {
       }
 
       const results = await Promise.allSettled(requests);
-      const [statsRes, performanceRes, healthRes, playbackRes, trafficRes] = results;
+      const [statsRes, performanceRes, healthRes, playbackRes, diskUsageRes, trafficRes] = results;
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
       // Removido: atualização de estado de alertas
@@ -379,6 +381,14 @@ const Dashboard = () => {
         setPlaybackStatus(playbackRes.value.data);
       } else {
         console.error('[Dashboard] Failed to load playback status:', playbackRes.reason);
+      }
+
+      if (diskUsageRes.status === 'fulfilled') {
+        setDiskUsage(diskUsageRes.value.data);
+      } else {
+        console.error('[Dashboard] Failed to load disk usage:', diskUsageRes.reason);
+        // Não bloquear o dashboard se disk usage falhar
+        setDiskUsage(null);
       }
 
       if (includeTraffic) {
@@ -746,6 +756,54 @@ const Dashboard = () => {
             );
           })()}
         </Grid>
+
+        {/* KPI: Espaço de Upload */}
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <StatCard
+            icon={<UploadIcon />}
+            title="Espaço de Upload"
+            value={diskUsage ? `${diskUsage.uploads?.percentage || 0}%` : 'Carregando...'}
+            subtitle={diskUsage ? `${diskUsage.uploads?.size_gb || 0}GB / ${diskUsage.uploads?.max_gb || 100}GB` : 'Calculando...'}
+            color={
+              !diskUsage ? 'info' :
+              (diskUsage.uploads?.status === 'critical') ? 'error' :
+              (diskUsage.uploads?.status === 'warning') ? 'warning' :
+              (diskUsage.uploads?.status === 'caution') ? 'info' : 'success'
+            }
+            trend={
+              !diskUsage ? '⏳ Carregando' :
+              diskUsage.uploads?.status === 'critical' ? '🚨 Crítico' :
+              diskUsage.uploads?.status === 'warning' ? '⚠️ Alto' :
+              diskUsage.uploads?.status === 'caution' ? '📊 Moderado' : '✅ Normal'
+            }
+            delay={6}
+            navigateTo="/content"
+          />
+        </Grid>
+
+        {/* KPI: Espaço de Vídeos Compilados */}
+        <Grid item xs={12} sm={6} md={4} lg={2}>
+          <StatCard
+            icon={<CampaignIcon />}
+            title="Vídeos Compilados"
+            value={diskUsage ? `${diskUsage.compiled_videos?.percentage || 0}%` : 'Carregando...'}
+            subtitle={diskUsage ? `${diskUsage.compiled_videos?.size_gb || 0}GB / ${diskUsage.compiled_videos?.max_gb || 100}GB` : 'Calculando...'}
+            color={
+              !diskUsage ? 'info' :
+              (diskUsage.compiled_videos?.status === 'critical') ? 'error' :
+              (diskUsage.compiled_videos?.status === 'warning') ? 'warning' :
+              (diskUsage.compiled_videos?.status === 'caution') ? 'info' : 'success'
+            }
+            trend={
+              !diskUsage ? '⏳ Carregando' :
+              diskUsage.compiled_videos?.status === 'critical' ? '🚨 Crítico' :
+              diskUsage.compiled_videos?.status === 'warning' ? '⚠️ Alto' :
+              diskUsage.compiled_videos?.status === 'caution' ? '📊 Moderado' : '✅ Normal'
+            }
+            delay={7}
+            navigateTo="/campaigns"
+          />
+        </Grid>
       </Grid>
 
       <Grid container spacing={1.5}>
@@ -926,6 +984,71 @@ const Dashboard = () => {
                         <Typography variant="caption" color="text.secondary">
                           {ghost.reason}
                         </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Alert>
+            </Fade>
+          </Grid>
+        )}
+
+        {/* Alertas de Espaço em Disco */}
+        {diskUsage && diskUsage.alerts?.length > 0 && (
+          <Grid item xs={12}>
+            <Fade in={true} timeout={2000}>
+              <Alert 
+                severity={diskUsage.alerts.some(alert => alert.type === 'error') ? 'error' : 'warning'}
+                sx={{ 
+                  borderRadius: 3,
+                  '& .MuiAlert-message': { width: '100%' }
+                }}
+              >
+                <AlertTitle>
+                  {diskUsage.alerts.some(alert => alert.type === 'error') ? '🚨' : '⚠️'} 
+                  {' '}Alertas de Espaço em Disco ({diskUsage.alerts?.length || 0})
+                </AlertTitle>
+                <Typography variant="body2" mb={2}>
+                  Atenção necessária para evitar problemas de armazenamento:
+                </Typography>
+                <Grid container spacing={2}>
+                  {diskUsage.alerts?.map((alert, index) => (
+                    <Grid item xs={12} md={6} key={index}>
+                      <Box 
+                        sx={{ 
+                          p: 2, 
+                          bgcolor: alert.type === 'error' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(255, 152, 0, 0.1)', 
+                          borderRadius: 2,
+                          border: alert.type === 'error' ? '1px solid rgba(244, 67, 54, 0.3)' : '1px solid rgba(255, 152, 0, 0.3)'
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight="bold" mb={1}>
+                          {alert.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" mb={1}>
+                          {alert.message}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          💡 {alert.recommendation}
+                        </Typography>
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={Math.min(alert.percentage, 100)}
+                            sx={{ 
+                              height: 6, 
+                              borderRadius: 3,
+                              bgcolor: 'rgba(255, 255, 255, 0.3)',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 3,
+                                bgcolor: alert.type === 'error' ? '#f44336' : '#ff9800'
+                              }
+                            }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            {alert.percentage.toFixed(1)}% utilizado
+                          </Typography>
+                        </Box>
                       </Box>
                     </Grid>
                   ))}

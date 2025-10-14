@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 from sqlalchemy import func, text
+import os
+import shutil
 from models.user import User, db
 from models.content import Content
 from models.campaign import Campaign
@@ -625,4 +627,159 @@ def get_playback_status():
         
     except Exception as e:
         print(f"[DASHBOARD] Erro ao obter status de reprodução: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@dashboard_bp.route('/disk-usage', methods=['GET'])
+@jwt_required()
+def get_disk_usage():
+    """Retorna informações sobre uso de espaço em disco das pastas de upload e vídeos compilados"""
+    try:
+        # Definir caminhos das pastas
+        uploads_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+        compiled_videos_path = os.path.join(uploads_path, 'compiled')
+        
+        # Limite de 100GB por pasta (em bytes)
+        MAX_STORAGE_GB = 100
+        MAX_STORAGE_BYTES = MAX_STORAGE_GB * 1024 * 1024 * 1024
+        
+        def get_directory_size(path):
+            """Calcula o tamanho total de uma pasta em bytes"""
+            if not os.path.exists(path):
+                return 0
+            
+            total_size = 0
+            try:
+                for dirpath, dirnames, filenames in os.walk(path):
+                    for filename in filenames:
+                        filepath = os.path.join(dirpath, filename)
+                        try:
+                            if os.path.exists(filepath):
+                                total_size += os.path.getsize(filepath)
+                        except (OSError, IOError):
+                            continue
+            except (OSError, IOError):
+                pass
+            
+            return total_size
+        
+        def get_directory_file_count(path):
+            """Conta o número de arquivos em uma pasta"""
+            if not os.path.exists(path):
+                return 0
+            
+            file_count = 0
+            try:
+                for dirpath, dirnames, filenames in os.walk(path):
+                    file_count += len(filenames)
+            except (OSError, IOError):
+                pass
+            
+            return file_count
+        
+        def bytes_to_gb(bytes_value):
+            """Converte bytes para GB"""
+            return bytes_value / (1024 * 1024 * 1024)
+        
+        # Calcular uso das pastas
+        uploads_size_bytes = get_directory_size(uploads_path)
+        compiled_videos_size_bytes = get_directory_size(compiled_videos_path)
+        
+        uploads_file_count = get_directory_file_count(uploads_path)
+        compiled_videos_file_count = get_directory_file_count(compiled_videos_path)
+        
+        # Calcular percentuais
+        uploads_percentage = (uploads_size_bytes / MAX_STORAGE_BYTES) * 100
+        compiled_videos_percentage = (compiled_videos_size_bytes / MAX_STORAGE_BYTES) * 100
+        
+        # Determinar status de alerta
+        def get_storage_status(percentage):
+            if percentage >= 90:
+                return 'critical'
+            elif percentage >= 75:
+                return 'warning'
+            elif percentage >= 50:
+                return 'caution'
+            else:
+                return 'normal'
+        
+        uploads_status = get_storage_status(uploads_percentage)
+        compiled_videos_status = get_storage_status(compiled_videos_percentage)
+        
+        # Calcular espaço livre
+        uploads_free_bytes = MAX_STORAGE_BYTES - uploads_size_bytes
+        compiled_videos_free_bytes = MAX_STORAGE_BYTES - compiled_videos_size_bytes
+        
+        # Estatísticas adicionais
+        total_content_count = Content.query.filter(Content.is_active == True).count()
+        total_campaigns_count = Campaign.query.filter(Campaign.is_active == True).count()
+        
+        # Conteúdos por tipo para análise
+        content_by_type = db.session.query(
+            Content.content_type,
+            func.count(Content.id).label('count')
+        ).filter(Content.is_active == True).group_by(Content.content_type).all()
+        
+        result = {
+            'uploads': {
+                'path': uploads_path,
+                'size_bytes': uploads_size_bytes,
+                'size_gb': round(bytes_to_gb(uploads_size_bytes), 2),
+                'file_count': uploads_file_count,
+                'max_gb': MAX_STORAGE_GB,
+                'percentage': round(uploads_percentage, 1),
+                'free_gb': round(bytes_to_gb(uploads_free_bytes), 2),
+                'status': uploads_status,
+                'exists': os.path.exists(uploads_path)
+            },
+            'compiled_videos': {
+                'path': compiled_videos_path,
+                'size_bytes': compiled_videos_size_bytes,
+                'size_gb': round(bytes_to_gb(compiled_videos_size_bytes), 2),
+                'file_count': compiled_videos_file_count,
+                'max_gb': MAX_STORAGE_GB,
+                'percentage': round(compiled_videos_percentage, 1),
+                'free_gb': round(bytes_to_gb(compiled_videos_free_bytes), 2),
+                'status': compiled_videos_status,
+                'exists': os.path.exists(compiled_videos_path)
+            },
+            'summary': {
+                'total_used_gb': round(bytes_to_gb(uploads_size_bytes + compiled_videos_size_bytes), 2),
+                'total_max_gb': MAX_STORAGE_GB * 2,
+                'total_percentage': round(((uploads_size_bytes + compiled_videos_size_bytes) / (MAX_STORAGE_BYTES * 2)) * 100, 1),
+                'total_files': uploads_file_count + compiled_videos_file_count,
+                'content_count': total_content_count,
+                'campaigns_count': total_campaigns_count,
+                'content_by_type': {stat[0]: stat[1] for stat in content_by_type}
+            },
+            'alerts': [],
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        # Gerar alertas baseados no status
+        if uploads_status in ['warning', 'critical']:
+            severity = 'error' if uploads_status == 'critical' else 'warning'
+            result['alerts'].append({
+                'type': severity,
+                'category': 'uploads',
+                'title': f'Espaço de Upload {"Crítico" if uploads_status == "critical" else "Alto"}',
+                'message': f'Pasta de uploads está com {uploads_percentage:.1f}% de uso ({bytes_to_gb(uploads_size_bytes):.1f}GB/{MAX_STORAGE_GB}GB)',
+                'recommendation': 'Remova conteúdos obsoletos ou desnecessários para liberar espaço',
+                'percentage': uploads_percentage
+            })
+        
+        if compiled_videos_status in ['warning', 'critical']:
+            severity = 'error' if compiled_videos_status == 'critical' else 'warning'
+            result['alerts'].append({
+                'type': severity,
+                'category': 'compiled_videos',
+                'title': f'Espaço de Vídeos Compilados {"Crítico" if compiled_videos_status == "critical" else "Alto"}',
+                'message': f'Pasta de vídeos compilados está com {compiled_videos_percentage:.1f}% de uso ({bytes_to_gb(compiled_videos_size_bytes):.1f}GB/{MAX_STORAGE_GB}GB)',
+                'recommendation': 'Remova campanhas antigas ou recompile campanhas para otimizar espaço',
+                'percentage': compiled_videos_percentage
+            })
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"[DASHBOARD] Erro ao calcular uso de disco: {e}")
         return jsonify({'error': str(e)}), 500

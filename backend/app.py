@@ -779,13 +779,32 @@ def handle_player_command(data):
         
         # Processar diferentes tipos de comando
         if command == 'stop':
+            print(f"[PlayerCommand] Processando comando STOP para player {player_id}")
+            print(f"[PlayerCommand] Player info: name={player.name}, chromecast_id={player.chromecast_id}")
+            print(f"[PlayerCommand] Player status atual: is_playing={player.is_playing}")
+            
             # Para comando stop, usar o serviço de Chromecast se disponível
             if player.chromecast_id:
+                print(f"[PlayerCommand] Usando Chromecast service para enviar comando stop")
                 from services.chromecast_service import chromecast_service
+                
+                # Primeiro, tentar conectar ao dispositivo se não estiver conectado
+                if player.chromecast_id not in chromecast_service.active_connections:
+                    print(f"[PlayerCommand] Dispositivo não conectado, tentando conectar...")
+                    success_connect, actual_id = chromecast_service.connect_to_device(player.chromecast_id, player.chromecast_name)
+                    if not success_connect:
+                        print(f"[PlayerCommand] Falha ao conectar ao dispositivo {player.chromecast_id}")
+                        emit('error', {'message': 'Falha ao conectar ao Chromecast'})
+                        return
+                    else:
+                        print(f"[PlayerCommand] Conectado com sucesso ao dispositivo")
+                
                 success = chromecast_service.send_command(player.chromecast_id, 'stop')
+                print(f"[PlayerCommand] Resultado do comando stop: {success}")
                 
                 if success:
                     # Atualizar status do player
+                    print(f"[PlayerCommand] Atualizando status do player no banco de dados")
                     player.is_playing = False
                     player.current_content_id = None
                     player.current_content_title = None
@@ -817,14 +836,11 @@ def handle_player_command(data):
                     print(f"[PlayerCommand] Falha ao executar comando stop para player {player_id}")
                     emit('error', {'message': 'Falha ao parar reprodução no Chromecast'})
             else:
-                # Para players sem Chromecast, emitir comando via WebSocket para o player
-                socketio.emit('remote_command', {
-                    'command': command,
-                    'data': command_data,
-                    'timestamp': datetime.now(timezone.utc).isoformat()
-                }, room=f'player_{player_id}')
+                print(f"[PlayerCommand] Player sem Chromecast ID, processando comando stop local")
                 
-                # Atualizar status local
+                # Para players sem Chromecast, processar comando localmente
+                # Atualizar status do player
+                print(f"[PlayerCommand] Atualizando status do player no banco de dados")
                 player.is_playing = False
                 player.current_content_id = None
                 player.current_content_title = None
@@ -832,16 +848,44 @@ def handle_player_command(data):
                 player.current_campaign_id = None
                 player.current_campaign_name = None
                 player.playback_start_time = None
+                player.status = 'online'  # Manter online mas não reproduzindo
                 db.session.commit()
                 
-                print(f"[PlayerCommand] Comando stop enviado via WebSocket para player {player_id}")
+                print(f"[PlayerCommand] Status do player atualizado - is_playing=False")
                 
+                # Emitir comando via WebSocket para o player (se conectado)
+                socketio.emit('remote_command', {
+                    'command': command,
+                    'data': command_data,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }, room=f'player_{player_id}')
+                
+                print(f"[PlayerCommand] Comando stop processado com sucesso para player {player_id}")
+                
+                # Emitir confirmação para o cliente
                 emit('player_command_response', {
                     'player_id': player_id,
                     'command': command,
                     'success': True,
-                    'message': 'Comando enviado para o player'
+                    'message': 'Reprodução parada com sucesso'
                 })
+                
+                # Notificar admins sobre mudança de status
+                socketio.emit('playback_status_update', {
+                    'player_id': player_id,
+                    'event_type': 'playback_stop',
+                    'status': {'is_playing': False},
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }, room='admin')
+                
+                # Emitir atualização de status do player para o frontend
+                socketio.emit('player_status_update', {
+                    'player_id': player_id,
+                    'status': 'online',
+                    'is_playing': False,
+                    'current_content': None,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }, room='admin')
         
         elif command in ['start', 'pause', 'restart']:
             # Para outros comandos, usar Chromecast se disponível

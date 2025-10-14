@@ -47,7 +47,7 @@ const PlayerForm = () => {
     chromecast_id: '',
     chromecast_name: '',
     platform: 'web',
-    device_type: 'modern',
+    device_type: 'tizen', // Padrão para web browser
     // Valores padrão para exibição e armazenamento
     resolution: '1920x1080',
     orientation: 'landscape',
@@ -73,6 +73,15 @@ const PlayerForm = () => {
     };
     init();
   }, [id]);
+
+  // Automação do tipo de dispositivo baseado na plataforma
+  useEffect(() => {
+    if (formData.platform === 'chromecast' && formData.device_type !== 'modern') {
+      handleChange('device_type', 'modern');
+    } else if (formData.platform === 'web' && formData.device_type !== 'tizen') {
+      handleChange('device_type', 'tizen');
+    }
+  }, [formData.platform]);
 
   const loadLocations = async () => {
     try {
@@ -270,7 +279,17 @@ const PlayerForm = () => {
                           select
                           label="Plataforma"
                           value={formData.platform}
-                          onChange={(e) => handleChange('platform', e.target.value)}
+                          onChange={(e) => {
+                            const newPlatform = e.target.value;
+                            handleChange('platform', newPlatform);
+                            
+                            // Automação do tipo de dispositivo baseado na plataforma
+                            if (newPlatform === 'chromecast') {
+                              handleChange('device_type', 'modern');
+                            } else if (newPlatform === 'web') {
+                              handleChange('device_type', 'tizen');
+                            }
+                          }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
@@ -282,8 +301,6 @@ const PlayerForm = () => {
                           }}
                         >
                           <MenuItem value="web">Web Browser</MenuItem>
-                          <MenuItem value="android">Android</MenuItem>
-                          <MenuItem value="windows">Windows</MenuItem>
                           <MenuItem value="chromecast">Chromecast</MenuItem>
                         </TextField>
                       </Grid>
@@ -294,10 +311,12 @@ const PlayerForm = () => {
                           label="Tipo de Dispositivo"
                           value={formData.device_type === 'legacy' ? 'tizen' : formData.device_type}
                           onChange={(e) => handleChange('device_type', e.target.value === 'legacy' ? 'tizen' : e.target.value)}
-                          helperText="Apenas Moderno e Tizen. Dispositivos legados são tratados como Tizen automaticamente."
+                          helperText={`Selecionado automaticamente: ${formData.platform === 'chromecast' ? 'Chromecast → Moderno (React/HTML5)' : 'Web Browser → Tizen (Samsung/Legacy)'}`}
+                          disabled={true}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
+                              backgroundColor: (theme) => theme.palette.action.disabledBackground,
                               '&:hover': {
                                 transform: 'translateY(-2px)',
                                 transition: 'transform 0.2s ease-in-out',
