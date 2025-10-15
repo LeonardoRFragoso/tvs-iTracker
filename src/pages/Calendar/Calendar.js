@@ -426,7 +426,15 @@ const Calendar = () => {
   };
 
   const handleViewChange = (newView) => {
+    if (!newView) return;
     setView(newView);
+
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      if (calendarApi) {
+        calendarApi.changeView(newView);
+      }
+    }
     
     // Após mudar a view, rolar para o horário atual se for uma view de tempo
     setTimeout(() => {

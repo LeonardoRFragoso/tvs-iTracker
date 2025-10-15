@@ -5,16 +5,18 @@ from PIL import Image
 import os
 import uuid
 import subprocess
+import json
 from datetime import datetime
 from models.content import Content, db
 from models.user import User
+from sqlalchemy import or_
 
 content_bp = Blueprint('content', __name__)
 
 ALLOWED_EXTENSIONS = {
     'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp',
-    'mp4', 'avi', 'mov', 'wmv', 'flv',
-    'mp3', 'wav', 'ogg', 'm4a',
+    'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv',
+    'mp3', 'wav', 'ogg', 'm4a', 'aac',
     'html', 'txt'
 }
 
@@ -25,15 +27,40 @@ def get_content_type(filename):
     ext = filename.rsplit('.', 1)[1].lower()
     if ext in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']:
         return 'image'
-    elif ext in ['mp4', 'avi', 'mov', 'wmv', 'flv']:
+    elif ext in ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv']:
         return 'video'
-    elif ext in ['mp3', 'wav', 'ogg', 'm4a']:
+    elif ext in ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'opus']:
         return 'audio'
     elif ext in ['html']:
         return 'html'
     elif ext in ['txt']:
         return 'text'
     return 'unknown'
+
+def normalize_tags_to_text(value):
+    try:
+        if value is None or value == '':
+            return '[]'
+        if isinstance(value, list):
+            return json.dumps([str(v).strip() for v in value if str(v).strip()])
+        if isinstance(value, str):
+            s = value.strip()
+            if not s:
+                return '[]'
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    return json.dumps([str(v).strip() for v in parsed if str(v).strip()])
+                if isinstance(parsed, str):
+                    return json.dumps([parsed.strip()]) if parsed.strip() else '[]'
+                return json.dumps([str(parsed)])
+            except Exception:
+                if ',' in s:
+                    return json.dumps([t.strip() for t in s.split(',') if t.strip()])
+                return json.dumps([s])
+        return json.dumps([str(value)])
+    except Exception:
+        return '[]'
 
 def generate_video_thumbnail(video_path, thumbnail_path):
     """Gera thumbnail de vídeo usando FFmpeg"""
@@ -76,7 +103,12 @@ def generate_image_thumbnail(image_path, thumbnail_path, size=(300, 200)):
                 img = img.convert('RGB')
             
             # Redimensionar mantendo proporção
-            img.thumbnail(size, Image.Resampling.LANCZOS)
+            try:
+                resample = Image.Resampling.LANCZOS  # Pillow >= 9.1
+            except Exception:
+                # Compatibilidade com versões antigas
+                resample = getattr(Image, 'LANCZOS', getattr(Image, 'ANTIALIAS', Image.BICUBIC))
+            img.thumbnail(size, resample)
             
             # Salvar thumbnail
             img.save(thumbnail_path, 'JPEG', quality=85)
@@ -84,6 +116,39 @@ def generate_image_thumbnail(image_path, thumbnail_path, size=(300, 200)):
             
     except Exception as e:
         print(f"Erro ao gerar thumbnail de imagem: {str(e)}")
+        return False
+
+def generate_audio_thumbnail(audio_path, thumbnail_path, size='640x360'):
+    try:
+        cmd = [
+            'ffmpeg',
+            '-y',
+            '-i', audio_path,
+            '-filter_complex', f"showwavespic=s={size}:colors=DodgerBlue",
+            '-frames:v', '1',
+            thumbnail_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0 and os.path.exists(thumbnail_path):
+            return True
+        cmd2 = [
+            'ffmpeg',
+            '-y',
+            '-i', audio_path,
+            '-lavfi', f"showspectrumpic=s={size}:legend=disabled",
+            '-frames:v', '1',
+            thumbnail_path
+        ]
+        result2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=30)
+        return result2.returncode == 0 and os.path.exists(thumbnail_path)
+    except subprocess.TimeoutExpired:
+        print("FFmpeg timeout - áudio muito longo ou corrompido")
+        return False
+    except FileNotFoundError:
+        print("FFmpeg não encontrado. Instale FFmpeg para gerar thumbnails de áudio.")
+        return False
+    except Exception as e:
+        print(f"Erro ao gerar thumbnail de áudio: {str(e)}")
         return False
 
 def get_video_duration_seconds(video_path):
@@ -165,6 +230,39 @@ def get_content(content_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@content_bp.route('/tags', methods=['GET'])
+@jwt_required()
+def get_tags():
+    try:
+        rows = db.session.query(Content.tags).filter(Content.tags.isnot(None)).all()
+        tagset = set()
+        for (s,) in rows:
+            if not s:
+                continue
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, list):
+                    for v in parsed:
+                        vs = str(v).strip()
+                        if vs:
+                            tagset.add(vs)
+                elif isinstance(parsed, str):
+                    vs = parsed.strip()
+                    if vs:
+                        tagset.add(vs)
+                else:
+                    tagset.add(str(parsed))
+            except Exception:
+                parts = [p.strip() for p in s.split(',') if p.strip()]
+                for p in parts:
+                    tagset.add(p)
+        tags = sorted(tagset, key=lambda x: x.lower())
+        return jsonify({'tags': tags}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error getting tags: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @content_bp.route('/<content_id>', methods=['PUT'])
 @jwt_required()
 def update_content(content_id):
@@ -196,7 +294,7 @@ def update_content(content_id):
             if 'category' in form:
                 content.category = form.get('category', content.category)
             if 'tags' in form:
-                content.tags = form.get('tags', content.tags)
+                content.tags = normalize_tags_to_text(form.get('tags', '[]'))
             if 'duration' in form and form.get('duration') not in (None, ''):
                 try:
                     content.duration = int(float(form.get('duration')))
@@ -228,6 +326,8 @@ def update_content(content_id):
                     generate_video_thumbnail(file_path, thumbnail_path)
                 elif content.content_type == 'image':
                     generate_image_thumbnail(file_path, thumbnail_path)
+                elif content.content_type == 'audio':
+                    generate_audio_thumbnail(file_path, thumbnail_path)
                 # Para outros tipos, thumbnail é opcional
                 if os.path.exists(thumbnail_path):
                     content.thumbnail_path = os.path.basename(thumbnail_path)
@@ -258,7 +358,7 @@ def update_content(content_id):
             if 'duration' in data:
                 content.duration = data['duration']
             if 'tags' in data:
-                content.tags = data['tags']
+                content.tags = normalize_tags_to_text(data['tags'])
             if 'category' in data:
                 content.category = data['category']
             if 'is_active' in data:
@@ -401,6 +501,9 @@ def list_content():
         category = request.args.get('category')
         content_type = request.args.get('type')
         search = request.args.get('search')
+        tags_param = request.args.get('tags')
+        tags_list_param = request.args.getlist('tags')
+        tag_single = request.args.get('tag')
         
         query = Content.query
         
@@ -412,6 +515,20 @@ def list_content():
         
         if search:
             query = query.filter(Content.title.contains(search))
+
+        # Tags filter: accepts CSV (?tags=a,b) or repeated (?tags=a&tags=b) or single (?tag=a)
+        tags = []
+        if tags_param:
+            tags.extend([t.strip() for t in tags_param.split(',') if t.strip()])
+        if tags_list_param:
+            for t in tags_list_param:
+                if t and t.strip():
+                    tags.append(t.strip())
+        if tag_single and tag_single.strip():
+            tags.append(tag_single.strip())
+        if tags:
+            patterns = [Content.tags.like(f'%"{t}"%') for t in set(tags)]
+            query = query.filter(or_(*patterns))
         
         query = query.filter(Content.is_active == True)
         query = query.order_by(Content.created_at.desc())
@@ -484,7 +601,10 @@ def create_content():
                     generate_video_thumbnail(file_path, thumbnail_path)
                 elif content_type == 'image':
                     generate_image_thumbnail(file_path, thumbnail_path)
-                
+                elif content_type == 'audio':
+                    generate_audio_thumbnail(file_path, thumbnail_path)
+                thumb_file = os.path.basename(thumbnail_path) if os.path.exists(thumbnail_path) else None
+
                 content = Content(
                     title=request.form.get('title', filename),
                     description=request.form.get('description', ''),
@@ -493,11 +613,13 @@ def create_content():
                     file_size=file_size,
                     mime_type=file.mimetype,
                     duration=duration,
-                    tags=request.form.get('tags', ''),
-                    category=request.form.get('category', 'default'),
+                    tags=normalize_tags_to_text(request.form.get('tags', '[]')),
+                    category=request.form.get('category') or None,
                     user_id=user_id,
-                    thumbnail_path=os.path.basename(thumbnail_path)
+                    thumbnail_path=thumb_file
                 )
+            else:
+                return jsonify({'error': 'Tipo de arquivo não suportado'}), 400
                 
         else:
             # Conteúdo texto/HTML
@@ -511,8 +633,8 @@ def create_content():
                 description=data.get('description', ''),
                 content_type=data.get('content_type', 'text'),
                 duration=data.get('duration', 10),
-                tags=data.get('tags', ''),
-                category=data.get('category', 'default'),
+                tags=normalize_tags_to_text(data.get('tags', [])),
+                category=data.get('category') or None,
                 user_id=user_id
             )
             
@@ -541,6 +663,76 @@ def create_content():
         print(f"Error type: {type(e).__name__}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@content_bp.route('/rebuild-thumbnails', methods=['POST'])
+@jwt_required()
+def rebuild_thumbnails():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user or user.role not in ['admin', 'manager']:
+            return jsonify({'error': 'Sem permissão'}), 403
+        data = request.get_json(silent=True) or {}
+        force = bool(data.get('force', False))
+        types = data.get('types')
+        if isinstance(types, str):
+            types = [t.strip() for t in types.split(',') if t.strip()]
+        limit = data.get('limit')
+        try:
+            limit = int(limit) if limit is not None else None
+        except Exception:
+            limit = None
+        thumbnails_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'thumbnails')
+        os.makedirs(thumbnails_dir, exist_ok=True)
+        query = Content.query
+        if types:
+            query = query.filter(Content.content_type.in_(types))
+        items = query.all()
+        processed = 0
+        generated = 0
+        skipped = 0
+        errors = []
+        updated_ids = []
+        for c in items:
+            if limit is not None and generated >= limit:
+                break
+            need = force or not c.thumbnail_path or not os.path.exists(os.path.join(thumbnails_dir, c.thumbnail_path or ''))
+            if not need:
+                skipped += 1
+                continue
+            if not c.file_path:
+                skipped += 1
+                continue
+            src = os.path.join(current_app.config['UPLOAD_FOLDER'], c.file_path)
+            if not os.path.exists(src):
+                skipped += 1
+                continue
+            dest_name = f"{uuid.uuid4()}.jpg"
+            dest = os.path.join(thumbnails_dir, dest_name)
+            ok = False
+            if c.content_type == 'video':
+                ok = generate_video_thumbnail(src, dest)
+            elif c.content_type == 'image':
+                ok = generate_image_thumbnail(src, dest)
+            elif c.content_type == 'audio':
+                ok = generate_audio_thumbnail(src, dest)
+            if ok and os.path.exists(dest):
+                c.thumbnail_path = dest_name
+                generated += 1
+                updated_ids.append(c.id)
+            else:
+                try:
+                    if os.path.exists(dest):
+                        os.remove(dest)
+                except Exception:
+                    pass
+                errors.append(c.id)
+            processed += 1
+        db.session.commit()
+        return jsonify({'processed': processed, 'generated': generated, 'skipped': skipped, 'errors': errors, 'updated_ids': updated_ids}), 200
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 @content_bp.route('/recalc-durations', methods=['POST'])

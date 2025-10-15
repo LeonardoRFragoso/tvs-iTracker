@@ -28,6 +28,7 @@ import {
   Skeleton,
   Badge,
   LinearProgress,
+  Autocomplete,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -116,7 +117,8 @@ const ContentList = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterTags, setFilterTags] = useState([]);
+  const [allTags, setAllTags] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, content: null });
@@ -126,7 +128,19 @@ const ContentList = () => {
 
   useEffect(() => {
     loadContents();
-  }, [page, searchTerm, filterType, filterCategory]);
+  }, [page, searchTerm, filterType, filterTags]);
+
+  useEffect(() => {
+    const loadTags = async () => {
+      try {
+        const res = await axios.get('/content/tags');
+        setAllTags(res.data.tags || []);
+      } catch (err) {
+        // silencioso
+      }
+    };
+    loadTags();
+  }, []);
 
   const loadContents = async () => {
     try {
@@ -136,7 +150,7 @@ const ContentList = () => {
         per_page: 12,
         search: searchTerm || undefined,
         type: filterType !== 'all' ? filterType : undefined,
-        category: filterCategory !== 'all' ? filterCategory : undefined,
+        tags: (filterTags && filterTags.length > 0) ? filterTags.join(',') : undefined,
       };
 
       const response = await axios.get(`/content`, { params });
@@ -350,46 +364,26 @@ const ContentList = () => {
                 <MenuItem value="audio">Áudio</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                select
-                label="Categoria"
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                  },
-                }}
-              >
-                <MenuItem value="all">Todas as categorias</MenuItem>
-                <MenuItem value="promocional">Promocional</MenuItem>
-                <MenuItem value="institucional">Institucional</MenuItem>
-                <MenuItem value="entretenimento">Entretenimento</MenuItem>
-                <MenuItem value="informativo">Informativo</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={loadContents}
-                sx={{
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 'bold',
-                  height: 56,
-                  '&:hover': {
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                Filtrar
-              </Button>
+            <Grid item xs={12} md={5}>
+              <Autocomplete
+                multiple
+                options={allTags}
+                value={filterTags}
+                onChange={(e, value) => setFilterTags(value)}
+                freeSolo
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Tags"
+                    placeholder="Filtrar por tags"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                      },
+                    }}
+                  />
+                )}
+              />
             </Grid>
           </Grid>
         </Paper>
@@ -565,17 +559,28 @@ const ContentList = () => {
                     </Typography>
                     
                     <Box display="flex" gap={1} mb={2} flexWrap="wrap">
-                      {content.category && (
-                        <Chip
-                          size="small"
-                          label={content.category}
-                          variant="outlined"
-                          sx={{
-                            borderRadius: 2,
-                            fontSize: '0.75rem',
-                          }}
-                        />
-                      )}
+                      {(() => {
+                        const tagsArr = Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : []);
+                        if (tagsArr.length === 0 && content.category) {
+                          return (
+                            <Chip
+                              size="small"
+                              label={content.category}
+                              variant="outlined"
+                              sx={{ borderRadius: 2, fontSize: '0.75rem' }}
+                            />
+                          );
+                        }
+                        return tagsArr.map((tag, idx) => (
+                          <Chip
+                            key={`${content.id}-tag-${idx}`}
+                            size="small"
+                            label={tag}
+                            variant="outlined"
+                            sx={{ borderRadius: 2, fontSize: '0.75rem' }}
+                          />
+                        ));
+                      })()}
                     </Box>
                     
                     <Box 

@@ -41,6 +41,9 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 24)))
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
+if not os.path.isabs(app.config['UPLOAD_FOLDER']):
+    # Tornar caminho de uploads absoluto relativo ao diretório do backend
+    app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), app.config['UPLOAD_FOLDER'])
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 52428800))  # 50MB
 
 # Criar diretório de uploads se não existir

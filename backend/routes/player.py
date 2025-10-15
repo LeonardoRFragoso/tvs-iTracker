@@ -237,23 +237,41 @@ def create_player():
 @jwt_required()
 def get_player(player_id):
     try:
+        print(f"[DEBUG] get_player chamado para ID: {player_id}")
+        
         user_id = get_jwt_identity()
+        print(f"[DEBUG] JWT Identity: {user_id}")
+        
         current_user = User.query.get(user_id)
+        print(f"[DEBUG] User encontrado: {current_user is not None}")
         
         player = Player.query.get(player_id)
+        print(f"[DEBUG] Player encontrado: {player is not None}")
         
         if not player:
+            print(f"[DEBUG] Player {player_id} não encontrado")
             return jsonify({'error': 'Player não encontrado'}), 404
+        
+        print(f"[DEBUG] Player name: {player.name}")
         
         # HR can only access players from their company
         if current_user and current_user.role == 'rh':
+            print(f"[DEBUG] Verificando acesso RH para empresa: {current_user.company}")
             location = Location.query.get(player.location_id)
             if not location or location.company != current_user.company:
+                print(f"[DEBUG] Acesso negado - Player empresa: {location.company if location else 'N/A'}, User empresa: {current_user.company}")
                 return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
         
-        return jsonify(player.to_dict()), 200
+        print(f"[DEBUG] Chamando to_dict() para player {player.name}")
+        result = player.to_dict()
+        print(f"[DEBUG] to_dict() executado com sucesso")
+        
+        return jsonify(result), 200
         
     except Exception as e:
+        print(f"[ERROR] Erro em get_player: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @player_bp.route('/<player_id>', methods=['PUT'])

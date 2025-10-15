@@ -7,10 +7,6 @@ import {
   TextField,
   Button,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   LinearProgress,
   Chip,
@@ -45,7 +41,6 @@ const ContentForm = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category: '',
     tags: [],
     duration: '',
     filename: '',
@@ -85,7 +80,6 @@ const ContentForm = () => {
       setFormData({
         title: content.title || '',
         description: content.description || '',
-        category: content.category || '',
         tags: Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : []),
         duration: content.duration || '',
         filename: content.filename || '',
@@ -698,29 +692,7 @@ const ContentForm = () => {
                         />
                       </Grid>
                       
-                      <Grid item xs={12} md={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Categoria</InputLabel>
-                          <Select
-                            name="category"
-                            value={formData.category}
-                            onChange={handleInputChange}
-                            label="Categoria"
-                            sx={{
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            }}
-                          >
-                            <MenuItem value="institucional">Institucional</MenuItem>
-                            <MenuItem value="promocional">Promocional</MenuItem>
-                            <MenuItem value="informativo">Informativo</MenuItem>
-                            <MenuItem value="entretenimento">Entretenimento</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
+                      
                       
                       {showDurationInput && (
                         <Grid item xs={12} md={6}>

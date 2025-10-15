@@ -8,7 +8,6 @@ import {
   Card,
   CardContent,
   LinearProgress,
-  Button,
 } from '@mui/material';
 import { useSocket } from '../../contexts/SocketContext';
 import axios from '../../config/axios';
@@ -85,6 +84,8 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
   const pendingUnmuteRef = useRef(false);
   // Ref para o elemento de áudio de fundo
   const backgroundAudioRef = useRef(null);
+  // Timer dedicado para duração de imagens
+  const imageTimeoutRef = useRef(null);
 
   // Constantes (ajustadas para modo legado)
   const MAX_ATTEMPTS = 5;
@@ -146,90 +147,6 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     };
   }, [playerId, socket]);
 
-  // Escutar comandos remotos via Socket.IO
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleRemoteCommand = (data) => {
-      console.log('[WebPlayer] Comando remoto recebido:', data);
-      
-      const { command, data: commandData } = data;
-      
-      switch (command) {
-        case 'stop':
-          console.log('[WebPlayer] Executando comando stop...');
-          // Parar reprodução atual
-          setIsPlaying(false);
-          setCurrentContent(null);
-          setCurrentIndex(0);
-          
-          // Parar mídia se estiver reproduzindo
-          if (mediaRef.current) {
-            mediaRef.current.pause();
-            mediaRef.current.currentTime = 0;
-          }
-          
-          // Parar áudio de fundo
-          if (backgroundAudioRef.current) {
-            backgroundAudioRef.current.pause();
-            backgroundAudioRef.current.currentTime = 0;
-          }
-          
-          // Limpar playlist
-          setPlaylist([]);
-          
-          // Enviar evento de telemetria
-          sendPlaybackEvent('playback_end', {
-            content_id: null,
-            content_title: 'Reprodução parada remotamente',
-            content_type: 'remote_stop',
-            duration_actual: 0
-          });
-          
-          console.log('[WebPlayer] Comando stop executado');
-          break;
-          
-        case 'pause':
-          console.log('[WebPlayer] Executando comando pause...');
-          setIsPlaying(false);
-          if (mediaRef.current) {
-            mediaRef.current.pause();
-          }
-          if (backgroundAudioRef.current) {
-            backgroundAudioRef.current.pause();
-          }
-          break;
-          
-        case 'start':
-        case 'play':
-          console.log('[WebPlayer] Executando comando play/start...');
-          setIsPlaying(true);
-          if (mediaRef.current) {
-            mediaRef.current.play().catch(console.error);
-          }
-          if (backgroundAudioRef.current && backgroundAudioLoaded) {
-            backgroundAudioRef.current.play().catch(console.error);
-          }
-          break;
-          
-        case 'restart':
-          console.log('[WebPlayer] Executando comando restart...');
-          // Recarregar dados do player
-          loadPlayerData();
-          connectToPlayer();
-          break;
-          
-        default:
-          console.log('[WebPlayer] Comando não reconhecido:', command);
-      }
-    };
-
-    socket.on('remote_command', handleRemoteCommand);
-
-    return () => {
-      socket.off('remote_command', handleRemoteCommand);
-    };
-  }, [socket, sendPlaybackEvent, loadPlayerData, connectToPlayer, backgroundAudioLoaded]);
 
   // Overlay de ativação: exibir quando em fullscreen/kiosk
   const [showActivation, setShowActivation] = useState(false);
@@ -351,40 +268,35 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     };
   }, [backgroundAudioUrl]);
 
-  // Controlar reprodução do áudio de fundo baseado na existência de playlist
+  // Controlar reprodução do áudio de fundo: tocar apenas para imagens
   useEffect(() => {
     if (!backgroundAudioRef.current || !backgroundAudioLoaded) return;
 
-    // O áudio deve tocar se houver playlist ativa, independente do isPlaying momentâneo
-    if (playlist && playlist.length > 0) {
-      // Verificar se já está tocando para evitar restart desnecessário
+    const shouldPlay = (playlist && playlist.length > 0) && (currentContent?.type === 'image');
+
+    if (shouldPlay) {
       if (backgroundAudioRef.current.paused) {
-        console.log('[WebPlayer] Iniciando áudio de fundo (playlist ativa)');
+        console.log('[WebPlayer] Iniciando áudio de fundo (imagem ativa)');
         backgroundAudioRef.current.play().catch(err => {
           console.warn('[WebPlayer] Falha ao iniciar áudio de fundo (pode precisar de gesto do usuário):', err);
-          // Tentar novamente após primeiro gesto do usuário
           const tryOnGesture = () => {
             if (backgroundAudioRef.current && backgroundAudioRef.current.paused) {
-              console.log('[WebPlayer] Tentando iniciar áudio após gesto do usuário');
+              console.log('[WebPlayer] Tentando iniciar áudio após gesto do usuário (imagem)');
               backgroundAudioRef.current.play().catch(e => console.warn('[WebPlayer] Ainda bloqueado:', e));
             }
           };
           document.addEventListener('click', tryOnGesture, { once: true });
           document.addEventListener('keydown', tryOnGesture, { once: true });
         });
-      } else {
-        console.log('[WebPlayer] Áudio de fundo já está tocando, mantendo reprodução');
       }
     } else {
-      // Só pausar se NÃO houver playlist
-      console.log('[WebPlayer] Sem playlist, pausando áudio de fundo');
-      try {
-        backgroundAudioRef.current.pause();
-      } catch (e) {
-        console.warn('[WebPlayer] Erro ao pausar áudio de fundo:', e);
+      // Pausar durante vídeos ou sem playlist
+      if (!backgroundAudioRef.current.paused) {
+        console.log('[WebPlayer] Pausando áudio de fundo (vídeo ativo ou sem playlist)');
+        try { backgroundAudioRef.current.pause(); } catch (e) { console.warn('[WebPlayer] Erro ao pausar áudio de fundo:', e); }
       }
     }
-  }, [backgroundAudioLoaded, playlist]);
+  }, [backgroundAudioLoaded, playlist, currentContent]);
 
   // Sincronizar mute do áudio de fundo com o estado muted
   useEffect(() => {
@@ -394,15 +306,14 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     console.log('[WebPlayer] Áudio de fundo muted:', muted);
   }, [muted]);
 
-  // Tentar iniciar áudio quando primeiro conteúdo carregar
+  // Tentar iniciar áudio quando primeiro conteúdo for uma imagem
   useEffect(() => {
-    if (!currentContent || !backgroundAudioRef.current || !backgroundAudioLoaded) return;
-    
-    // Se o áudio está pausado e temos conteúdo, tentar iniciar
+    if (!currentContent || currentContent.type !== 'image') return;
+    if (!backgroundAudioRef.current || !backgroundAudioLoaded) return;
     if (backgroundAudioRef.current.paused) {
-      console.log('[WebPlayer] Primeiro conteúdo carregado, tentando iniciar áudio de fundo');
+      console.log('[WebPlayer] Primeiro conteúdo é imagem, tentando iniciar áudio de fundo');
       backgroundAudioRef.current.play().catch(err => {
-        console.warn('[WebPlayer] Autoplay bloqueado, aguardando gesto do usuário:', err);
+        console.warn('[WebPlayer] Autoplay bloqueado (imagem), aguardando gesto do usuário:', err);
       });
     }
   }, [currentContent, backgroundAudioLoaded]);
@@ -433,15 +344,21 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
         }
       }
       // 3) Ativar áudio de fundo após gesto do usuário
-      if (backgroundAudioRef.current && backgroundAudioRef.current.paused) {
-        console.log('[WebPlayer] Ativando áudio de fundo após gesto do usuário');
-        try {
-          backgroundAudioRef.current.muted = false;
-          await backgroundAudioRef.current.play();
-          console.log('[WebPlayer] ✅ Áudio de fundo ativado com sucesso!');
-        } catch (e) {
-          console.warn('[WebPlayer] Erro ao ativar áudio de fundo:', e);
+      // Só iniciar o áudio de fundo se o conteúdo atual for imagem
+      if (currentContent?.type === 'image') {
+        if (backgroundAudioRef.current && backgroundAudioRef.current.paused) {
+          console.log('[WebPlayer] Ativando áudio de fundo após gesto do usuário (imagem)');
+          try {
+            backgroundAudioRef.current.muted = false;
+            await backgroundAudioRef.current.play();
+            console.log('[WebPlayer] ✅ Áudio de fundo ativado com sucesso!');
+          } catch (e) {
+            console.warn('[WebPlayer] Erro ao ativar áudio de fundo:', e);
+          }
         }
+      } else if (backgroundAudioRef.current && !backgroundAudioRef.current.paused) {
+        // Garantir pausa durante vídeo
+        try { backgroundAudioRef.current.pause(); } catch (_) {}
       }
     } finally {
       activationDismissedRef.current = true;
@@ -503,6 +420,10 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     if (playbackHeartbeatRef.current) {
       clearInterval(playbackHeartbeatRef.current);
       playbackHeartbeatRef.current = null;
+    }
+    if (imageTimeoutRef.current) {
+      clearTimeout(imageTimeoutRef.current);
+      imageTimeoutRef.current = null;
     }
     
     // Reset flags
@@ -689,351 +610,249 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     }
   }, []);
 
-  // Effect para configurar event listeners de mídia
-  useEffect(() => {
-    if (!currentContent) {
-      console.log('[WebPlayer] useEffect: Sem currentContent');
+  // Funções simplificadas de reprodução
+  const shouldLoopVideo = (
+    currentContent?.type === 'video' && (
+      playbackConfig.playback_mode === 'loop_infinite' ||
+      (playlist.length === 1 && (
+        playbackConfig.loop_behavior === 'infinite' ||
+        playbackConfig.loop_behavior === 'until_next'
+      ))
+    )
+  );
+
+  const beginPlaybackStartTelemetry = () => {
+    if (!currentContent) return;
+    sendPlaybackEvent('playback_start', {
+      content_id: currentContent.id,
+      content_title: currentContent.title,
+      content_type: currentContent.type,
+      campaign_id: currentContent.campaign_id,
+      campaign_name: currentContent.campaign_name,
+      playlist_index: currentIndex,
+      playlist_total: playlist.length,
+      duration_expected: currentContent.duration || 0
+    });
+    startPlaybackHeartbeat();
+  };
+
+  const endPlaybackTelemetry = () => {
+    if (!currentContent) return;
+    sendPlaybackEvent('playback_end', {
+      content_id: currentContent.id,
+      content_title: currentContent.title,
+      content_type: currentContent.type,
+      duration_actual: Date.now() - (playbackStartTimeRef.current || Date.now())
+    });
+    stopPlaybackHeartbeat();
+  };
+
+  const advanceToNext = () => {
+    if (!playlist || playlist.length === 0) return;
+    const { playback_mode, loop_behavior, shuffle_enabled } = playbackConfig;
+    let nextIndex = currentIndex;
+    if (playback_mode === 'single' && loop_behavior !== 'infinite') {
       return;
     }
-
-    console.log('[WebPlayer] useEffect: Configurando listeners para:', currentContent.title, 'tipo:', currentContent.type);
-
-    // Para vídeos, usar mediaRef
-    const mediaElement = currentContent.type === 'video' ? mediaRef.current : null;
-    
-    if (currentContent.type === 'video' && !mediaElement) {
-      console.log('[WebPlayer] useEffect: mediaRef.current não disponível ainda, reagendando...');
-      // Se o elemento de mídia não estiver pronto, reagendar
-      const timer = setTimeout(() => {
-        console.log('[WebPlayer] useEffect: Tentando novamente após timeout');
-        // Forçar re-render do useEffect
-        setCurrentContent(prev => ({ ...prev }));
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-    
-    const handleLoadStart = () => {
-      console.log('[WebPlayer] Mídia começou a carregar');
-    };
-
-    const handleCanPlay = () => {
-      console.log('[WebPlayer] Mídia pronta para reproduzir');
-      console.log('[WebPlayer] Socket disponível:', !!socket);
-      console.log('[WebPlayer] Player ID:', playerId);
-      setIsPlaying(true);
-      playbackStartTimeRef.current = Date.now();
-
-      // Se havia um desmute pendente (gesto chegou antes do <video>), aplique agora
-      if (mediaRef.current && (pendingUnmuteRef.current || !muted)) {
-        try { mediaRef.current.muted = false; } catch (_) {}
-        try {
-          const vol = Number.isFinite(playerPrefs?.volume) ? Math.min(Math.max(playerPrefs.volume, 0), 100) : 50;
-          mediaRef.current.volume = vol / 100;
-        } catch (_) {}
-        pendingUnmuteRef.current = false;
-      }
-
-      // Diagnóstico: detectar presença de áudio
-      try {
-        const el = mediaRef.current;
-        const hasAudioTracks = !!(el && el.audioTracks && typeof el.audioTracks.length === 'number' && el.audioTracks.length > 0);
-        const hasDecoded = !!(el && (el.webkitAudioDecodedByteCount || el.mozHasAudio));
-        console.log('[WebPlayer] Áudio detectado? tracks=', hasAudioTracks, ' decodedBytes/mozHasAudio=', hasDecoded);
-        console.log('[WebPlayer] muted=', el?.muted, ' volume=', el?.volume);
-      } catch (e) {
-        // ignore
-      }
-
-      // Refreforço temporário: tentar garantir desmute e volume nos próximos 2s
-      try {
-        const el = mediaRef.current;
-        if (el) {
-          let tries = 4;
-          const vol = Number.isFinite(playerPrefs?.volume) ? Math.min(Math.max(playerPrefs.volume, 0), 100) : 50;
-          const t = setInterval(() => {
-            try { el.muted = false; } catch (_) {}
-            try { el.volume = vol / 100; } catch (_) {}
-            tries -= 1;
-            if (tries <= 0) clearInterval(t);
-          }, 500);
+    if (playback_mode === 'random' || shuffle_enabled) {
+      nextIndex = Math.floor(Math.random() * playlist.length);
+    } else if (currentIndex < playlist.length - 1) {
+      nextIndex = currentIndex + 1;
+    } else {
+      // fim da playlist
+      if (playback_mode === 'loop_infinite' || loop_behavior === 'infinite' || loop_behavior === 'until_next') {
+        nextIndex = 0;
+        if (backgroundAudioRef.current) {
+          try { backgroundAudioRef.current.currentTime = 0; } catch (_) {}
         }
-      } catch (_) {}
-
-      // Tentar iniciar reprodução explicitamente (autoplay pode falhar em TVs antigas)
-      if (currentContent.type === 'video' && mediaRef.current && typeof mediaRef.current.play === 'function') {
-        try {
-          console.log('[WebPlayer] DEBUG: Tentando reproduzir vídeo:', currentContent.file_url);
-          const p = mediaRef.current.play();
-          if (p && typeof p.catch === 'function') {
-            p.then(() => {
-              console.log('[WebPlayer] DEBUG: Vídeo reproduzindo com sucesso!');
-            }).catch((error) => {
-              console.error('[WebPlayer] DEBUG: Erro ao reproduzir vídeo:', error);
-              console.log('[WebPlayer] Autoplay falhou, exibindo controles');
-              try { mediaRef.current.controls = true; } catch (_) {}
-              setShowControls(true);
-            });
-          }
-        } catch (error) {
-          console.error('[WebPlayer] DEBUG: Exceção ao tentar reproduzir:', error);
-          try { mediaRef.current.controls = true; } catch (_) {}
-          setShowControls(true);
-        }
-      }
-      // Enviar evento de início de reprodução
-      console.log('[WebPlayer] Enviando playback_start...');
-      sendPlaybackEvent('playback_start', {
-        content_id: currentContent.id,
-        content_title: currentContent.title,
-        content_type: currentContent.type,
-        campaign_id: currentContent.campaign_id,
-        campaign_name: currentContent.campaign_name,
-        playlist_index: currentIndex,
-        playlist_total: playlist.length,
-        duration_expected: currentContent.duration || 0
-      });
-
-      // Iniciar heartbeat
-      console.log('[WebPlayer] Iniciando heartbeat...');
-      startPlaybackHeartbeat();
-    };
-
-    const handlePlay = () => {
-      console.log('[WebPlayer] Reprodução iniciada');
-      setIsPlaying(true);
-    };
-
-    const handlePause = () => {
-      console.log('[WebPlayer] Reprodução pausada');
-      setIsPlaying(false);
-    };
-
-    const handleEnded = () => {
-      console.log('[WebPlayer] Reprodução finalizada');
-      setIsPlaying(false);
-      if (ignoreNextEndedRef.current) {
-        // Já fizemos o reinício antecipado via timeupdate; consumir e limpar flag
-        console.log('[WebPlayer] Ignorando ended (reinício antecipado)');
-        ignoreNextEndedRef.current = false;
-        return;
-      }
-      
-      // Enviar evento de fim de reprodução
-      sendPlaybackEvent('playback_end', {
-        content_id: currentContent.id,
-        content_title: currentContent.title,
-        content_type: currentContent.type,
-        duration_actual: Date.now() - (playbackStartTimeRef.current || Date.now())
-      });
-
-      // Parar heartbeat
-      stopPlaybackHeartbeat();
-
-      // Loop contínuo: se há apenas um item na playlist e o modo/loop indica repetição, reiniciar imediatamente
-      const isSingleItem = playlist.length === 1;
-      const { playback_mode, loop_behavior, shuffle_enabled } = playbackConfig;
-      const shouldImmediateLoop = isSingleItem && (
-        playback_mode === 'loop_infinite' ||
-        loop_behavior === 'infinite' ||
-        loop_behavior === 'until_next'
-      );
-
-      if (currentContent.type === 'video' && shouldImmediateLoop && mediaRef.current) {
-        try {
-          const el = mediaRef.current;
-          // Reinicia o mesmo elemento sem trocar src para evitar tela preta
-          el.currentTime = 0;
-          const p = el.play();
-          if (p && typeof p.catch === 'function') {
-            p.catch(() => {
-              try { el.controls = true; } catch (_) {}
-              setShowControls(true);
-            });
-          }
-          // Restaura estado de reprodução e heartbeat
-          setIsPlaying(true);
-          playbackStartTimeRef.current = Date.now();
-          startPlaybackHeartbeat();
-          // Registrar novo início de reprodução (como um novo ciclo do loop)
-          sendPlaybackEvent('playback_start', {
-            content_id: currentContent.id,
-            content_title: currentContent.title,
-            content_type: currentContent.type,
-            campaign_id: currentContent.campaign_id,
-            campaign_name: currentContent.campaign_name,
-            playlist_index: currentIndex,
-            playlist_total: playlist.length,
-            duration_expected: currentContent.duration || 0
-          });
-          return; // Evita cair na lógica de transição/alteração de conteúdo
-        } catch (e) {
-          console.warn('[WebPlayer] Falha ao reiniciar loop imediato; usando fluxo padrão', e);
-        }
-      }
-
-      // Determinar o próximo conteúdo com base nas configurações de reprodução
-      console.log(`[WebPlayer] Determinando próximo conteúdo: modo=${playback_mode}, loop=${loop_behavior}, shuffle=${shuffle_enabled}`);
-      
-      // Não avançar se for modo single e não for loop infinito
-      if (playback_mode === 'single' && loop_behavior !== 'infinite') {
-        console.log('[WebPlayer] Modo single sem loop, parando após reprodução');
-        return;
-      }
-      
-      let nextIndex = 0;
-      let nextContent = null;
-      
-      // Determinar o próximo índice com base no modo de reprodução
-      if (playback_mode === 'random' || shuffle_enabled) {
-        // Modo aleatório
-        nextIndex = Math.floor(Math.random() * playlist.length);
-        console.log(`[WebPlayer] Modo aleatório: próximo índice = ${nextIndex}`);
-      } else if (playback_mode === 'sequential' || playback_mode === 'loop_infinite') {
-        // Modo sequencial
-        if (currentIndex < playlist.length - 1) {
-          // Ainda há próximos itens
-          nextIndex = currentIndex + 1;
-          console.log(`[WebPlayer] Modo sequencial: próximo índice = ${nextIndex}`);
-        } else {
-          // Chegou ao fim da playlist
-          if (playback_mode === 'loop_infinite' || loop_behavior === 'infinite' || loop_behavior === 'until_next') {
-            // Voltar ao início
-            nextIndex = 0;
-            console.log('[WebPlayer] Fim da playlist: voltando ao início (loop)');
-            
-            // Sincronizar áudio de fundo (reiniciar quando ciclo recomeçar)
-            if (backgroundAudioRef.current) {
-              console.log('[WebPlayer] 🔄 Ciclo recomeçou, sincronizando áudio de fundo');
-              try {
-                backgroundAudioRef.current.currentTime = 0;
-              } catch (e) {
-                console.warn('[WebPlayer] Erro ao reiniciar áudio de fundo:', e);
-              }
-            }
-          } else {
-            // Parar reprodução
-            console.log('[WebPlayer] Fim da playlist: parando reprodução');
-            return;
-          }
-        }
-      }
-      
-      // Obter o próximo conteúdo
-      nextContent = playlist[nextIndex];
-      
-      // Aplicar transição: para loops infinitos/até próximo, sem atraso
-      const isLoopForever = (
-        playback_mode === 'loop_infinite' ||
-        loop_behavior === 'infinite' ||
-        loop_behavior === 'until_next'
-      );
-      let transitionTime = (playbackConfig.transition_duration ?? 0) * 1000;
-      if (isLoopForever) transitionTime = 0;
-      console.log(`[WebPlayer] Aplicando transição de ${transitionTime}ms (isLoopForever=${isLoopForever})`);
-
-      const doSwitch = () => {
-        // Troca inline usando o mesmo elemento para minimizar flicker
-        if (currentContent.type === 'video' && mediaRef.current && nextContent?.type === 'video') {
-          try {
-            mediaRef.current.src = nextContent.file_url || nextContent.url;
-            const p = mediaRef.current.play();
-            if (p && typeof p.catch === 'function') p.catch(() => {});
-          } catch (_) {}
-        }
-
-        setCurrentIndex(nextIndex);
-        setCurrentContent(nextContent);
-
-        // Enviar evento de mudança de conteúdo
-        sendPlaybackEvent('content_change', {
-          previous_content_id: currentContent.id,
-          next_content_id: nextContent.id,
-          next_content_title: nextContent.title,
-          next_content_type: nextContent.type,
-          playlist_index: nextIndex
-        });
-      };
-
-      if (transitionTime > 0) {
-        setTimeout(doSwitch, transitionTime);
       } else {
-        doSwitch();
+        return;
       }
-    };
-
-    const handleError = (e) => {
-      console.error('[WebPlayer] Erro na mídia:', e);
-      setIsPlaying(false);
-      stopPlaybackHeartbeat();
-      // Fallback: exibir controles para permitir gesto do usuário
-      try { if (mediaRef.current) mediaRef.current.controls = true; } catch (_) {}
-      setShowControls(true);
-    };
-    let handleTimeUpdate = null;
-    // Adicionar event listeners apenas para vídeos
-    if (currentContent.type === 'video' && mediaElement) {
-      console.log('[WebPlayer] Adicionando event listeners ao elemento de vídeo');
-      mediaElement.addEventListener('loadstart', handleLoadStart);
-      mediaElement.addEventListener('canplay', handleCanPlay);
-      mediaElement.addEventListener('play', handlePlay);
-      mediaElement.addEventListener('pause', handlePause);
-      mediaElement.addEventListener('ended', handleEnded);
-      mediaElement.addEventListener('error', handleError);
-      // Seamless loop: reinicia poucos ms antes do término quando loop único
-      const isSingleItem = playlist.length === 1;
-      const { playback_mode, loop_behavior } = playbackConfig;
-      const enableSeamless = isSingleItem && (
-        playback_mode === 'loop_infinite' ||
-        loop_behavior === 'infinite' ||
-        loop_behavior === 'until_next'
-      );
-      handleTimeUpdate = () => {
-        if (!enableSeamless) return;
-        const el = mediaRef.current;
-        if (!el || !isFinite(el.duration) || el.duration <= 0) return;
-        const remaining = el.duration - el.currentTime;
-        // Se faltam menos de 120ms, reinicia antes do ended
-        if (remaining > 0 && remaining <= 0.12) {
-          ignoreNextEndedRef.current = true;
-          try { el.currentTime = 0; } catch (_) {}
-          const p = el.play();
-          if (p && typeof p.catch === 'function') p.catch(() => {});
-        }
-      };
-      mediaElement.addEventListener('timeupdate', handleTimeUpdate);
-      console.log('[WebPlayer] Event listeners adicionados com sucesso');
-    } else if (currentContent.type === 'image') {
-      console.log('[WebPlayer] Simulando eventos para imagem');
-      // Para imagens, simular eventos de reprodução
-      setTimeout(() => {
-        handleCanPlay();
-        handlePlay();
-      }, 100);
-
-      // Simular duração da imagem (em segundos → ms quando necessário)
-      const rawDur = currentContent.duration || playbackConfig.content_duration || 10;
-      const imageDuration = rawDur > 1000 ? rawDur : (rawDur * 1000);
-      setTimeout(() => {
-        handleEnded();
-      }, imageDuration);
     }
 
-    // Cleanup
-    return () => {
-      if (currentContent.type === 'video' && mediaElement) {
-        mediaElement.removeEventListener('loadstart', handleLoadStart);
-        mediaElement.removeEventListener('canplay', handleCanPlay);
-        mediaElement.removeEventListener('play', handlePlay);
-        mediaElement.removeEventListener('pause', handlePause);
-        mediaElement.removeEventListener('ended', handleEnded);
-        mediaElement.removeEventListener('error', handleError);
-        if (handleTimeUpdate) {
-          mediaElement.removeEventListener('timeupdate', handleTimeUpdate);
-        }
-      }
-      stopPlaybackHeartbeat();
+    const nextContent = playlist[nextIndex];
+    const transitionTime = (
+      (playbackConfig.transition_duration ?? 0) * 1000
+    );
+    const doSwitch = () => {
+      setCurrentIndex(nextIndex);
+      setCurrentContent(nextContent);
+      sendPlaybackEvent('content_change', {
+        previous_content_id: currentContent?.id,
+        next_content_id: nextContent?.id,
+        next_content_title: nextContent?.title,
+        next_content_type: nextContent?.type,
+        playlist_index: nextIndex
+      });
     };
-     }, [currentContent, currentIndex, playlist, sendPlaybackEvent, startPlaybackHeartbeat, stopPlaybackHeartbeat]);
+    if (transitionTime > 0) {
+      setTimeout(doSwitch, transitionTime);
+    } else {
+      doSwitch();
+    }
+  };
+
+  const handleVideoLoadStart = () => {
+    console.log('[WebPlayer] Mídia começou a carregar');
+  };
+
+  const handleVideoCanPlay = () => {
+    console.log('[WebPlayer] Mídia pronta para reproduzir');
+    setIsPlaying(true);
+    playbackStartTimeRef.current = Date.now();
+    // Pausar áudio de fundo se estiver tocando (evita duplicidade)
+    if (backgroundAudioRef.current && !backgroundAudioRef.current.paused) {
+      try { backgroundAudioRef.current.pause(); } catch (_) {}
+    }
+
+    if (mediaRef.current && (pendingUnmuteRef.current || !muted)) {
+      try { mediaRef.current.muted = false; } catch (_) {}
+      try {
+        const vol = Number.isFinite(playerPrefs?.volume) ? Math.min(Math.max(playerPrefs.volume, 0), 100) : 50;
+        mediaRef.current.volume = vol / 100;
+      } catch (_) {}
+      pendingUnmuteRef.current = false;
+    }
+
+    // tentar reproduzir
+    try {
+      const p = mediaRef.current?.play?.();
+      if (p && typeof p.catch === 'function') p.catch(() => { try { mediaRef.current.controls = true; } catch (_) {} setShowControls(true); });
+    } catch (_) { try { mediaRef.current.controls = true; } catch (_) {} setShowControls(true); }
+
+    beginPlaybackStartTelemetry();
+  };
+
+  const handleVideoPlay = () => {
+    console.log('[WebPlayer] Reprodução iniciada');
+    setIsPlaying(true);
+    // Segurança extra: pausar áudio de fundo durante vídeos
+    if (backgroundAudioRef.current && !backgroundAudioRef.current.paused) {
+      try { backgroundAudioRef.current.pause(); } catch (_) {}
+    }
+  };
+
+  const handleVideoPause = () => {
+    console.log('[WebPlayer] Reprodução pausada');
+    setIsPlaying(false);
+  };
+
+  const handleVideoEnded = () => {
+    console.log('[WebPlayer] Reprodução finalizada');
+    setIsPlaying(false);
+    if (ignoreNextEndedRef.current) { ignoreNextEndedRef.current = false; return; }
+    endPlaybackTelemetry();
+    if (!shouldLoopVideo) {
+      advanceToNext();
+    }
+  };
+
+  const handleVideoError = (e) => {
+    console.error('[WebPlayer] Erro na mídia:', e);
+    setIsPlaying(false);
+    stopPlaybackHeartbeat();
+    try { if (mediaRef.current) mediaRef.current.controls = true; } catch (_) {}
+    setShowControls(true);
+  };
+
+  // Duração e telemetria para imagens
+  useEffect(() => {
+    if (!currentContent) return;
+    if (currentContent.type !== 'image') return;
+    // limpar timer anterior
+    if (imageTimeoutRef.current) { clearTimeout(imageTimeoutRef.current); imageTimeoutRef.current = null; }
+    setIsPlaying(true);
+    playbackStartTimeRef.current = Date.now();
+    beginPlaybackStartTelemetry();
+    const rawDur = currentContent.duration || playbackConfig.content_duration || 10;
+    const imageDuration = rawDur > 1000 ? rawDur : (rawDur * 1000);
+    imageTimeoutRef.current = setTimeout(() => {
+      setIsPlaying(false);
+      endPlaybackTelemetry();
+      advanceToNext();
+    }, imageDuration);
+    return () => {
+      if (imageTimeoutRef.current) { clearTimeout(imageTimeoutRef.current); imageTimeoutRef.current = null; }
+    };
+  }, [currentContent, playbackConfig]);
+
+  // Escutar comandos remotos via Socket.IO
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRemoteCommand = (data) => {
+      console.log('[WebPlayer] Comando remoto recebido:', data);
+      
+      const { command, data: commandData } = data;
+      
+      switch (command) {
+        case 'stop':
+          console.log('[WebPlayer] Executando comando stop...');
+          
+          // Parar reprodução atual
+          setIsPlaying(false);
+          setCurrentIndex(-1);
+          setCurrentContent(null);
+          
+          // Parar mídia atual
+          if (mediaRef.current) {
+            mediaRef.current.pause();
+            mediaRef.current.currentTime = 0;
+          }
+          
+          // Parar áudio de fundo
+          if (backgroundAudioRef.current) {
+            backgroundAudioRef.current.pause();
+            backgroundAudioRef.current.currentTime = 0;
+          }
+          
+          // Limpar playlist
+          setPlaylist([]);
+          
+          console.log('[WebPlayer] Comando stop executado');
+          break;
+          
+        case 'pause':
+          console.log('[WebPlayer] Executando comando pause...');
+          setIsPlaying(false);
+          if (mediaRef.current) {
+            mediaRef.current.pause();
+          }
+          if (backgroundAudioRef.current) {
+            backgroundAudioRef.current.pause();
+          }
+          break;
+          
+        case 'start':
+        case 'play':
+          console.log('[WebPlayer] Executando comando play/start...');
+          setIsPlaying(true);
+          if (mediaRef.current) {
+            mediaRef.current.play().catch(console.error);
+          }
+          if (backgroundAudioRef.current && backgroundAudioLoaded) {
+            backgroundAudioRef.current.play().catch(console.error);
+          }
+          break;
+          
+        case 'restart':
+          console.log('[WebPlayer] Executando comando restart...');
+          // Recarregar dados do player
+          if (typeof loadPlayerData === 'function') loadPlayerData();
+          if (typeof connectToPlayer === 'function') connectToPlayer();
+          break;
+          
+        default:
+          console.log('[WebPlayer] Comando não reconhecido:', command);
+      }
+    };
+
+    socket.on('remote_command', handleRemoteCommand);
+
+    return () => {
+      socket.off('remote_command', handleRemoteCommand);
+    };
+  }, [socket, backgroundAudioLoaded, loadPlayerData, connectToPlayer]);
 
   const renderContent = () => {
     if (!currentContent) return null;
@@ -1041,15 +860,7 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
     console.log('[WebPlayer] DEBUG: Renderizando conteúdo:', currentContent.type, currentContent.title, 'índice:', currentIndex);
 
     // Deve manter o vídeo em loop contínuo? (inclui 'até próximo agendamento')
-    const shouldLoop = (
-      currentContent?.type === 'video' && (
-        playbackConfig.playback_mode === 'loop_infinite' ||
-        (playlist.length === 1 && (
-          playbackConfig.loop_behavior === 'infinite' ||
-          playbackConfig.loop_behavior === 'until_next'
-        ))
-      )
-    );
+    const shouldLoop = shouldLoopVideo;
 
     const commonStyle = {
       width: '100%',
@@ -1081,6 +892,12 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
             preload={(LEGACY_MODE && !shouldLoop) ? 'metadata' : 'auto'}
             controls={showControls}
             loop={shouldLoop}
+            onLoadStart={handleVideoLoadStart}
+            onCanPlay={handleVideoCanPlay}
+            onPlay={handleVideoPlay}
+            onPause={handleVideoPause}
+            onEnded={handleVideoEnded}
+            onError={handleVideoError}
           />
         );
       
@@ -1224,34 +1041,22 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
         >
           <Box sx={{ textAlign: 'center', color: '#fff', px: 2 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Toque para ativar Tela Cheia e Áudio</Typography>
-            {LEGACY_MODE ? (
-              <button
-                onClick={activateAudioAndFullscreen}
-                onTouchStart={activateAudioAndFullscreen}
-                style={{
-                  padding: '12px 24px',
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: '#000',
-                  backgroundColor: '#ffa000',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                }}
-              >
-                Ativar
-              </button>
-            ) : (
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                onClick={activateAudioAndFullscreen}
-                sx={{ px: 4, py: 1.5, fontWeight: 600 }}
-              >
-                Ativar
-              </Button>
-            )}
+            <button
+              onClick={activateAudioAndFullscreen}
+              onTouchStart={activateAudioAndFullscreen}
+              style={{
+                padding: '12px 24px',
+                fontSize: 16,
+                fontWeight: 700,
+                color: '#000',
+                backgroundColor: '#ffa000',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+            >
+              Ativar
+            </button>
             <Typography variant="body2" sx={{ mt: 2, opacity: 0.8 }}>
               Dica: pressione a tecla F para alternar tela cheia
             </Typography>
@@ -1300,6 +1105,7 @@ const WebPlayer = ({ playerId, fullscreen = false, onRequestFullscreen }) => {
       )}
     </Box>
   );
+
 
   if (fullscreen) {
     return playerContent;

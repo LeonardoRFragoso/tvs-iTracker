@@ -51,7 +51,7 @@ import PageTitle from '../../components/Common/PageTitle';
 const PlayerDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { sendPlayerCommand } = useSocket();
+  const { sendPlayerCommand, socket } = useSocket();
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
