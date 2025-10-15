@@ -559,28 +559,15 @@ const ContentList = () => {
                     </Typography>
                     
                     <Box display="flex" gap={1} mb={2} flexWrap="wrap">
-                      {(() => {
-                        const tagsArr = Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : []);
-                        if (tagsArr.length === 0 && content.category) {
-                          return (
-                            <Chip
-                              size="small"
-                              label={content.category}
-                              variant="outlined"
-                              sx={{ borderRadius: 2, fontSize: '0.75rem' }}
-                            />
-                          );
-                        }
-                        return tagsArr.map((tag, idx) => (
-                          <Chip
-                            key={`${content.id}-tag-${idx}`}
-                            size="small"
-                            label={tag}
-                            variant="outlined"
-                            sx={{ borderRadius: 2, fontSize: '0.75rem' }}
-                          />
-                        ));
-                      })()}
+                      {(Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : [])).map((tag, idx) => (
+                        <Chip
+                          key={`${content.id}-tag-${idx}`}
+                          size="small"
+                          label={tag}
+                          variant="outlined"
+                          sx={{ borderRadius: 2, fontSize: '0.75rem' }}
+                        />
+                      ))}
                     </Box>
                     
                     <Box 

@@ -253,6 +253,11 @@ const ContentForm = () => {
       // Edição continua permitindo apenas um arquivo
       const targetFiles = isEdit ? (files[0] ? [files[0]] : []) : files;
 
+      // Tags finais: existing chips + texto pendente no campo (se não adicionado como chip)
+      const normalizedTags = Array.isArray(formData.tags) ? formData.tags : (formData.tags ? [formData.tags] : []);
+      const pending = (tagInput || '').trim();
+      const finalTags = Array.from(new Set([...normalizedTags, ...(pending ? [pending] : [])]));
+
       // Validação: tamanho total do lote
       const totalBytes = targetFiles.reduce((sum, f) => sum + (f?.size || 0), 0);
       if (totalBytes > MAX_TOTAL_BYTES) {
@@ -260,6 +265,21 @@ const ContentForm = () => {
         return;
       }
       setTotalBytesSelected(totalBytes);
+
+      if (isEdit && targetFiles.length === 0) {
+        const payload = {
+          title: (formData.title || '').trim(),
+          description: formData.description || '',
+          tags: finalTags,
+        };
+        if (formData.duration !== '' && formData.duration !== null && formData.duration !== undefined) {
+          payload.duration = formData.duration;
+        }
+        await axios.put(`/content/${id}`, payload);
+        setSuccess('Conteúdo atualizado com sucesso!');
+        setTimeout(() => { navigate('/content'); }, 1200);
+        return;
+      }
 
       let uploadedSoFar = 0;
       for (let idx = 0; idx < targetFiles.length; idx++) {
@@ -270,7 +290,7 @@ const ContentForm = () => {
 
         Object.keys(formData).forEach(key => {
           if (key === 'tags') {
-            submitData.append('tags', JSON.stringify(formData.tags));
+            submitData.append('tags', JSON.stringify(finalTags));
           } else if (key === 'duration') {
             if (isDurationRequired(contentType) && formData[key]) {
               submitData.append(key, formData[key]);
