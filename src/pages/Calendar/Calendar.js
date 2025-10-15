@@ -728,7 +728,18 @@ const Calendar = () => {
             const scheduleId = info.event.extendedProps?.schedule_id 
               || (info.event.id ? String(info.event.id).split('-')[0] : null);
             if (scheduleId) {
-              navigate(`/schedules/${scheduleId}/edit`);
+              try {
+                localStorage.setItem('schedule_returnTo', '/calendar');
+                localStorage.setItem('schedule_from', 'calendar');
+              } catch (e) {}
+              const editPath = `/schedules/${scheduleId}/edit?from=calendar&returnTo=${encodeURIComponent('/calendar')}`;
+              navigate(editPath, {
+                state: {
+                  returnTo: '/calendar',
+                  from: 'calendar',
+                  calendar: { selectedPlayer }
+                }
+              });
             } else {
               navigate('/schedules');
             }

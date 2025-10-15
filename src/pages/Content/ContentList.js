@@ -29,6 +29,7 @@ import {
   Badge,
   LinearProgress,
   Autocomplete,
+  Checkbox,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -46,6 +47,8 @@ import {
   Refresh as RefreshIcon,
   GridView as GridViewIcon,
   Close as CloseIcon,
+  CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
+  CheckBox as CheckBoxIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../config/axios';
@@ -367,15 +370,28 @@ const ContentList = () => {
             <Grid item xs={12} md={5}>
               <Autocomplete
                 multiple
+                disableCloseOnSelect
                 options={allTags}
-                value={filterTags}
+                getOptionLabel={(option) => option}
+                isOptionEqualToValue={(opt, val) => opt === val}
+                value={filterTags.filter((t) => allTags.includes(t))}
                 onChange={(e, value) => setFilterTags(value)}
-                freeSolo
+                renderOption={(props, option, { selected }) => (
+                  <li {...props}>
+                    <Checkbox
+                      icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
+                      checkedIcon={<CheckBoxIcon fontSize="small" />}
+                      style={{ marginRight: 8 }}
+                      checked={selected}
+                    />
+                    {option}
+                  </li>
+                )}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Tags"
-                    placeholder="Filtrar por tags"
+                    placeholder="Selecione tags"
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 2,

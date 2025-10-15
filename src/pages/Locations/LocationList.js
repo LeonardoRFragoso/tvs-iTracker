@@ -44,7 +44,6 @@ import {
   Wifi as WifiIcon,
   Schedule as ScheduleIcon,
   Computer as ComputerIcon,
-  Storage as StorageIcon,
   Refresh as RefreshIcon,
   Business as BusinessIcon,
   TrendingUp as TrendingUpIcon,
@@ -187,11 +186,6 @@ const LocationList = () => {
   const getOnlinePercentage = (locationStats) => {
     if (!locationStats?.player_stats) return 0;
     return locationStats.player_stats.online_percentage || 0;
-  };
-
-  const getStorageUsage = (locationStats) => {
-    if (!locationStats?.storage_stats) return 0;
-    return locationStats.storage_stats.usage_percentage || 0;
   };
 
   if (loading) {
@@ -530,67 +524,7 @@ const LocationList = () => {
               </Card>
             </Grow>
           </Grid>
-          <Grid item xs={12} sm={6} md={4} lg={3}>
-            <Grow in={true} timeout={1600}>
-              <Card 
-                sx={{
-                  borderRadius: 3,
-                  background: theme.palette.mode === 'dark' 
-                    ? 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
-                    : 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-                  color: theme.palette.mode === 'dark' ? 'white' : 'white',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  '&:hover': {
-                    transform: 'translateY(-4px) scale(1.02)',
-                    boxShadow: theme.palette.mode === 'dark' ? '0 12px 35px rgba(255, 152, 0, 0.3)' : '0 12px 35px rgba(255, 152, 0, 0.3)',
-                  },
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    top: -50,
-                    right: -50,
-                    width: 100,
-                    height: 100,
-                    background: theme.palette.mode === 'dark' ? 'transparent' : 'rgba(255, 255, 255, 0.1)',
-                    display: theme.palette.mode === 'dark' ? 'none' : 'block',
-                    borderRadius: '50%',
-                    transition: 'all 0.5s ease',
-                  },
-                  '&:hover::before': {
-                    transform: theme.palette.mode === 'dark' ? 'none' : 'scale(1.5)',
-                    opacity: theme.palette.mode === 'dark' ? 1 : 0,
-                  },
-                }}
-              >
-                <CardContent sx={{ position: 'relative', zIndex: 1, p: 1.5 }}>
-                  <Box display="flex" alignItems="center" justifyContent="space-between">
-                    <Box>
-                      <Typography variant="h5" fontWeight="bold" mb={0.5} sx={{ fontSize: '1.5rem' }}>
-                        {Object.values(stats).reduce((acc, stat) => 
-                          acc + (stat?.storage_stats?.total_storage_gb || 0), 0
-                        ).toFixed(1)} GB
-                      </Typography>
-                      <Typography variant="body1" sx={{ opacity: 0.9, fontSize: '0.9rem' }}>
-                        Armazenamento Total
-                      </Typography>
-                    </Box>
-                    <Avatar
-                      sx={{
-                        bgcolor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.2)',
-                        width: 40,
-                        height: 40,
-                      }}
-                    >
-                      <StorageIcon fontSize="medium" />
-                    </Avatar>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grow>
-          </Grid>
+          
         </Grid>
       </Fade>
 
@@ -642,8 +576,6 @@ const LocationList = () => {
                 <TableCell>Status</TableCell>
                 <TableCell>Players</TableCell>
                 <TableCell>Horário de Pico</TableCell>
-                <TableCell>Bandwidth</TableCell>
-                <TableCell>Armazenamento</TableCell>
                 <TableCell align="center">Ações</TableCell>
               </TableRow>
             </TableHead>
@@ -748,55 +680,6 @@ const LocationList = () => {
                             {formatPeakHours(location.peak_hours_start, location.peak_hours_end)}
                           </Typography>
                         </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Avatar
-                            sx={{
-                              bgcolor: 'primary.main',
-                              width: 24,
-                              height: 24,
-                            }}
-                          >
-                            <WifiIcon fontSize="small" />
-                          </Avatar>
-                          <Typography variant="body2" fontWeight="bold">
-                            {location.network_bandwidth_mbps} Mbps
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        {locationStats ? (
-                          <Box>
-                            <Box display="flex" alignItems="center" gap={1} mb={0.5}>
-                              <Typography variant="body2" fontWeight="bold">
-                                {locationStats.storage_stats.used_storage_gb.toFixed(1)}/
-                                {locationStats.storage_stats.total_storage_gb.toFixed(1)} GB
-                              </Typography>
-                              <Chip
-                                label={`${getStorageUsage(locationStats).toFixed(0)}%`}
-                                size="small"
-                                color={getStorageUsage(locationStats) < 70 ? 'success' : 
-                                       getStorageUsage(locationStats) < 90 ? 'warning' : 'error'}
-                                sx={{ fontSize: '0.7rem', height: 20 }}
-                              />
-                            </Box>
-                            <LinearProgress
-                              variant="determinate"
-                              value={getStorageUsage(locationStats)}
-                              sx={{
-                                height: 4,
-                                borderRadius: 2,
-                                bgcolor: theme.palette.mode === 'dark' ? '#333' : '#e0e0e0',
-                                '& .MuiLinearProgress-bar': {
-                                  borderRadius: 2,
-                                },
-                              }}
-                            />
-                          </Box>
-                        ) : (
-                          <Skeleton variant="text" width="80%" height={20} />
-                        )}
                       </TableCell>
                       <TableCell align="center">
                         <Box display="flex" gap={0.5} justifyContent="center">

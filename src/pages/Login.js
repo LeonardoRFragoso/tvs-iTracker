@@ -22,6 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 
 const Login = () => {
@@ -32,8 +33,12 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login, user } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { getSetting } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
+  const brandBase = 'ICTSI TVs';
+  const companyName = (getSetting && getSetting('general.company_name', '')) || '';
+  const appTitle = companyName ? `${brandBase} - ${companyName}` : brandBase;
 
   // Redirecionar se já estiver logado
   useEffect(() => {
@@ -113,7 +118,7 @@ const Login = () => {
           </Avatar>
           
           <Typography component="h1" variant="h4" gutterBottom>
-            Controle de Televisões iTracker
+            {appTitle}
           </Typography>
           
           <Typography variant="h6" color="text.secondary" gutterBottom>

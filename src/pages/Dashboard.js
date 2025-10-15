@@ -16,11 +16,7 @@ import {
   Grow,
   Paper,
   Divider,
-  Fab,
   Skeleton,
-  SpeedDial,
-  SpeedDialAction,
-  SpeedDialIcon,
   Snackbar,
   AlertTitle,
   Button,
@@ -29,7 +25,6 @@ import {
   VideoLibrary as ContentIcon,
   Campaign as CampaignIcon,
   Tv as PlayerIcon,
-  Schedule as ScheduleIcon,
   RssFeed as EditorialIcon,
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
@@ -37,7 +32,6 @@ import {
   Remove,
   Storage as StorageIcon,
   Timeline as TimelineIcon,
-  Add as AddIcon,
   Keyboard as KeyboardIcon,
   Upload as UploadIcon,
   PlayArrow as PlayIcon,
@@ -570,12 +564,6 @@ const Dashboard = () => {
     };
   })() : null;
 
-  const speedDialActions = [
-    { icon: <UploadIcon />, name: 'Novo Conteúdo', onClick: () => window.location.href = '/content/new' },
-    { icon: <CampaignIcon />, name: 'Nova Campanha', onClick: () => window.location.href = '/campaigns/new' },
-    { icon: <PlayerIcon />, name: 'Novo Player', onClick: () => window.location.href = '/players/new' },
-    { icon: <ScheduleIcon />, name: 'Novo Agendamento', onClick: () => window.location.href = '/schedules/new' },
-  ];
 
   if (loading) {
     return (
@@ -1059,40 +1047,7 @@ const Dashboard = () => {
         )}
       </Grid>
 
-      {/* Speed Dial for Quick Actions */}
-      <SpeedDial
-        ariaLabel="Ações rápidas"
-        sx={{ 
-          position: 'fixed', 
-          bottom: 24, 
-          right: 24,
-          '& .MuiFab-primary': {
-            bgcolor: 'primary.main',
-            '&:hover': {
-              bgcolor: 'primary.dark',
-            },
-          },
-        }}
-        icon={<SpeedDialIcon />}
-      >
-        {speedDialActions.map((action) => (
-          <SpeedDialAction
-            key={action.name}
-            icon={action.icon}
-            tooltipTitle={action.name}
-            onClick={action.onClick}
-            sx={{
-              '& .MuiFab-primary': {
-                bgcolor: isDarkMode ? '#333' : '#fff',
-                color: isDarkMode ? '#ff9800' : '#1976d2',
-                '&:hover': {
-                  bgcolor: isDarkMode ? '#444' : '#f5f5f5',
-                },
-              },
-            }}
-          />
-        ))}
-      </SpeedDial>
+      
 
       {/* Notifications */}
       {notifications.map((notification) => (

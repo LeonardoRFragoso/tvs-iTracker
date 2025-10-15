@@ -37,9 +37,11 @@ import {
   TrendingUp,
   People as PeopleIcon,
   CalendarToday,
+  Password,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import axios from '../../config/axios';
 
 const drawerWidth = 220;
@@ -54,9 +56,19 @@ const Layout = () => {
   });
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme, animationsEnabled, transitionDuration } = useTheme();
+  const { getSetting, companyDisplayName } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const didFetchBadgesRef = useRef(false);
+  const brandBase = 'ICTSI TVs';
+  const effectiveCompanyName = (companyDisplayName || (getSetting && getSetting('general.company_name', '')) || '').trim();
+  const appTitle = effectiveCompanyName ? `${brandBase} - ${effectiveCompanyName}` : brandBase;
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = appTitle;
+    }
+  }, [appTitle]);
 
   // Buscar dados para badges
   useEffect(() => {
@@ -199,6 +211,11 @@ const Layout = () => {
 
   const computedMenuItems = useMemo(() => {
     let items = [...menuItems];
+    // Separar itens que devem ir para a seção Administração
+    const locationItem = items.find(i => i.path === '/locations');
+    const playersItem = items.find(i => i.path === '/players');
+    // Remover temporariamente para reordenar depois
+    items = items.filter(i => i.path !== '/locations' && i.path !== '/players');
     const isAdmin = user?.role === 'admin';
 
     // Remover Monitor de Tráfego e Configurações temporariamente
@@ -225,6 +242,10 @@ const Layout = () => {
       };
       items.push(monitorItem);
     }
+
+    // Adicionar Empresas e Players na área de Administração (após itens admin e antes de Configurações)
+    if (locationItem) items.push(locationItem);
+    if (playersItem) items.push(playersItem);
 
     // Sempre adicionar Configurações como último item
     const configItem = {
@@ -299,10 +320,10 @@ const Layout = () => {
           </Avatar>
           <Box>
             <Typography variant="h6" noWrap component="div" fontWeight="bold" sx={{ color: isDarkMode ? 'white' : 'inherit' }}>
-              TVS iTracker
+              {brandBase}
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.9 }}>
-              Digital Signage
+              {effectiveCompanyName || ''}
             </Typography>
           </Box>
         </Box>
@@ -353,9 +374,16 @@ const Layout = () => {
                             (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
             
             // Adicionar separador antes dos itens administrativos
-            const isAdminItem = item.path.startsWith('/admin') || item.path === '/settings';
+            const isAdminItem = item.path.startsWith('/admin') 
+                               || item.path === '/settings'
+                               || item.path === '/locations'
+                               || item.path === '/players';
             const prevItem = computedMenuItems[index - 1];
-            const showDivider = isAdminItem && prevItem && !prevItem.path.startsWith('/admin') && prevItem.path !== '/settings';
+            const prevIsAdmin = prevItem && (prevItem.path.startsWith('/admin') 
+                               || prevItem.path === '/settings'
+                               || prevItem.path === '/locations'
+                               || prevItem.path === '/players');
+            const showDivider = isAdminItem && prevItem && !prevIsAdmin;
             
             return (
               <React.Fragment key={item.text}>
@@ -534,7 +562,7 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Controle de Televisões iTracker
+            {appTitle}
           </Typography>
           <div>
             <IconButton
@@ -596,6 +624,12 @@ const Layout = () => {
                 <AccountCircle sx={{ mr: 1 }} />
                 {user?.username || 'Usuário'}
               </MenuItem>
+              {user?.role === 'admin' && (
+                <MenuItem onClick={() => { navigate('/users'); handleClose(); }}>
+                  <Password sx={{ mr: 1 }} />
+                  Trocar senha de usuários
+                </MenuItem>
+              )}
               <MenuItem onClick={handleLogout}>
                 <Logout sx={{ mr: 1 }} />
                 Sair
