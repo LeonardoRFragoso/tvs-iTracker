@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 import json
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
-from sqlalchemy import func, text
+from sqlalchemy import func, text, inspect
 from collections import defaultdict
 from models.campaign import Campaign, CampaignContent, db, PlaybackEvent
 from models.content import Content
@@ -788,28 +788,23 @@ def debug_campaign_analytics(campaign_id):
         db_file = engine.url.database
         db_abspath = os.path.abspath(db_file) if db_file else None
 
-        # Verificar tabela playback_events e suas colunas (SQLite)
+        # Verificar tabela playback_events e suas colunas (agnóstico ao SGBD)
         columns = []
-        has_table = False
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("PRAGMA table_info(playback_events)"))
-                rows = result.fetchall()
-                if rows:
-                    has_table = True
-                    for r in rows:
-                        # PRAGMA columns: cid, name, type, notnull, dflt_value, pk
-                        columns.append({
-                            'cid': r[0],
-                            'name': r[1],
-                            'type': r[2],
-                            'notnull': r[3],
-                            'default': r[4],
-                            'pk': r[5],
-                        })
-        except Exception as e:
-            # Falha ao executar PRAGMA
-            columns = [{'error': f'PRAGMA failed: {str(e)}'}]
+        inspector = inspect(engine)
+        has_table = inspector.has_table('playback_events')
+        if has_table:
+            try:
+                cols = inspector.get_columns('playback_events')
+                for c in cols:
+                    columns.append({
+                        'name': c.get('name'),
+                        'type': str(c.get('type')),
+                        'nullable': c.get('nullable'),
+                        'default': c.get('default'),
+                        'primary_key': c.get('primary_key'),
+                    })
+            except Exception as e:
+                columns = [{'error': f'Inspector failed: {str(e)}'}]
 
         totals = {
             'total_events': 0,

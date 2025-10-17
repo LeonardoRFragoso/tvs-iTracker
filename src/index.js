@@ -7,6 +7,7 @@ import './config/axios'; // Import axios configuration
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { SettingsProvider } from './contexts/SettingsContext';
+import { OnboardingProvider } from './contexts/OnboardingContext';
 import App from './App';
 
 const AppWithTheme = () => {
@@ -37,7 +38,9 @@ root.render(
       <AuthProvider>
         <SettingsProvider>
           <ThemeProvider>
-            <AppWithTheme />
+            <OnboardingProvider>
+              <AppWithTheme />
+            </OnboardingProvider>
           </ThemeProvider>
         </SettingsProvider>
       </AuthProvider>

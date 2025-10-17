@@ -52,10 +52,34 @@ export REACT_APP_SOCKET_URL=same-origin
 
 # 2) Build do React
 step "[2/4] Fazendo build da aplicação React"
-echo "[INFO] Limpando cache do npm..."
-npm cache clean --force 2>/dev/null || true
-echo "[INFO] Instalando dependências com npm install..."
-npm install --legacy-peer-deps
+echo "[INFO] Preparando ambiente npm (timeouts e retrys)..."
+npm config set fetch-retries 5 >/dev/null 2>&1 || true
+npm config set fetch-timeout 120000 >/dev/null 2>&1 || true
+npm config set fetch-retry-maxtimeout 240000 >/dev/null 2>&1 || true
+npm config set progress false >/dev/null 2>&1 || true
+
+echo "[INFO] Instalando dependências (com tolerância)..."
+NPM_INSTALL_FAILED=0
+npm install --legacy-peer-deps --no-audit --no-fund || NPM_INSTALL_FAILED=$?
+if [ "${NPM_INSTALL_FAILED:-0}" -ne 0 ]; then
+  echo "[AVISO] npm install falhou, tentando registry alternativo (npmmirror)..."
+  ORIG_REG="$(npm config get registry || echo https://registry.npmjs.org/)"
+  npm config set registry https://registry.npmmirror.com >/dev/null 2>&1 || true
+  npm install --legacy-peer-deps --no-audit --no-fund || NPM_INSTALL_FAILED=$?
+  npm config set registry "${ORIG_REG}" >/dev/null 2>&1 || true
+fi
+if [ "${NPM_INSTALL_FAILED:-0}" -ne 0 ]; then
+  echo "[ERRO] npm install falhou mesmo após fallback de registry."
+  echo "       Tente manualmente: npm install --legacy-peer-deps --no-audit --no-fund"
+  exit 1
+fi
+
+if [ ! -f node_modules/.bin/react-scripts ]; then
+  echo "[ERRO] react-scripts não encontrado após instalação. Verifique o npm install."
+  exit 1
+fi
+
+echo "[INFO] Fazendo build..."
 npm run build
 
 # 3) Copiar build para backend/build
@@ -104,6 +128,14 @@ fi
 echo
 if [ "$RUN_AFTER" = true ]; then
   echo "Iniciando backend..."
+  if [ ! -f backend/.env ]; then
+    echo "[ERRO] Arquivo backend/.env não encontrado. Crie com DATABASE_URL e MEDIA_BASE_URL."
+    exit 1
+  fi
+  if ! grep -q '^DATABASE_URL=' backend/.env; then
+    echo "[ERRO] Variável DATABASE_URL não definida em backend/.env"
+    exit 1
+  fi
   # Executa a partir da pasta backend para paths relativos (uploads, etc.)
   pushd backend >/dev/null
   if [ "$PORT80" = true ]; then

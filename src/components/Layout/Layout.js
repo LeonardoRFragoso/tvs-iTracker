@@ -40,6 +40,7 @@ import {
   Password,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import axios from '../../config/axios';
@@ -55,6 +56,7 @@ const Layout = () => {
     players: 0
   });
   const { user, logout } = useAuth();
+  const { start: startOnboarding } = useOnboarding();
   const { isDarkMode, toggleTheme, animationsEnabled, transitionDuration } = useTheme();
   const { getSetting, companyDisplayName } = useSettings();
   const navigate = useNavigate();
@@ -75,25 +77,33 @@ const Layout = () => {
     if (didFetchBadgesRef.current) return;
     const fetchBadgeData = async () => {
       try {
-        const [contentRes, locationsRes, dashboardRes] = await Promise.all([
-          axios.get('/content?per_page=1000'), // Buscar todos os conteúdos
-          axios.get('/locations'),
-          axios.get('/dashboard/stats') // Buscar stats do dashboard para players online
+        // Buscar endpoints de forma resiliente para não falhar tudo se um deles der erro
+        const [contentRes, locationsRes, playersStatsRes] = await Promise.allSettled([
+          axios.get('/content?per_page=1'),
+          axios.get('/locations?per_page=1'),
+          axios.get('/players/stats') // players online
         ]);
 
+        const contentTotal = (contentRes.status === 'fulfilled')
+          ? (contentRes.value?.data?.total || contentRes.value?.data?.contents?.length || 0)
+          : 0;
+
+        const locationsTotal = (locationsRes.status === 'fulfilled')
+          ? (locationsRes.value?.data?.total || locationsRes.value?.data?.locations?.length || 0)
+          : 0;
+
+        const playersOnline = (playersStatsRes.status === 'fulfilled')
+          ? (playersStatsRes.value?.data?.online_players || 0)
+          : 0;
+
         setBadges({
-          content: contentRes.data.total || contentRes.data.contents?.length || 0,
-          locations: locationsRes.data.total || locationsRes.data.locations?.length || 0,
-          players: dashboardRes.data.overview?.online_players || 0 // Usar players online em vez do total
+          content: contentTotal,
+          locations: locationsTotal,
+          players: playersOnline
         });
       } catch (error) {
         console.error('Erro ao buscar dados dos badges:', error);
-        // Manter valores padrão em caso de erro
-        setBadges({
-          content: 4,
-          locations: 3,
-          players: 0 // Padrão 0 para players online
-        });
+        // Em caso de erro inesperado do bloco acima, manter estado atual (sem hardcode)
       }
     };
 
@@ -104,16 +114,20 @@ const Layout = () => {
   // Atalhos globais de teclado
   useEffect(() => {
     const handleKeyPress = (event) => {
-      // Verificar se não está em um input/textarea/select
       const activeElement = document.activeElement;
-      const isInputActive = activeElement && (
-        activeElement.tagName === 'INPUT' ||
-        activeElement.tagName === 'TEXTAREA' ||
-        activeElement.tagName === 'SELECT' ||
-        activeElement.contentEditable === 'true'
+      const isInputActive = !!(
+        activeElement && (
+          activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.tagName === 'SELECT' ||
+          activeElement.isContentEditable ||
+          (typeof activeElement.closest === 'function' && (
+            activeElement.closest('input, textarea, select, [contenteditable="true"], .MuiInputBase-root, [role="textbox"]')
+          ))
+        )
       );
 
-      if (isInputActive) return; // Não executar atalhos se estiver digitando
+      if (isInputActive) return;
 
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
@@ -372,6 +386,13 @@ const Layout = () => {
           {computedMenuItems.map((item, index) => {
             const isActive = location.pathname === item.path || 
                             (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+            const dataTour = item.path === '/content' ? 'menu-content'
+              : item.path === '/campaigns' ? 'menu-campaigns'
+              : item.path === '/schedules' ? 'menu-schedules'
+              : item.path === '/players' ? 'menu-players'
+              : item.path === '/calendar' ? 'menu-calendar'
+              : item.path === '/dashboard' ? 'menu-dashboard'
+              : undefined;
             
             // Adicionar separador antes dos itens administrativos
             const isAdminItem = item.path.startsWith('/admin') 
@@ -415,6 +436,7 @@ const Layout = () => {
                 <Fade in={true} timeout={animationsEnabled ? Math.max(0, Math.min(transitionDuration + index * 100, 1500)) : 0}>
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
+                      data-tour={dataTour}
                       selected={isActive}
                       onClick={() => navigate(item.path)}
                       sx={{
@@ -630,6 +652,10 @@ const Layout = () => {
                   Trocar senha de usuários
                 </MenuItem>
               )}
+              <MenuItem onClick={() => { startOnboarding(); handleClose(); }}>
+                <Password sx={{ mr: 1 }} />
+                Iniciar Tour
+              </MenuItem>
               <MenuItem onClick={handleLogout}>
                 <Logout sx={{ mr: 1 }} />
                 Sair

@@ -126,8 +126,16 @@ def get_dashboard_stats():
         except Exception as e:
             print(f"[DASHBOARD] total_storage_capacity fallback due to: {e}")
             total_storage_capacity = 0
+        try:
+            total_storage_used = float(total_storage_used or 0)
+        except Exception:
+            total_storage_used = 0.0
+        try:
+            total_storage_capacity = float(total_storage_capacity or 0)
+        except Exception:
+            total_storage_capacity = 0.0
         
-        storage_percentage = (total_storage_used / total_storage_capacity * 100) if total_storage_capacity and total_storage_capacity > 0 else 0
+        storage_percentage = (total_storage_used / total_storage_capacity * 100.0) if total_storage_capacity and total_storage_capacity > 0 else 0.0
         
         return jsonify({
             'overview': {
@@ -435,7 +443,7 @@ def get_playback_status():
     """Retorna KPIs de reprodução em tempo real dos players"""
     try:
         print(f"[DASHBOARD] Endpoint playback-status chamado")
-        from app import PLAYER_PLAYBACK_STATUS, CONNECTED_PLAYERS
+        # Status agora é persistido no banco; não depende de variáveis globais em memória
         from datetime import datetime, timezone, timedelta
         
         current_time = datetime.now(timezone.utc)
@@ -444,8 +452,6 @@ def get_playback_status():
         # Calcular estatísticas de reprodução
         total_players = Player.query.count()
         print(f"[DASHBOARD] Total players no banco: {total_players}")
-        print(f"[DASHBOARD] PLAYER_PLAYBACK_STATUS: {PLAYER_PLAYBACK_STATUS}")
-        print(f"[DASHBOARD] CONNECTED_PLAYERS: {CONNECTED_PLAYERS}")
         online_players = 0
         playing_players = 0
         idle_players = 0
@@ -458,13 +464,75 @@ def get_playback_status():
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
         online_player_ids = set()
         
-        all_players = Player.query.all()
-        print(f"[DASHBOARD] Players encontrados: {len(all_players)}")
+        # Buscar players com fallback para esquemas antigos
+        is_orm_players = True
+        try:
+            all_players = Player.query.all()
+            print(f"[DASHBOARD] Players encontrados: {len(all_players)} (ORM)")
+        except Exception as fetch_err:
+            print(f"[DASHBOARD] Falha ao buscar players via ORM (fallback leve): {fetch_err}")
+            from sqlalchemy import text as _text
+            rows = db.session.execute(_text("SELECT id, name, platform, location_id, last_ping, status FROM players"))
+            # Converter rows em objetos leves compatíveis
+            light_players = []
+            for r in rows:
+                try:
+                    # Acesso posicional e por nome para compatibilidade
+                    pid = getattr(r, 'id', None) if hasattr(r, 'id') else r[0]
+                    pname = getattr(r, 'name', None) if hasattr(r, 'name') else r[1]
+                    pplatform = getattr(r, 'platform', None) if hasattr(r, 'platform') else r[2]
+                    plocation_id = getattr(r, 'location_id', None) if hasattr(r, 'location_id') else r[3]
+                    plast_ping = getattr(r, 'last_ping', None) if hasattr(r, 'last_ping') else r[4]
+                    pstatus = getattr(r, 'status', None) if hasattr(r, 'status') else r[5]
+                except Exception:
+                    # Se a ordem variar, tente por dict/mapping
+                    try:
+                        m = r._mapping if hasattr(r, '_mapping') else {}
+                        pid = m.get('id')
+                        pname = m.get('name')
+                        pplatform = m.get('platform')
+                        plocation_id = m.get('location_id')
+                        plast_ping = m.get('last_ping')
+                        pstatus = m.get('status')
+                    except Exception:
+                        continue
+                # Criar objeto leve com atributos usados abaixo
+                class _LightPlayer:
+                    pass
+                lp = _LightPlayer()
+                lp.id = pid
+                lp.name = pname
+                lp.platform = pplatform
+                lp.location_id = plocation_id
+                # location_name via consulta
+                try:
+                    loc = Location.query.get(plocation_id)
+                    lp.location_name = loc.name if loc else 'N/A'
+                except Exception:
+                    lp.location_name = 'N/A'
+                lp.last_ping = plast_ping
+                lp.status = pstatus
+                # Campos de telemetria inexistentes em esquema antigo
+                lp.is_playing = False
+                lp.last_playback_heartbeat = None
+                lp.playback_start_time = None
+                lp.current_content_id = None
+                lp.current_content_title = None
+                lp.current_content_type = None
+                lp.current_campaign_name = None
+                light_players.append(lp)
+            all_players = light_players
+            is_orm_players = False
+            print(f"[DASHBOARD] Players encontrados: {len(all_players)} (fallback leve)")
         
         for player in all_players:
             print(f"[DASHBOARD] Processando player: {player.name} (ID: {player.id})")
             print(f"[DASHBOARD] Last ping: {player.last_ping}")
-            is_online = player.last_ping and player.last_ping >= five_minutes_ago
+            # Usar propriedade robusta que lida com string/datetime
+            try:
+                is_online = bool(player.is_online)
+            except Exception:
+                is_online = False
             print(f"[DASHBOARD] Player {player.name} online: {is_online}")
             
             if is_online:
@@ -478,9 +546,23 @@ def get_playback_status():
             
             # Verificar se o heartbeat está recente (últimos 2 minutos)
             heartbeat_fresh = False
-            if player.last_playback_heartbeat:
-                heartbeat_age = (datetime.utcnow() - player.last_playback_heartbeat).total_seconds()
-                heartbeat_fresh = heartbeat_age < 120  # 2 minutos
+            heartbeat_dt = None
+            lph = getattr(player, 'last_playback_heartbeat', None)
+            if lph:
+                if isinstance(lph, datetime):
+                    heartbeat_dt = lph
+                elif isinstance(lph, str):
+                    try:
+                        from dateutil import parser as dtparser
+                        heartbeat_dt = dtparser.parse(lph)
+                    except Exception:
+                        heartbeat_dt = None
+            if heartbeat_dt:
+                try:
+                    heartbeat_age = (datetime.utcnow() - heartbeat_dt).total_seconds()
+                    heartbeat_fresh = heartbeat_age < 120  # 2 minutos
+                except Exception:
+                    heartbeat_fresh = False
             
             # Se não há heartbeat recente, considerar como não reproduzindo
             if is_playing and not heartbeat_fresh:
@@ -510,8 +592,8 @@ def get_playback_status():
                     'campaign_name': player.current_campaign_name,
                     'playlist_position': '1/1'  # Simplificado por enquanto
                 } if is_playing and heartbeat_fresh else None,
-                'last_heartbeat': player.last_playback_heartbeat.isoformat() if player.last_playback_heartbeat else None,
-                'start_time': player.playback_start_time.isoformat() if player.playback_start_time else None
+                'last_heartbeat': (heartbeat_dt.isoformat() if heartbeat_dt else (player.last_playback_heartbeat if isinstance(player.last_playback_heartbeat, str) else None)),
+                'start_time': (player.playback_start_time.isoformat() if isinstance(player.playback_start_time, datetime) else (player.playback_start_time if isinstance(player.playback_start_time, str) else None))
             })
         
         # Detectar players "fantasma" (online mas sem reprodução há mais de 10 minutos)
@@ -522,14 +604,27 @@ def get_playback_status():
             if not player:
                 continue
                 
-            # Se o player está reproduzindo atualmente, não é fantasma
-            if player.is_playing and player.last_playback_heartbeat:
-                heartbeat_age = (datetime.utcnow() - player.last_playback_heartbeat).total_seconds()
-                if heartbeat_age < 120:  # Heartbeat recente (2 minutos)
-                    continue
+            # Se o player está reproduzindo atualmente, não é fantasma (considerando heartbeat recente)
+            hb_dt = None
+            lph = getattr(player, 'last_playback_heartbeat', None)
+            if isinstance(lph, datetime):
+                hb_dt = lph
+            elif isinstance(lph, str):
+                try:
+                    from dateutil import parser as dtparser
+                    hb_dt = dtparser.parse(lph)
+                except Exception:
+                    hb_dt = None
+            if player.is_playing and hb_dt:
+                try:
+                    heartbeat_age = (datetime.utcnow() - hb_dt).total_seconds()
+                    if heartbeat_age < 120:  # Heartbeat recente (2 minutos)
+                        continue
+                except Exception:
+                    pass
             
             # Verificar se nunca enviou heartbeat ou há muito tempo
-            last_heartbeat = player.last_playback_heartbeat
+            last_heartbeat = hb_dt
             
             reasons = []
             heartbeat_age_sec = None

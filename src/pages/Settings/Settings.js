@@ -98,6 +98,52 @@ const CompanyNameField = memo(({ value, onChange, theme }) => {
   );
 });
 
+// Componente otimizado para o display name (evita re-render pesado a cada tecla)
+const DisplayNameField = memo(({ value, onChange, theme }) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  const lastPropValueRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastPropValueRef.current) {
+      setDisplayValue(value);
+      lastPropValueRef.current = value;
+    }
+  }, [value]);
+
+  const commitChange = useCallback(() => {
+    if (displayValue !== lastPropValueRef.current) {
+      onChange(displayValue);
+      lastPropValueRef.current = displayValue;
+    }
+  }, [displayValue, onChange]);
+
+  return (
+    <TextField
+      fullWidth
+      label="Nome exibido (header/sidebar)"
+      value={displayValue}
+      onChange={(e) => setDisplayValue(e.target.value)}
+      onBlur={commitChange}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitChange(); } }}
+      autoComplete="off"
+      sx={{ 
+        mb: 3,
+        '& .MuiOutlinedInput-root': {
+          borderRadius: '12px',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+          },
+          '&.Mui-focused': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
+          }
+        }
+      }}
+    />
+  );
+});
+
 // Componente otimizado para switches
 const SettingSwitch = memo(({ checked, onChange, label, sx, theme }) => {
   return (
@@ -183,12 +229,10 @@ const Settings = () => {
     }
   }, [contextLoading, settings]);
 
-  // Sincronizar display name da empresa para não-admins
+  // Sincronizar display name da empresa para todos os papéis
   useEffect(() => {
-    if (!isAdmin) {
-      setLocalCompanyDisplayName(companyDisplayName || '');
-    }
-  }, [companyDisplayName, isAdmin]);
+    setLocalCompanyDisplayName(companyDisplayName || '');
+  }, [companyDisplayName]);
 
   // Sincronizar tema com isDarkMode (fonte da verdade visual)
   useEffect(() => {
@@ -239,6 +283,10 @@ const Settings = () => {
         if (Object.keys(changedSettings).length > 0) {
           await updateSettings(changedSettings);
         }
+
+        if (localCompanyDisplayName !== (companyDisplayName || '')) {
+          await updateCompanyDisplayName(localCompanyDisplayName);
+        }
         
         setSuccess('Configurações salvas com sucesso!');
       }
@@ -249,7 +297,7 @@ const Settings = () => {
     } finally {
       setSaving(false);
     }
-  }, [settings, updateSettings, isAdmin, localCompanyDisplayName, updateCompanyDisplayName]);
+  }, [settings, updateSettings, isAdmin, localCompanyDisplayName, updateCompanyDisplayName, companyDisplayName]);
 
   const SettingsSkeleton = () => (
     <Box>
@@ -515,15 +563,19 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <CompanyNameField 
-                        value={isAdmin ? formSettings['general.company_name'] : localCompanyDisplayName} 
-                        onChange={(value) => {
-                          if (isAdmin) {
+                      {isAdmin && (
+                        <CompanyNameField 
+                          value={formSettings['general.company_name']}
+                          onChange={(value) => {
                             handleSettingChange('general.company_name', value);
-                          } else {
-                            setLocalCompanyDisplayName(value);
-                          }
-                        }}
+                          }}
+                          theme={theme}
+                        />
+                      )}
+
+                      <DisplayNameField
+                        value={localCompanyDisplayName}
+                        onChange={(val) => setLocalCompanyDisplayName(val)}
                         theme={theme}
                       />
                       

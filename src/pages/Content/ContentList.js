@@ -260,6 +260,7 @@ const ContentList = () => {
               </IconButton>
             </Tooltip>
             <Button
+              data-tour="btn-new-content"
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => navigate('/content/new')}

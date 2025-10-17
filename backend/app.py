@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import os
 from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import inspect as sa_inspect, text
 import atexit
 
 # App/DB
@@ -24,6 +25,7 @@ from routes.schedule import schedule_bp
 from routes.dashboard import dashboard_bp
 from routes.cast import cast_bp
 from routes.settings import settings_bp
+from routes.onboarding import onboarding_bp
 
 # Registros modulares
 from public.routes import register_public_routes
@@ -48,8 +50,15 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
 # Config
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///tvs_platform.db')
+db_uri = os.getenv('DATABASE_URL')
+if not db_uri:
+    raise RuntimeError('DATABASE_URL environment variable is required (e.g., mysql+pymysql://user:password@host:3306/dbname)')
+app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 1800,
+}
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 24)))
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', 'uploads')
@@ -115,6 +124,7 @@ app.register_blueprint(schedule_bp, url_prefix='/api/schedules')
 app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
 app.register_blueprint(cast_bp, url_prefix='/api/cast')
 app.register_blueprint(settings_bp)
+app.register_blueprint(onboarding_bp, url_prefix='/api/onboarding')
 
 # Registros modulares
 register_public_routes(app)
@@ -184,10 +194,50 @@ atexit.register(_safe_scheduler_shutdown)
 # Bootstrap mínimo de tabelas e admin default
 from werkzeug.security import generate_password_hash
 
+def ensure_onboarding_columns():
+    """Garante colunas de onboarding na tabela users em bancos já existentes."""
+    with app.app_context():
+        try:
+            inspector = sa_inspect(db.engine)
+            if not inspector.has_table('users'):
+                return
+            existing = {col['name'] for col in inspector.get_columns('users')}
+            dialect = (db.engine.dialect.name or '').lower()
+
+            def _add(sql):
+                try:
+                    db.session.execute(text(sql))
+                    db.session.commit()
+                except Exception as e:
+                    db.session.rollback()
+                    # evitar crash em caso de coluna já existir/erro de permissão
+                    print(f"[Init] Aviso ao adicionar coluna: {e}")
+
+            if 'onboarding_version' not in existing:
+                if dialect in ('mysql', 'mariadb'):
+                    _add("ALTER TABLE users ADD COLUMN onboarding_version VARCHAR(50) NULL")
+                else:
+                    _add("ALTER TABLE users ADD COLUMN onboarding_version TEXT")
+            if 'onboarding_completed_at' not in existing:
+                if dialect in ('mysql', 'mariadb'):
+                    _add("ALTER TABLE users ADD COLUMN onboarding_completed_at DATETIME NULL")
+                else:
+                    _add("ALTER TABLE users ADD COLUMN onboarding_completed_at DATETIME")
+            if 'onboarding_step_index' not in existing:
+                if dialect in ('mysql', 'mariadb'):
+                    _add("ALTER TABLE users ADD COLUMN onboarding_step_index INT DEFAULT 0")
+                else:
+                    _add("ALTER TABLE users ADD COLUMN onboarding_step_index INTEGER DEFAULT 0")
+        except Exception as e:
+            print(f"[Init] Aviso: não foi possível garantir colunas de onboarding: {e}")
+
+
 def create_tables():
     with app.app_context():
         try:
             db.create_all()
+            # Garantir colunas de onboarding em bases existentes
+            ensure_onboarding_columns()
             admin = User.query.filter_by(email='admin@tvs.com').first()
             if not admin:
                 print("[Init] Criando usuário admin padrão...")
@@ -259,3 +309,4 @@ def start_application():
 
 if __name__ == '__main__':
     start_application()
+

@@ -31,7 +31,6 @@ import {
 import {
   Add as AddIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -287,6 +286,7 @@ const CampaignList = () => {
         icon={<CampaignIcon />}
         actions={
           <Button
+            data-tour="btn-new-campaign"
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate('/campaigns/new')}
@@ -416,30 +416,7 @@ const CampaignList = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={3}>
-                <Button
-                  variant="outlined"
-                  startIcon={<FilterIcon />}
-                  fullWidth
-                  sx={{
-                    borderRadius: '12px',
-                    py: 1.5,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderColor: 'rgba(255, 119, 48, 0.5)',
-                    color: '#ff7730',
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      borderColor: '#ff7730',
-                      background: 'rgba(255, 119, 48, 0.05)',
-                      transform: 'translateY(-1px)',
-                    }
-                  }}
-                  onClick={loadCampaigns}
-                >
-                  Filtrar
-                </Button>
-              </Grid>
+              
             </Grid>
           </CardContent>
         </Card>

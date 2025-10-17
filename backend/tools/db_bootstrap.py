@@ -1,4 +1,4 @@
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 from database import db
 
 
@@ -9,6 +9,8 @@ def ensure_schema_columns():
     try:
         engine = db.engine
         with engine.connect() as conn:
+            inspector = inspect(engine)
+
             table_columns = {
                 'users': [
                     ('company', 'VARCHAR(100)', 'iTracker'),
@@ -29,32 +31,34 @@ def ensure_schema_columns():
                 ]
             }
 
-            for table, columns in table_columns.items():
-                try:
-                    result = conn.execute(text(f"PRAGMA table_info({table})"))
-                    rows = result.fetchall()
-                    if rows:
-                        existing_cols = [r[1] for r in rows]
+            trans = conn.begin()
+            try:
+                for table, columns in table_columns.items():
+                    try:
+                        if not inspector.has_table(table):
+                            continue
+                        existing_cols = [c['name'] for c in inspector.get_columns(table)]
                         for col_name, col_type, default_val in columns:
                             if col_name not in existing_cols:
                                 if default_val is None:
                                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
                                 else:
+                                    # manter DEFAULT com aspas para strings/booleans
                                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type} DEFAULT '{default_val}'"))
-                except Exception as te:
-                    print(f"[DB] Erro ao processar tabela {table}: {te}")
+                    except Exception as te:
+                        print(f"[DB] Erro ao processar tabela {table}: {te}")
 
-            # Garantir access_code em players (ou player)
-            for table in ['players', 'player']:
-                try:
-                    result = conn.execute(text(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"))
-                    if result.fetchone():
-                        info = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
-                        colnames = [r[1] for r in info]
-                        if 'access_code' not in colnames:
+                # Garantir access_code em players (ou player)
+                for table in ['players', 'player']:
+                    try:
+                        if not inspector.has_table(table):
+                            continue
+                        existing = [c['name'] for c in inspector.get_columns(table)]
+                        if 'access_code' not in existing:
                             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN access_code VARCHAR(12)"))
+                            # criar índice único, ignorando erro se já existir
                             try:
-                                conn.execute(text(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_access_code ON {table} (access_code)"))
+                                conn.execute(text(f"CREATE UNIQUE INDEX idx_{table}_access_code ON {table} (access_code)"))
                             except Exception:
                                 pass
                             # Backfill códigos
@@ -72,8 +76,12 @@ def ensure_schema_columns():
                                         break
                                     except Exception:
                                         attempts += 1
-                        break
-                except Exception:
-                    continue
+                    except Exception as e:
+                        print(f"[DB] Erro ao garantir access_code em {table}: {e}")
+
+                trans.commit()
+            except Exception as e:
+                trans.rollback()
+                raise
     except Exception as e:
         print(f"[DB] Erro ao garantir schema: {e}")

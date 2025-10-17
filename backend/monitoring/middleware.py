@@ -1,6 +1,6 @@
 from flask import request, g
 from time import perf_counter
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.schedule import fmt_br_datetime
 from .state import TRAFFIC_STATS, TRAFFIC_MINUTE, TRAFFIC_LOCK, UPLOAD_METRICS
@@ -44,7 +44,7 @@ def register_monitoring_middleware(app):
                     pstats['last_seen'] = ts
                     TRAFFIC_STATS['total_bytes'] += bytes_sent
 
-                    minute_key = fmt_br_datetime(datetime.now().replace(second=0, microsecond=0))
+                    minute_key = datetime.now(timezone.utc).replace(second=0, microsecond=0).isoformat()
                     pminute = TRAFFIC_MINUTE.setdefault(pid, {})
                     bucket = pminute.setdefault(minute_key, {
                         'bytes': 0, 'requests': 0,

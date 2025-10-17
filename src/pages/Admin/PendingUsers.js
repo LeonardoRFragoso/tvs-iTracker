@@ -389,13 +389,9 @@ const AdminUsers = () => {
             >
               <MenuItem value="">Todos</MenuItem>
               <MenuItem value="admin">Admin</MenuItem>
-              <MenuItem value="manager">Manager</MenuItem>
               <MenuItem value="rh">RH</MenuItem>
-              <MenuItem value="user">User</MenuItem>
             </TextField>
             <Button variant="outlined" onClick={fetchUsers} disabled={loadingUsers}>Atualizar</Button>
-            <Box sx={{ flex: 1 }} />
-            <Button variant="contained" onClick={() => setCreateDialog({ open: true, username: '', email: '', role: 'rh', company: companies[0] || 'iTracker', password: '' })}>Novo Usuário</Button>
           </Toolbar>
 
           <Paper>
@@ -431,13 +427,11 @@ const AdminUsers = () => {
                         <TableCell>
                           <FormControl size="small" sx={{ minWidth: 140 }}>
                             <Select
-                              value={u.role || 'user'}
+                              value={(u.role === 'admin' || u.role === 'rh') ? u.role : 'rh'}
                               onChange={(e) => handleChangeRole(u.id, e.target.value)}
                             >
                               <MenuItem value="admin">Admin</MenuItem>
-                              <MenuItem value="manager">Manager</MenuItem>
                               <MenuItem value="rh">RH</MenuItem>
-                              <MenuItem value="user">User</MenuItem>
                             </Select>
                           </FormControl>
                         </TableCell>
@@ -550,9 +544,7 @@ const AdminUsers = () => {
                 <InputLabel>Papel</InputLabel>
                 <Select label="Papel" value={createDialog.role} onChange={(e) => setCreateDialog({ ...createDialog, role: e.target.value })}>
                   <MenuItem value="admin">Admin</MenuItem>
-                  <MenuItem value="manager">Manager</MenuItem>
                   <MenuItem value="rh">RH</MenuItem>
-                  <MenuItem value="user">User</MenuItem>
                 </Select>
               </FormControl>
               <FormControl fullWidth size="small">

@@ -45,6 +45,8 @@ def list_players():
         is_active = request.args.get('is_active')
         region = request.args.get('region')
         search = request.args.get('search')
+        status = request.args.get('status')
+        location_id = request.args.get('location_id')
         
         print(f"[DEBUG] Parâmetros: page={page}, per_page={per_page}, is_online={is_online}, is_active={is_active}, region={region}, search={search}")
         
@@ -74,8 +76,20 @@ def list_players():
                 sql_where.append("l.company = :company")
                 sql_params['company'] = current_user.company
         
-        # Filtrar por is_online
-        if is_online is not None:
+        # Filtrar por status (prioritário) ou is_online
+        if status is not None and str(status).strip() != '':
+            s = status.lower()
+            if s in ['online', 'offline']:
+                threshold = datetime.utcnow() - timedelta(minutes=5)
+                if s == 'online':
+                    sql_where.append("p.last_ping IS NOT NULL AND p.last_ping >= :threshold")
+                else:
+                    sql_where.append("(p.last_ping IS NULL OR p.last_ping < :threshold)")
+                sql_params['threshold'] = threshold
+            else:
+                sql_where.append("LOWER(p.status) = :status")
+                sql_params['status'] = s
+        elif is_online is not None:
             threshold = datetime.utcnow() - timedelta(minutes=5)
             if is_online.lower() == 'true':
                 sql_where.append("p.last_ping IS NOT NULL AND p.last_ping >= :threshold")
@@ -94,6 +108,11 @@ def list_players():
         if region:
             sql_where.append("p.region = :region")
             sql_params['region'] = region
+        
+        # Filtrar por location_id
+        if location_id:
+            sql_where.append("p.location_id = :location_id")
+            sql_params['location_id'] = location_id
         
         # Filtrar por search
         if search:
@@ -755,13 +774,28 @@ def get_player_stats():
             stats_by_platform_q = stats_by_platform_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
         stats_by_platform = stats_by_platform_q.group_by(Player.platform).all()
         
-        stats_by_region_q = db.session.query(
-            Player.region,
-            db.func.count(Player.id).label('count')
-        ).filter(Player.region != '')
-        if current_user and current_user.role == 'rh':
-            stats_by_region_q = stats_by_region_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
-        stats_by_region = stats_by_region_q.group_by(Player.region).all()
+        # Agrupamento por região deve ser resiliente a esquemas sem coluna Player.region
+        stats_by_region = []
+        try:
+            if hasattr(Player, 'region'):
+                stats_by_region_q = db.session.query(
+                    Player.region,
+                    db.func.count(Player.id).label('count')
+                ).filter(Player.region != None, Player.region != '')
+                if current_user and current_user.role == 'rh':
+                    stats_by_region_q = stats_by_region_q.join(Location, Player.location_id == Location.id).filter(Location.company == current_user.company)
+                stats_by_region = stats_by_region_q.group_by(Player.region).all()
+            else:
+                # Fallback: usar nome da Location como "região"
+                stats_by_region_q = db.session.query(
+                    Location.name.label('region'),
+                    db.func.count(Player.id).label('count')
+                ).join(Location, Player.location_id == Location.id)
+                if current_user and current_user.role == 'rh':
+                    stats_by_region_q = stats_by_region_q.filter(Location.company == current_user.company)
+                stats_by_region = stats_by_region_q.group_by(Location.name).all()
+        except Exception:
+            stats_by_region = []
         
         return jsonify({
             'total_players': total_players,

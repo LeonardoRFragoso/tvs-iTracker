@@ -1334,6 +1334,52 @@ const CampaignForm = () => {
 
               {/* Enhanced Action Buttons removidos para evitar duplicação */}
             </Grid>
+            {/* Ações principais (Salvar/Cancelar) */}
+            <Grid container spacing={2} sx={{ mt: 2 }}>
+              <Grid item xs={12}>
+                <Box display="flex" gap={2} justifyContent="flex-end">
+                  <Button
+                    variant="outlined"
+                    onClick={() => navigate('/campaigns')}
+                    startIcon={<CancelIcon />}
+                    sx={{
+                      borderRadius: 2,
+                      px: 4,
+                      py: 1.5,
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        transition: 'transform 0.2s ease-in-out',
+                      },
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => handleSubmit()}
+                    variant="contained"
+                    disabled={loading || !formData.name || !formData.start_date || !formData.end_date}
+                    startIcon={<SaveIcon />}
+                    sx={{
+                      borderRadius: 2,
+                      px: 4,
+                      py: 1.5,
+                      background: (theme) => theme.palette.mode === 'dark'
+                        ? theme.palette.primary.main
+                        : 'linear-gradient(45deg, #2196F3, #21CBF3)',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        transition: 'transform 0.2s ease-in-out',
+                      },
+                      '&:disabled': {
+                        background: 'rgba(0, 0, 0, 0.12)',
+                      },
+                    }}
+                  >
+                    {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar')}
+                  </Button>
+                </Box>
+              </Grid>
+            </Grid>
           </Box>
         )}
 
@@ -1930,119 +1976,24 @@ const CampaignForm = () => {
           </DialogActions>
         </Dialog>
 
-        {/* Tabs */}
-        <Paper sx={{ mt: 2 }}>
-          <Tabs 
-            value={currentTab} 
-            onChange={(e, newValue) => setCurrentTab(newValue)}
-            variant="fullWidth"
-          >
-            <Tab icon={<SettingsIcon />} label="Configurações Gerais" />
-            {isEdit && <Tab icon={<ContentIcon />} label="Conteúdos" />}
-            {isEdit && <Tab icon={<AnalyticsIcon />} label="Analytics" />}
-          </Tabs>
-        </Paper>
-
-        {/* Tab Content */}
-        {currentTab === 0 && (
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={2}>
-              {/* Informações Básicas */}
-              <Grid item xs={12}>
-                <Card>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
-                      Informações Básicas
-                    </Typography>
-                    <Grid container spacing={1.5}>
-                      <Grid item xs={12} md={6}>
-                        <TextField
-                          fullWidth
-                          label="Nome da Campanha"
-                          value={formData.name}
-                          onChange={(e) => handleInputChange('name', e.target.value)}
-                          required
-                          disabled={loading}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        />
-                      </Grid>
-
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          multiline
-                          rows={3}
-                          label="Descrição"
-                          value={formData.description}
-                          onChange={(e) => handleInputChange('description', e.target.value)}
-                          disabled={loading}
-                        />
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              {/* REMOVIDO: Configurações de Reprodução movidas para Agendamentos */}
-
-              {/* Actions */}
-              <Grid item xs={12}>
-                <Box display="flex" gap={2} justifyContent="flex-end">
-                  <Button
-                    variant="outlined"
-                    onClick={() => navigate('/campaigns')} 
-                    startIcon={<CancelIcon />}
-                    sx={{
-                      borderRadius: 2,
-                      px: 4,
-                      py: 1.5,
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        transition: 'transform 0.2s ease-in-out',
-                      },
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={loading || !formData.name || !formData.start_date || !formData.end_date}
-                    startIcon={<SaveIcon />}
-                    sx={{
-                      borderRadius: 2,
-                      px: 4,
-                      py: 1.5,
-                      background: (theme) => theme.palette.mode === 'dark'
-                        ? theme.palette.primary.main
-                        : 'linear-gradient(45deg, #2196F3, #21CBF3)',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        transition: 'transform 0.2s ease-in-out',
-                      },
-                      '&:disabled': {
-                        background: 'rgba(0, 0, 0, 0.12)',
-                      },
-                    }}
-                  >
-                    {loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar')}
-                  </Button>
-                </Box>
-              </Grid>
-            </Grid>
-          </form>
+        {/* Tabs (somente em modo edição) */}
+        {isEdit && (
+          <Paper sx={{ mt: 2 }}>
+            <Tabs 
+              value={currentTab} 
+              onChange={(e, newValue) => setCurrentTab(newValue)}
+              variant="fullWidth"
+            >
+              <Tab icon={<ContentIcon />} label="Conteúdos" />
+              <Tab icon={<AnalyticsIcon />} label="Analytics" />
+            </Tabs>
+          </Paper>
         )}
 
+        {/* Tab Content (somente em modo edição) */}
+
         {/* Tab de Conteúdos */}
-        {currentTab === 1 && isEdit && (
+        {isEdit && currentTab === 0 && (
           <MultiContentManager 
             campaignId={id} 
             onContentChange={handleContentChange}
@@ -2050,7 +2001,7 @@ const CampaignForm = () => {
         )}
 
         {/* Tab de Analytics */}
-        {currentTab === 2 && isEdit && (
+        {isEdit && currentTab === 1 && (
           <CampaignAnalytics campaignId={id} />
         )}
       </Box>

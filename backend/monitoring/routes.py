@@ -10,6 +10,7 @@ from models.system_config import SystemConfig
 
 from .state import TRAFFIC_STATS, TRAFFIC_MINUTE, TRAFFIC_LOCK
 from .utils import collect_system_stats
+from .jobs import _ensure_network_tables
 
 
 # Helpers locais
@@ -123,13 +124,17 @@ def register_monitoring_routes(app):
             if not user or user.role not in ['admin', 'manager', 'rh']:
                 return jsonify({'error': 'Sem permissão'}), 403
 
+            # Garante existência das tabelas necessárias
+            _ensure_network_tables()
+
             try:
                 import dateutil.parser as _p
             except Exception:
                 _p = None
 
-            q_from = request.args.get('from')
-            q_to = request.args.get('to')
+            # Aceita aliases: from/to e start/end
+            q_from = request.args.get('from') or request.args.get('start')
+            q_to = request.args.get('to') or request.args.get('end')
             group_by = (request.args.get('group_by') or 'minute').lower()
             player_id = request.args.get('player_id')
             company = request.args.get('company')
@@ -154,14 +159,23 @@ def register_monitoring_routes(app):
                     d = dt.replace('Z', '')
                     return datetime.fromisoformat(d).isoformat()
                 except Exception:
+                    pass
+                # Suporte a formatos BR: DD/MM/YYYY e DD/MM/YYYY HH:MM:SS
+                try:
+                    if ' ' in dt:
+                        d = datetime.strptime(dt.strip(), '%d/%m/%Y %H:%M:%S')
+                    else:
+                        d = datetime.strptime(dt.strip(), '%d/%m/%Y')
+                    return d.isoformat()
+                except Exception:
                     return dt
 
             params = {}
             clauses = []
             if q_from:
-                clauses.append(f"{ts_col} >= :from"); params['from'] = _iso(q_from)
+                clauses.append(f"{ts_col} >= :start"); params['start'] = _iso(q_from)
             if q_to:
-                clauses.append(f"{ts_col} <= :to"); params['to'] = _iso(q_to)
+                clauses.append(f"{ts_col} <= :end"); params['end'] = _iso(q_to)
             if player_id:
                 clauses.append("player_id = :player_id"); params['player_id'] = str(player_id)
             if company:
@@ -180,7 +194,14 @@ def register_monitoring_routes(app):
                 GROUP BY {ts_col}
                 ORDER BY {ts_col} ASC
             """)
-            rows = db.session.execute(sql, params).fetchall()
+            try:
+                rows = db.session.execute(sql, params).fetchall()
+            except Exception as qe:
+                msg = str(qe).lower()
+                if 'no such table' in msg or "doesn't exist" in msg or 'unknown table' in msg:
+                    # Tabela ainda não criada: retorna vazio para não quebrar a UI
+                    return jsonify({'group_by': group_by, 'series': []}), 200
+                raise
             series = [{
                 'ts': r[0], 'bytes': int(r[1] or 0), 'requests': int(r[2] or 0),
                 'video': int(r[3] or 0), 'image': int(r[4] or 0),
@@ -200,8 +221,19 @@ def register_monitoring_routes(app):
             if not user or user.role not in ['admin', 'manager', 'rh']:
                 return jsonify({'error': 'Sem permissão'}), 403
 
+            # Garante existência das tabelas necessárias
+            _ensure_network_tables()
+
             period = (request.args.get('period') or '24h').lower()
-            limit = int(request.args.get('limit', 10))
+            try:
+                limit = int(request.args.get('limit', 10))
+            except Exception:
+                limit = 10
+            # Sanitiza LIMIT embutindo um inteiro seguro (evita problemas com drivers MySQL)
+            if limit < 1:
+                limit = 1
+            if limit > 100:
+                limit = 100
             player_id = request.args.get('player_id')
             company = request.args.get('company')
             location_id = request.args.get('location_id')
@@ -234,9 +266,15 @@ def register_monitoring_routes(app):
                 {where_sql}
                 GROUP BY player_id
                 ORDER BY bytes DESC
-                LIMIT :limit
+                LIMIT {limit}
             ''')
-            rows = db.session.execute(sql, params).fetchall()
+            try:
+                rows = db.session.execute(sql, params).fetchall()
+            except Exception as qe:
+                msg = str(qe).lower()
+                if 'no such table' in msg or "doesn't exist" in msg or 'unknown table' in msg:
+                    return jsonify({'start': start, 'now': now.isoformat(), 'top': []}), 200
+                raise
             items = [{'player_id': r[0], 'bytes': int(r[1] or 0), 'requests': int(r[2] or 0)} for r in rows]
 
             return jsonify({'start': start, 'now': now.isoformat(), 'top': items}), 200
@@ -264,6 +302,9 @@ def register_monitoring_routes(app):
             user = db.session.get(User, user_id)
             if not user or user.role not in ['admin', 'manager', 'rh']:
                 return jsonify({'error': 'Sem permissão'}), 403
+
+            # Garante existência das tabelas necessárias
+            _ensure_network_tables()
 
             period = (request.args.get('period') or '24h').lower()
             player_id = request.args.get('player_id')
@@ -308,7 +349,13 @@ def register_monitoring_routes(app):
                 GROUP BY player_id
                 ORDER BY bytes DESC
             ''')
-            rows = db.session.execute(sql, params).fetchall()
+            try:
+                rows = db.session.execute(sql, params).fetchall()
+            except Exception as qe:
+                msg = str(qe).lower()
+                if 'no such table' in msg or "doesn't exist" in msg or 'unknown table' in msg:
+                    return jsonify({'start': start, 'now': now.isoformat(), 'items': []}), 200
+                raise
             items = [{
                 'player_id': r[0],
                 'last_seen': r[1],

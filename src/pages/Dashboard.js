@@ -284,6 +284,24 @@ const Dashboard = () => {
 
   useEffect(() => {
     const handleKeyPress = (event) => {
+      const active = document.activeElement;
+      const isTyping = !!(
+        active && (
+          active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.tagName === 'SELECT' ||
+          active.isContentEditable ||
+          (typeof active.closest === 'function' && active.closest('input, textarea, select, [contenteditable="true"], .MuiInputBase-root, [role="textbox"]'))
+        )
+      );
+
+      // Evitar recarregar/navegar enquanto digitando
+      if (isTyping && (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r'))) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
           case 'r':
@@ -654,7 +672,7 @@ const Dashboard = () => {
 
       {/* Estatísticas */}
       <Grid container spacing={1.5} mb={2.5}>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<ContentIcon />}
             title="Conteúdos"
@@ -667,7 +685,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<CampaignIcon />}
             title="Campanhas"
@@ -680,7 +698,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<PlayIcon />}
             title="Players Reproduzindo"
@@ -693,7 +711,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<StorageIcon />}
             title="Armazenamento"
@@ -707,7 +725,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Status dos Players */}
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<PlayerIcon />}
             title="Status dos Players"
@@ -721,7 +739,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Uso de Rede (detecção de sobreuso) */}
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           {(() => {
             const overuseCount = traffic?.overuse_players?.length || 0;
             const recentPlayers = traffic?.recent?.players || {};
@@ -746,7 +764,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Espaço de Upload */}
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<UploadIcon />}
             title="Espaço de Upload"
@@ -770,7 +788,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Espaço de Vídeos Compilados */}
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<CampaignIcon />}
             title="Vídeos Compilados"
@@ -796,7 +814,7 @@ const Dashboard = () => {
 
       <Grid container spacing={1.5}>
         {/* Gráfico de Performance */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12}>
           <Fade in={true} timeout={1200}>
             <Paper
               elevation={0}

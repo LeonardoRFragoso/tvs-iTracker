@@ -12,32 +12,75 @@ from .utils import collect_system_stats
 def _ensure_network_tables():
     try:
         engine = db.engine
-        with engine.connect() as conn:
+        is_mysql = (engine.dialect.name or '').startswith('mysql')
+        with engine.begin() as conn:
             for table, ts_col in [
                 ('network_samples_minute', 'ts_minute'),
                 ('network_samples_hour', 'ts_hour'),
                 ('network_samples_day', 'ts_day')
             ]:
-                conn.execute(text(f'''\
-                    CREATE TABLE IF NOT EXISTS {table} (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        player_id TEXT NOT NULL,
-                        {ts_col} TEXT NOT NULL,
-                        bytes INTEGER DEFAULT 0,
-                        requests INTEGER DEFAULT 0,
-                        video INTEGER DEFAULT 0,
-                        image INTEGER DEFAULT 0,
-                        audio INTEGER DEFAULT 0,
-                        other INTEGER DEFAULT 0,
-                        ip TEXT,
-                        company TEXT,
-                        location_id TEXT
-                    )
-                '''))
-                conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{table[17:]}_ts ON {table}({ts_col})'))
-                conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{table[17:]}_player_ts ON {table}(player_id, {ts_col})'))
-                conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{table[17:]}_company_ts ON {table}(company, {ts_col})'))
-                conn.execute(text(f'CREATE INDEX IF NOT EXISTS idx_{table[17:]}_location_ts ON {table}(location_id, {ts_col})'))
+                if is_mysql:
+                    create_sql = f'''\
+                        CREATE TABLE IF NOT EXISTS {table} (
+                            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                            player_id VARCHAR(36) NOT NULL,
+                            {ts_col} VARCHAR(32) NOT NULL,
+                            bytes BIGINT DEFAULT 0,
+                            requests INT DEFAULT 0,
+                            video BIGINT DEFAULT 0,
+                            image BIGINT DEFAULT 0,
+                            audio BIGINT DEFAULT 0,
+                            other BIGINT DEFAULT 0,
+                            ip VARCHAR(45),
+                            company VARCHAR(100),
+                            location_id VARCHAR(36)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                    '''
+                else:
+                    create_sql = f'''\
+                        CREATE TABLE IF NOT EXISTS {table} (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            player_id TEXT NOT NULL,
+                            {ts_col} TEXT NOT NULL,
+                            bytes INTEGER DEFAULT 0,
+                            requests INTEGER DEFAULT 0,
+                            video INTEGER DEFAULT 0,
+                            image INTEGER DEFAULT 0,
+                            audio INTEGER DEFAULT 0,
+                            other INTEGER DEFAULT 0,
+                            ip TEXT,
+                            company TEXT,
+                            location_id TEXT
+                        )
+                    '''
+                conn.execute(text(create_sql))
+
+                # Índices com nomes determinísticos por tabela/coluna
+                idx_ts = f'idx_{table}_{ts_col}'
+                idx_player_ts = f'idx_{table}_player_{ts_col}'
+                idx_company_ts = f'idx_{table}_company_{ts_col}'
+                idx_location_ts = f'idx_{table}_location_{ts_col}'
+
+                index_statements = [
+                    f'CREATE INDEX IF NOT EXISTS {idx_ts} ON {table}({ts_col})',
+                    f'CREATE INDEX IF NOT EXISTS {idx_player_ts} ON {table}(player_id, {ts_col})',
+                    f'CREATE INDEX IF NOT EXISTS {idx_company_ts} ON {table}(company, {ts_col})',
+                    f'CREATE INDEX IF NOT EXISTS {idx_location_ts} ON {table}(location_id, {ts_col})',
+                ]
+
+                for stmt in index_statements:
+                    try:
+                        conn.execute(text(stmt))
+                    except Exception as _e:
+                        # MariaDB < 10.5 pode não suportar IF NOT EXISTS em CREATE INDEX
+                        # Tenta sem IF NOT EXISTS e ignora erro de índice duplicado
+                        try:
+                            fallback = stmt.replace(' IF NOT EXISTS', '')
+                            conn.execute(text(fallback))
+                        except Exception as __e:
+                            msg = str(__e).lower()
+                            if 'duplicate key name' not in msg and 'already exists' not in msg:
+                                raise
     except Exception as e:
         print(f"[Monitor] Falha ao garantir tabelas de samples: {e}")
 
