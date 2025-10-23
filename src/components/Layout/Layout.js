@@ -186,26 +186,12 @@ const Layout = () => {
       badge: badges.content > 0 ? badges.content.toString() : null,
       description: 'Gerenciar mídias'
     },
-      { 
-        text: 'Empresas', 
-        icon: <LocationOn />, 
-        path: '/locations',
-      badge: badges.locations > 0 ? badges.locations.toString() : null,
-      description: 'Localizações ativas'
-    },
     { 
       text: 'Campanhas', 
       icon: <Campaign />, 
       path: '/campaigns',
       badge: null,
       description: 'Campanhas publicitárias'
-    },
-    { 
-      text: 'Players', 
-      icon: <Tv />, 
-      path: '/players',
-      badge: badges.players > 0 ? badges.players.toString() : null,
-      description: 'Players online'
     },
     { 
       text: 'Agendamentos', 
@@ -225,15 +211,7 @@ const Layout = () => {
 
   const computedMenuItems = useMemo(() => {
     let items = [...menuItems];
-    // Separar itens que devem ir para a seção Administração
-    const locationItem = items.find(i => i.path === '/locations');
-    const playersItem = items.find(i => i.path === '/players');
-    // Remover temporariamente para reordenar depois
-    items = items.filter(i => i.path !== '/locations' && i.path !== '/players');
     const isAdmin = user?.role === 'admin';
-
-    // Remover Monitor de Tráfego e Configurações temporariamente
-    items = items.filter(i => i.path !== '/admin/traffic-monitor' && i.path !== '/settings');
 
     // Adicionar item de aprovações para admin
     if (isAdmin) {
@@ -255,11 +233,27 @@ const Layout = () => {
         description: 'Estatísticas de rede por player'
       };
       items.push(monitorItem);
-    }
 
-    // Adicionar Empresas e Players na área de Administração (após itens admin e antes de Configurações)
-    if (locationItem) items.push(locationItem);
-    if (playersItem) items.push(playersItem);
+      // Adicionar Empresas na área de Administração
+      const locationItem = {
+        text: 'Empresas', 
+        icon: <LocationOn />, 
+        path: '/locations',
+        badge: badges.locations > 0 ? badges.locations.toString() : null,
+        description: 'Localizações ativas'
+      };
+      items.push(locationItem);
+
+      // Adicionar Players na área de Administração
+      const playersItem = {
+        text: 'Players', 
+        icon: <Tv />, 
+        path: '/players',
+        badge: badges.players > 0 ? badges.players.toString() : null,
+        description: 'Players online'
+      };
+      items.push(playersItem);
+    }
 
     // Sempre adicionar Configurações como último item
     const configItem = {
@@ -272,7 +266,7 @@ const Layout = () => {
     items.push(configItem);
 
     return items;
-  }, [menuItems, user]);
+  }, [menuItems, user, badges]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);

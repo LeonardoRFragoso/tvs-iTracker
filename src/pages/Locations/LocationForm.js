@@ -414,9 +414,8 @@ const LocationForm = () => {
               </Grow>
             </Grid>
 
-            {/* Removido: Configurações de Rede */}
-
-            {/* Removido: Horários de Pico */}
+            
+            
 
             {/* Actions */}
             <Grid item xs={12}>

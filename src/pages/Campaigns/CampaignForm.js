@@ -37,6 +37,7 @@ import {
   Divider,
   Tooltip,
 } from '@mui/material';
+import Autocomplete from '@mui/material/Autocomplete';
 import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
 import {
   Save as SaveIcon,
@@ -56,10 +57,6 @@ import {
   Pause as PauseIcon,
   Stop as StopIcon,
 } from '@mui/icons-material';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { ptBR } from 'date-fns/locale';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   DndContext,
@@ -86,41 +83,6 @@ import CampaignAnalytics from '../../components/Campaign/CampaignAnalytics';
 
 const API_HOST = axios.defaults.baseURL;
 
-// BR datetime helpers
-const pad2 = (n) => String(n).padStart(2, '0');
-const toBRDateTime = (date) => {
-  if (!date) return '';
-  const d = new Date(date);
-  const dd = pad2(d.getDate());
-  const mm = pad2(d.getMonth() + 1);
-  const yyyy = d.getFullYear();
-  const hh = pad2(d.getHours());
-  const min = pad2(d.getMinutes());
-  const ss = pad2(d.getSeconds());
-  return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
-};
-const parseDateTimeFlexible = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const s = value.trim();
-    if (s.includes('/')) {
-      const [datePart, timePart] = s.split(' ');
-      const [dd, mm, yyyy] = datePart.split('/').map(v => parseInt(v, 10));
-      let hh = 0, mi = 0, ss = 0;
-      if (timePart) {
-        const t = timePart.split(':');
-        hh = parseInt(t[0] || '0', 10);
-        mi = parseInt(t[1] || '0', 10);
-        ss = parseInt(t[2] || '0', 10);
-      }
-      return new Date(yyyy, mm - 1, dd, hh, mi, ss);
-    }
-    const iso = new Date(s);
-    if (!isNaN(iso.getTime())) return iso;
-  }
-  return null;
-};
 
 const CampaignForm = () => {
   const navigate = useNavigate();
@@ -134,8 +96,6 @@ const CampaignForm = () => {
     name: '',
     description: '',
     is_active: false,
-    start_date: null,
-    end_date: null,
     playback_mode: 'sequential',
     content_duration: 10,
     loop_enabled: false,
@@ -154,6 +114,9 @@ const CampaignForm = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [contentSearch, setContentSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [availableTags, setAvailableTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [matchAllTags, setMatchAllTags] = useState(false);
   // Aba ativa do modal (seleção/preview)
   const [contentModalTab, setContentModalTab] = useState('selection');
   // Estado de compilação (Preview tab)
@@ -460,10 +423,6 @@ const CampaignForm = () => {
     setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const handleDateChange = (field, value) => {
-    const d = value instanceof Date ? value : parseDateTimeFlexible(value);
-    setFormData((prev) => ({ ...prev, [field]: d }));
-  };
 
   // DnD reorder handler for inline list
   const handleDragEnd = (event) => {
@@ -489,18 +448,8 @@ const CampaignForm = () => {
     try {
       // Client-side validation
       const name = (formData.name || '').trim();
-      const sd = formData.start_date ? parseDateTimeFlexible(formData.start_date) : null;
-      const ed = formData.end_date ? parseDateTimeFlexible(formData.end_date) : null;
       if (!name) {
         setError('Nome da campanha é obrigatório.');
-        return;
-      }
-      if (!sd || !ed) {
-        setError('Data de início e data de fim são obrigatórias.');
-        return;
-      }
-      if (sd >= ed) {
-        setError('Data de início deve ser anterior à data de fim.');
         return;
       }
 
@@ -509,10 +458,7 @@ const CampaignForm = () => {
       const submitData = {
         name,
         description: formData.description || '',
-        start_date: toBRDateTime(sd),
-        end_date: toBRDateTime(ed),
         is_active: !!formData.is_active,
-        // REMOVIDO: Configurações de reprodução movidas para Schedule
       };
 
       // Sempre enviar o áudio de fundo (mesmo que vazio para remover)
@@ -526,8 +472,7 @@ const CampaignForm = () => {
         }));
       }
 
-      // Debug log AFTER defining submitData (avoid reference errors)
-      // console.log('Submitting campaign:', submitData);
+      
 
       const effId = effectiveCampaignId;
       if (effId) {
@@ -552,10 +497,25 @@ const CampaignForm = () => {
   // Data loading
   const loadAvailableContents = async () => {
     try {
-      const resp = await axios.get('/content?per_page=1000');
-      setAvailableContents(resp.data?.contents || []);
+      let url = '/content?per_page=1000';
+      const resp = await axios.get(url);
+      const contents = resp.data?.contents || [];
+      console.log('[CampaignForm] Conteúdos carregados:', contents.length);
+      console.log('[CampaignForm] Exemplo de conteúdo com tags:', contents.find(c => c.tags));
+      setAvailableContents(contents);
     } catch (err) {
       console.error('Erro ao carregar conteúdos disponíveis:', err);
+    }
+  };
+
+  const loadAvailableTags = async () => {
+    try {
+      const r = await axios.get('/content/tags');
+      const tags = r.data?.tags || [];
+      console.log('[CampaignForm] Tags carregadas:', tags);
+      setAvailableTags(tags);
+    } catch (err) {
+      console.error('Erro ao carregar tags:', err);
     }
   };
 
@@ -565,14 +525,11 @@ const CampaignForm = () => {
       const resp = await axios.get(`/campaigns/${id}`);
       const c = resp.data?.campaign || null;
       if (c) {
-        setFormData((prev) => ({
+        setFormData(prev => ({
           ...prev,
           name: c.name || '',
           description: c.description || '',
           is_active: !!c.is_active,
-          start_date: parseDateTimeFlexible(c.start_date),
-          end_date: parseDateTimeFlexible(c.end_date),
-          // REMOVIDO: Configurações de reprodução movidas para Schedule
         }));
         // Carregar áudio de fundo persistido
         if (c.background_audio_content_id) {
@@ -600,6 +557,7 @@ const CampaignForm = () => {
     const init = async () => {
       await Promise.all([
         loadAvailableContents(),
+        loadAvailableTags(),
         loadCampaignIfEdit(),
       ]);
       setInitialLoading(false);
@@ -804,14 +762,6 @@ const CampaignForm = () => {
       const defaultName = `Campanha ${now.getDate().toString().padStart(2,'0')}/${(now.getMonth()+1).toString().padStart(2,'0')}/${now.getFullYear()} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
 
       let name = (formData.name || '').trim() || defaultName;
-      let sd = formData.start_date ? parseDateTimeFlexible(formData.start_date) : null;
-      let ed = formData.end_date ? parseDateTimeFlexible(formData.end_date) : null;
-
-      if (!sd) sd = now;
-      if (!ed || (sd && ed <= sd)) {
-        // +1 dia por padrão
-        ed = new Date(sd.getTime() + 24 * 60 * 60 * 1000);
-      }
 
       if ((selectedContents || []).length === 0) {
         setError('Selecione ao menos 1 conteúdo para salvar.');
@@ -821,8 +771,6 @@ const CampaignForm = () => {
       const submitData = {
         name,
         description: formData.description || '',
-        start_date: toBRDateTime(sd),
-        end_date: toBRDateTime(ed),
         is_active: !!formData.is_active,
         contents: (selectedContents || []).map((id) => {
           const c = availableContents.find(x => x.id === id);
@@ -850,8 +798,6 @@ const CampaignForm = () => {
           ...prev,
           name,
           description: submitData.description,
-          start_date: sd,
-          end_date: ed,
           is_active: submitData.is_active
         }));
       }
@@ -904,9 +850,60 @@ const CampaignForm = () => {
 
   // Lista visível no modal (aplica filtros e exclui já adicionados)
   const getVisibleAvailableContents = useCallback(() => {
+    console.log('[CampaignForm] Executando filtragem. Total de conteúdos:', availableContents?.length || 0);
+    console.log('[CampaignForm] Filtros ativos - Tags:', selectedTags, 'Tipo:', typeFilter, 'Busca:', contentSearch, 'Match All:', matchAllTags);
+    
     return (availableContents || [])
       .filter(content => getTypeFor(content) !== 'audio')
       .filter(content => !campaignContents.find(cc => cc.id === content.id))
+      .filter(content => {
+        if (!selectedTags || selectedTags.length === 0) return true;
+        
+        // Parse tags do conteúdo
+        let contentTags = [];
+        if (content.tags) {
+          try {
+            // Se já é array, usa diretamente
+            if (Array.isArray(content.tags)) {
+              contentTags = content.tags;
+            } else if (typeof content.tags === 'string') {
+              // Tenta fazer parse JSON primeiro
+              try {
+                const parsed = JSON.parse(content.tags);
+                contentTags = Array.isArray(parsed) ? parsed : [parsed];
+              } catch {
+                // Se não é JSON, trata como string separada por vírgula
+                contentTags = content.tags.split(',').map(t => t.trim()).filter(t => t);
+              }
+            }
+          } catch (e) {
+            contentTags = [];
+          }
+        }
+        
+        // Debug log (reduzido para evitar spam)
+        // console.log(`[Filter] Conteúdo: ${content.title}, Tags:`, contentTags.length, 'Selecionadas:', selectedTags.length);
+        
+        if (matchAllTags) {
+          // Modo "Combinar todas": conteúdo deve ter TODAS as tags selecionadas
+          const result = selectedTags.every(selectedTag => 
+            contentTags.some(contentTag => 
+              contentTag.toLowerCase().includes(selectedTag.toLowerCase())
+            )
+          );
+          // if (selectedTags.length > 0) console.log(`[Filter] Match All Result:`, result);
+          return result;
+        } else {
+          // Modo padrão: conteúdo deve ter PELO MENOS UMA das tags selecionadas
+          const result = selectedTags.some(selectedTag => 
+            contentTags.some(contentTag => 
+              contentTag.toLowerCase().includes(selectedTag.toLowerCase())
+            )
+          );
+          // if (selectedTags.length > 0) console.log(`[Filter] Match Any Result:`, result);
+          return result;
+        }
+      })
       .filter(content => {
         if (!typeFilter) return true;
         const contentType = getTypeFor(content);
@@ -917,7 +914,7 @@ const CampaignForm = () => {
         const q = contentSearch.toLowerCase();
         return (content.title || '').toLowerCase().includes(q) || (content.description || '').toLowerCase().includes(q);
       });
-  }, [availableContents, campaignContents, typeFilter, contentSearch]);
+  }, [availableContents, campaignContents, typeFilter, contentSearch, selectedTags, matchAllTags]);
 
   const formatFileSize = (bytes) => {
     const n = Number(bytes);
@@ -973,7 +970,6 @@ const CampaignForm = () => {
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={ptBR}>
       <Box
         sx={{
           background: (theme) => theme.palette.mode === 'dark' 
@@ -1136,48 +1132,13 @@ const CampaignForm = () => {
                           />
                         </Grid>
 
-                        <Grid item xs={12} md={6}>
-                          <DateTimePicker
-                            label="Data de Início"
-                            value={formData.start_date}
-                            onChange={(value) => handleDateChange('start_date', value)}
-                            slotProps={{
-                              textField: {
-                                fullWidth: true,
-                                sx: {
-                                  '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover': {
-                                      transform: 'translateY(-2px)',
-                                      transition: 'transform 0.2s ease-in-out',
-                                    },
-                                  },
-                                }
-                              }
-                            }}
-                          />
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                          <DateTimePicker
-                            label="Data de Fim"
-                            value={formData.end_date}
-                            onChange={(value) => handleDateChange('end_date', value)}
-                            slotProps={{
-                              textField: {
-                                fullWidth: true,
-                                sx: {
-                                  '& .MuiOutlinedInput-root': {
-                                    borderRadius: 2,
-                                    '&:hover': {
-                                      transform: 'translateY(-2px)',
-                                      transition: 'transform 0.2s ease-in-out',
-                                    },
-                                  },
-                                }
-                              }
-                            }}
-                          />
+                        <Grid item xs={12}>
+                          <Alert severity="success" sx={{ mb: 2 }}>
+                            <Typography variant="body2">
+                              <strong>Fluxo simplificado:</strong> As datas de execução serão definidas apenas no momento do agendamento. 
+                              Isso torna o processo mais simples e flexível para reutilizar campanhas.
+                            </Typography>
+                          </Alert>
                         </Grid>
                       </Grid>
                     </CardContent>
@@ -1332,7 +1293,7 @@ const CampaignForm = () => {
                 </Grow>
               </Grid>
 
-              {/* Enhanced Action Buttons removidos para evitar duplicação */}
+              
             </Grid>
             {/* Ações principais (Salvar/Cancelar) */}
             <Grid container spacing={2} sx={{ mt: 2 }}>
@@ -1357,7 +1318,7 @@ const CampaignForm = () => {
                   <Button
                     onClick={() => handleSubmit()}
                     variant="contained"
-                    disabled={loading || !formData.name || !formData.start_date || !formData.end_date}
+                    disabled={loading || !formData.name}
                     startIcon={<SaveIcon />}
                     sx={{
                       borderRadius: 2,
@@ -1444,19 +1405,90 @@ const CampaignForm = () => {
             overflow: 'hidden',
           }}>
             {getVisibleAvailableContents().length === 0 ? (
-              <Box sx={{ 
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                py: 8, px: 4, textAlign: 'center'
-              }}>
-                <Avatar sx={{ width: 80, height: 80, mb: 3, background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', opacity: 0.7, color: (theme) => theme.palette.mode === 'dark' ? '#000' : 'inherit' }}>
-                  <ContentIcon sx={{ fontSize: 40 }} />
-                </Avatar>
-                <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-                  Nenhum conteúdo disponível
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Todos os conteúdos já foram adicionados à campanha
-                </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+                  <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
+                      <TextField
+                        size="small"
+                        label="Buscar"
+                        placeholder="Título ou descrição"
+                        value={contentSearch}
+                        onChange={(e) => setContentSearch(e.target.value)}
+                        sx={{ flex: '1 1 260px', minWidth: 220, maxWidth: { xs: '100%', md: '50%' } }}
+                      />
+                      <Autocomplete
+                        multiple
+                        size="small"
+                        options={availableTags}
+                        value={selectedTags}
+                        onChange={(e, value) => {
+                          console.log('[CampaignForm] Tags selecionadas:', value);
+                          setSelectedTags(value);
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Tags" placeholder="Filtrar por tags" />
+                        )}
+                        sx={{ minWidth: 240, flex: '1 1 260px' }}
+                        noOptionsText="Nenhuma tag disponível"
+                        loading={availableTags.length === 0}
+                      />
+                      <FormControlLabel
+                        control={<Switch checked={matchAllTags} onChange={(e) => setMatchAllTags(e.target.checked)} />}
+                        label="Combinar todas"
+                      />
+                      <FormControl size="small" sx={{ minWidth: 160, flex: '0 1 160px' }}>
+                        <InputLabel>Tipo</InputLabel>
+                        <Select label="Tipo" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                          <MenuItem value="">Todos</MenuItem>
+                          <MenuItem value="video">Vídeo</MenuItem>
+                          <MenuItem value="image">Imagem</MenuItem>
+                        </Select>
+                      </FormControl>
+                      {(typeFilter || contentSearch || (selectedTags && selectedTags.length > 0) || matchAllTags) && (
+                        <Button 
+                          size="small" 
+                          variant="outlined" 
+                          onClick={() => {
+                            setTypeFilter('');
+                            setContentSearch('');
+                            setSelectedTags([]);
+                            setMatchAllTags(false);
+                          }}
+                          sx={{
+                            borderColor: '#ff7730',
+                            color: '#ff7730',
+                            '&:hover': {
+                              borderColor: '#ff9800',
+                              background: 'rgba(255, 119, 48, 0.05)',
+                            },
+                          }}
+                        >
+                          Limpar Filtros
+                        </Button>
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Button size="small" variant="outlined" onClick={selectAllVisible}>Selecionar todos</Button>
+                      <Button size="small" variant="outlined" onClick={deselectAllVisible}>Desmarcar</Button>
+                      <Button size="small" variant="outlined" onClick={invertVisibleSelection}>Inverter</Button>
+                    </Box>
+                  </Box>
+                </Box>
+                <Box sx={{ 
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  flex: 1, py: 8, px: 4, textAlign: 'center'
+                }}>
+                  <Avatar sx={{ width: 80, height: 80, mb: 3, background: (theme) => theme.palette.mode === 'dark' ? theme.palette.primary.main : 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)', opacity: 0.7, color: (theme) => theme.palette.mode === 'dark' ? '#000' : 'inherit' }}>
+                    <ContentIcon sx={{ fontSize: 40 }} />
+                  </Avatar>
+                  <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
+                    Nenhum conteúdo disponível
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Todos os conteúdos já foram adicionados à campanha
+                  </Typography>
+                </Box>
               </Box>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -1472,6 +1504,26 @@ const CampaignForm = () => {
                         onChange={(e) => setContentSearch(e.target.value)}
                         sx={{ flex: 1 }}
                       />
+                      <Autocomplete
+                        multiple
+                        size="small"
+                        options={availableTags}
+                        value={selectedTags}
+                        onChange={(e, value) => {
+                          console.log('[CampaignForm] Tags selecionadas (Preview):', value);
+                          setSelectedTags(value);
+                        }}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Tags" placeholder="Filtrar por tags" />
+                        )}
+                        sx={{ minWidth: 260 }}
+                        noOptionsText="Nenhuma tag disponível"
+                        loading={availableTags.length === 0}
+                      />
+                      <FormControlLabel
+                        control={<Switch checked={matchAllTags} onChange={(e) => setMatchAllTags(e.target.checked)} />}
+                        label="Combinar todas"
+                      />
                       <FormControl size="small" sx={{ minWidth: 160 }}>
                         <InputLabel>Tipo</InputLabel>
                         <Select label="Tipo" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
@@ -1481,13 +1533,15 @@ const CampaignForm = () => {
                         </Select>
                       </FormControl>
                       {/* Botão Voltar quando há filtro ativo */}
-                      {(typeFilter || contentSearch) && (
+                      {(typeFilter || contentSearch || (selectedTags && selectedTags.length > 0) || matchAllTags) && (
                         <Button 
                           size="small" 
                           variant="outlined" 
                           onClick={() => {
                             setTypeFilter('');
                             setContentSearch('');
+                            setSelectedTags([]);
+                            setMatchAllTags(false);
                           }}
                           sx={{
                             borderColor: '#ff7730',
@@ -2005,7 +2059,6 @@ const CampaignForm = () => {
           <CampaignAnalytics campaignId={id} />
         )}
       </Box>
-    </LocalizationProvider>
   );
 };
 

@@ -25,7 +25,8 @@ import {
   CircularProgress,
   Tooltip,
   Grid,
-  LinearProgress
+  LinearProgress,
+  Autocomplete
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -54,6 +55,9 @@ const API_HOST = axios.defaults.baseURL;
 const MultiContentManager = ({ campaignId, onContentChange }) => {
   const [campaignContents, setCampaignContents] = useState([]);
   const [availableContents, setAvailableContents] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [matchAllTags, setMatchAllTags] = useState(false);
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -93,10 +97,16 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
   useEffect(() => {
     if (campaignId) {
       loadCampaignContents();
-      loadAvailableContents();
+      loadAvailableContents(selectedTags);
+      loadAvailableTags();
       fetchCompiledStatus();
     }
   }, [campaignId]);
+
+  // Recarregar conteúdos disponíveis quando o filtro de tags mudar (server-side)
+  useEffect(() => {
+    loadAvailableContents(selectedTags);
+  }, [selectedTags]);
 
   useEffect(() => {
     if (!socket || !campaignId) return;
@@ -148,12 +158,26 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
     }
   };
 
-  const loadAvailableContents = async () => {
+  const loadAvailableContents = async (tags = []) => {
     try {
-      const response = await axios.get(`/content?per_page=1000`);
+      let url = `/content?per_page=1000`;
+      if (Array.isArray(tags) && tags.length > 0) {
+        const csv = encodeURIComponent(tags.join(','));
+        url += `&tags=${csv}`;
+      }
+      const response = await axios.get(url);
       setAvailableContents(response.data.contents || []);
     } catch (err) {
       console.error('Load available contents error:', err);
+    }
+  };
+
+  const loadAvailableTags = async () => {
+    try {
+      const response = await axios.get('/content/tags');
+      setAvailableTags(response.data.tags || []);
+    } catch (err) {
+      console.error('Load tags error:', err);
     }
   };
 
@@ -753,6 +777,23 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
         <DialogTitle>Adicionar Conteúdo à Campanha</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+              <Autocomplete
+                multiple
+                options={availableTags}
+                value={selectedTags}
+                onChange={(e, value) => setSelectedTags(value)}
+                renderInput={(params) => (
+                  <TextField {...params} label="Filtrar por Tags" placeholder="Selecione tags" />
+                )}
+                sx={{ minWidth: 280 }}
+              />
+              <FormControlLabel
+                control={<Switch checked={matchAllTags} onChange={(e) => setMatchAllTags(e.target.checked)} />}
+                label="Combinar todas"
+              />
+              <Button size="small" onClick={() => setSelectedTags([])}>Limpar filtros</Button>
+            </Box>
             <TextField
               fullWidth
               select
@@ -764,12 +805,19 @@ const MultiContentManager = ({ campaignId, onContentChange }) => {
             >
               {availableContents
                 .filter(content => !campaignContents.find(cc => cc.content_id === content.id))
+                .filter(content => (matchAllTags && selectedTags.length > 0)
+                  ? (Array.isArray(content.tags) && selectedTags.every(t => (content.tags || []).includes(t)))
+                  : true
+                )
                 .map(content => (
                   <MenuItem key={content.id} value={content.id}>
-                    <Box display="flex" alignItems="center" gap={1}>
+                    <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
                       <span>{getContentIcon(content.content_type)}</span>
                       <span>{content.title}</span>
                       <Chip label={content.content_type} size="small" />
+                      {(content.tags || []).slice(0, 3).map((tag) => (
+                        <Chip key={tag} label={tag} size="small" variant="outlined" />
+                      ))}
                     </Box>
                   </MenuItem>
                 ))}

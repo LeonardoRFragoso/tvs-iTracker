@@ -30,6 +30,11 @@ import {
   LinearProgress,
   Autocomplete,
   Checkbox,
+  Select,
+  FormControl,
+  InputLabel,
+  OutlinedInput,
+  ListItemText,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -318,14 +323,29 @@ const ContentList = () => {
             <Box>
               <Typography variant="h6" fontWeight="bold">
                 Filtros e Busca
+                {filterTags.length > 0 && (
+                  <Chip
+                    label={`${filterTags.length} tag${filterTags.length > 1 ? 's' : ''} ativa${filterTags.length > 1 ? 's' : ''}`}
+                    color="primary"
+                    size="small"
+                    sx={{ ml: 2, fontWeight: 'bold' }}
+                  />
+                )}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Encontre o conteúdo que você precisa
+                {filterTags.length > 0 && (
+                  <span style={{ color: '#1976d2', fontWeight: 'bold' }}>
+                    {' • Filtrando por: '}
+                    {filterTags.slice(0, 3).join(', ')}
+                    {filterTags.length > 3 && ` e mais ${filterTags.length - 3}`}
+                  </span>
+                )}
               </Typography>
             </Box>
           </Box>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
                 placeholder="Buscar conteúdo..."
@@ -349,7 +369,7 @@ const ContentList = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
                 select
@@ -368,39 +388,52 @@ const ContentList = () => {
                 <MenuItem value="audio">Áudio</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} md={5}>
-              <Autocomplete
-                multiple
-                disableCloseOnSelect
-                options={allTags}
-                getOptionLabel={(option) => option}
-                isOptionEqualToValue={(opt, val) => opt === val}
-                value={filterTags.filter((t) => allTags.includes(t))}
-                onChange={(e, value) => setFilterTags(value)}
-                renderOption={(props, option, { selected }) => (
-                  <li {...props}>
-                    <Checkbox
-                      icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
-                      checkedIcon={<CheckBoxIcon fontSize="small" />}
-                      style={{ marginRight: 8 }}
-                      checked={selected}
-                    />
-                    {option}
-                  </li>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Tags"
-                    placeholder="Selecione tags"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
+            <Grid item xs={12} md={7}>
+              <FormControl fullWidth>
+                <InputLabel id="tags-filter-label">Filtrar por Tags</InputLabel>
+                <Select
+                  labelId="tags-filter-label"
+                  multiple
+                  value={filterTags}
+                  onChange={(e) => setFilterTags(e.target.value)}
+                  input={<OutlinedInput label="Filtrar por Tags" />}
+                  renderValue={(selected) => {
+                    if (selected.length === 0) {
+                      return <em style={{ color: '#999' }}>Selecione tags...</em>;
+                    }
+                    return selected.join(', ');
+                  }}
+                  sx={{
+                    borderRadius: 2,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                    },
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 300,
+                        borderRadius: 8,
                       },
-                    }}
-                  />
-                )}
-              />
+                    },
+                  }}
+                >
+                  <MenuItem disabled value="">
+                    <em style={{ color: '#666' }}>
+                      {allTags.length === 0 ? 'Nenhuma tag encontrada' : `${allTags.length} tags disponíveis`}
+                    </em>
+                  </MenuItem>
+                  {allTags.map((tag) => (
+                    <MenuItem key={tag} value={tag}>
+                      <Checkbox 
+                        checked={filterTags.indexOf(tag) > -1}
+                        sx={{ mr: 1 }}
+                      />
+                      <ListItemText primary={tag} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </Paper>

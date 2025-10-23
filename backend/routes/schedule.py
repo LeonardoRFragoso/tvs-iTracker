@@ -963,6 +963,7 @@ def get_schedules_in_range():
       - end: data final (BR dd/mm/yyyy[ HH:MM[:SS]] ou ISO)
       - is_active: (opcional) filtra por ativos true|false
       - player_id: (opcional) filtra por player específico
+      - company: (opcional) filtra por empresa específica
     """
     try:
         print(f"[SCHEDULE] Global range endpoint called")
@@ -971,8 +972,9 @@ def get_schedules_in_range():
         end_raw = request.args.get('end')
         is_active = request.args.get('is_active')
         player_id = request.args.get('player_id')
+        company = request.args.get('company')
 
-        print(f"[SCHEDULE] Query params: start={start_raw}, end={end_raw}, is_active={is_active}, player_id={player_id}")
+        print(f"[SCHEDULE] Query params: start={start_raw}, end={end_raw}, is_active={is_active}, player_id={player_id}, company={company}")
 
         if not start_raw or not end_raw:
             return jsonify({'error': 'Parâmetros start e end são obrigatórios'}), 400
@@ -1006,8 +1008,15 @@ def get_schedules_in_range():
         if is_active is not None:
             query = query.filter(Schedule.is_active == (str(is_active).lower() == 'true'))
 
+        # Filtrar por empresa se fornecido (apenas para admin/manager)
+        if company and current_user and current_user.role in ['admin', 'manager']:
+            print(f"[SCHEDULE] Aplicando filtro por empresa: {company}")
+            query = query.join(Player, Schedule.player_id == Player.id) \
+                         .join(Location, Player.location_id == Location.id) \
+                         .filter(Location.company == company)
+
         # HR scoping: garantir que só vê agendamentos de players da sua empresa
-        if current_user and current_user.role == 'rh':
+        elif current_user and current_user.role == 'rh':
             query = query.join(Player, Schedule.player_id == Player.id) \
                          .join(Location, Player.location_id == Location.id) \
                          .filter(Location.company == current_user.company)

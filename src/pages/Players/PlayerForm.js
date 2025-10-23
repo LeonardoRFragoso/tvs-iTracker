@@ -235,7 +235,7 @@ const PlayerForm = () => {
                           fullWidth
                           required
                           select
-                          label="Localização"
+                          label="Empresa"
                           value={formData.location_id}
                           onChange={(e) => handleChange('location_id', e.target.value)}
                           sx={{
@@ -456,9 +456,8 @@ const PlayerForm = () => {
               </Grow>
             </Grid>
 
-            {/* Removido: Configurações de Exibição - valores padrão aplicados automaticamente */}
-
-            {/* Removido: Configurações de Armazenamento - valores padrão aplicados automaticamente */}
+            
+            
 
             {/* Actions */}
             <Grid item xs={12}>

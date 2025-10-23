@@ -169,17 +169,27 @@ def create_campaign():
         print(f"[DEBUG] Campaign creation data received: {data}")
         print(f"[DEBUG] User ID: {user_id}")
         
-        required_fields = ['name', 'start_date', 'end_date']
-        for field in required_fields:
-            if not data.get(field):
-                print(f"[ERROR] Missing required field: {field}")
-                return jsonify({'error': f'{field} é obrigatório'}), 400
+        # Validação obrigatória apenas do nome
+        if not data.get('name'):
+            print(f"[ERROR] Missing required field: name")
+            return jsonify({'error': 'Nome é obrigatório'}), 400
         
-        # Converter datas (aceita BR e ISO). Considera fim do dia para end_date sem horário
-        start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
-        end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
+        # Processar datas opcionais
+        start_date = None
+        end_date = None
         
-        if start_date >= end_date:
+        if data.get('start_date'):
+            start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
+        
+        if data.get('end_date'):
+            end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
+        
+        # Validação condicional: se uma data for informada, ambas devem ser
+        if (start_date and not end_date) or (not start_date and end_date):
+            return jsonify({'error': 'Se informar uma data, ambas (início e fim) devem ser preenchidas'}), 400
+        
+        # Se ambas as datas foram informadas, validar ordem
+        if start_date and end_date and start_date >= end_date:
             return jsonify({'error': 'Data de início deve ser anterior à data de fim'}), 400
         
         # Converter tipos com segurança
@@ -212,7 +222,6 @@ def create_campaign():
             days_of_week=json.dumps(data.get('days_of_week', [])),
             user_id=user_id,
             background_audio_content_id=bg_audio_id,
-            # REMOVIDO: Configurações de reprodução movidas para Schedule
         )
         
         db.session.add(campaign)

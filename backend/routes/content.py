@@ -527,7 +527,20 @@ def list_content():
         if tag_single and tag_single.strip():
             tags.append(tag_single.strip())
         if tags:
-            patterns = [Content.tags.like(f'%"{t}"%') for t in set(tags)]
+            patterns = []
+            for t in set(tags):
+                t_clean = (t or '').strip()
+                if not t_clean:
+                    continue
+                # JSON array style: ["tag1", "tag2"]
+                patterns.append(Content.tags.like(f'%"{t_clean}"%'))
+                # CSV style with or without spaces: "tag1,tag2" or "tag1, tag2"
+                patterns.append(Content.tags.ilike(f'%,{t_clean},%'))
+                patterns.append(Content.tags.ilike(f'{t_clean},%'))
+                patterns.append(Content.tags.ilike(f'%,{t_clean}'))
+                # Fallback contains (covers edge cases and different spacings)
+                patterns.append(Content.tags.ilike(f'% {t_clean} %'))
+                patterns.append(Content.tags.ilike(f'%{t_clean}%'))
             query = query.filter(or_(*patterns))
         
         query = query.filter(Content.is_active == True)

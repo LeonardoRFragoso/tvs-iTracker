@@ -105,9 +105,6 @@ function hasTimeOverlap(schedule1, schedule2) {
   }
 }
 
-// REMOVIDO: detectTimeConflicts() - usando color_index do backend
-
-
 function expandScheduleToEvents(schedule, rangeStart, rangeEnd) {
   // Gera eventos diÃ¡rios dentro do intervalo com base em days_of_week e horÃ¡rios (suporta overnight)
   console.log(`[SchedulesCalendar] Expanding schedule "${schedule.name}":`, {

@@ -259,8 +259,7 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
-  // Removido: alertas do sistema não são mais exibidos
-  // const [alerts, setAlerts] = useState([]);
+  
   const [performance, setPerformance] = useState(null);
   const [health, setHealth] = useState(null);
   const [traffic, setTraffic] = useState(null);
@@ -280,7 +279,6 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  // Auto-refresh removido - apenas refresh manual
 
   useEffect(() => {
     const handleKeyPress = (event) => {
@@ -354,15 +352,12 @@ const Dashboard = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Função de exportação removida - apenas refresh manual disponível
-
   const loadDashboardData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
 
       const requests = [
         axios.get('/dashboard/stats'),
-        // Removido: /dashboard/alerts
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
         axios.get('/dashboard/playback-status'),
@@ -378,8 +373,6 @@ const Dashboard = () => {
       const [statsRes, performanceRes, healthRes, playbackRes, diskUsageRes, trafficRes] = results;
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
-      // Removido: atualização de estado de alertas
-      // if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
       if (performanceRes.status === 'fulfilled') {
         console.log('[Dashboard] Performance data loaded:', performanceRes.value.data);
         setPerformance(performanceRes.value.data);
@@ -425,8 +418,6 @@ const Dashboard = () => {
       if (!silent) setLoading(false);
     }
   };
-
-  // Removido: ícones de alerta não são mais utilizados
 
   const getHealthColor = (status) => {
     switch (status) {
@@ -864,8 +855,6 @@ const Dashboard = () => {
             </Paper>
           </Fade>
         </Grid>
-
-        {/* Removido: Alertas do Sistema */}
 
         {/* Detalhes dos Players Reproduzindo */}
         {playbackStatus && playbackStatus.summary?.playing_players > 0 && (

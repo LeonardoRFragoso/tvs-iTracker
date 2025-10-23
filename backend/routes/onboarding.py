@@ -36,7 +36,7 @@ def set_progress():
         user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         flow = (data.get('flow') or DEFAULT_FLOW).strip()
         step_index = int(data.get('step_index') or 0)
         if step_index < 0:
@@ -57,7 +57,7 @@ def complete():
         user = User.query.get(user_id)
         if not user:
             return jsonify({'error': 'Usuário não encontrado'}), 404
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         flow = (data.get('flow') or DEFAULT_FLOW).strip()
         user.onboarding_version = flow
         user.onboarding_completed_at = datetime.utcnow()

@@ -245,7 +245,6 @@ const ScheduleForm = () => {
         loop_behavior: schedule.loop_behavior || 'until_next',
         loop_duration_minutes: schedule.loop_duration_minutes || null,
         content_selection: schedule.content_selection || 'all',
-        // embaralhar removido do UI; manter estado interno padrão
         auto_skip_errors: true, // obrigatório
         // Forçar compatibilidade única: legado (recursos mínimos)
         device_type_compatibility: 'legacy',
@@ -1242,7 +1241,7 @@ const ScheduleForm = () => {
                         </FormControl>
                       </Grid>
 
-                      {/* Duração por Conteúdo e Transição removidos: reprodução usa vídeo compilado da campanha */}
+                      
 
                       {formData.loop_behavior === 'time_limited' && (
                         <Grid item xs={12} md={4}>

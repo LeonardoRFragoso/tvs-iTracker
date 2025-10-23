@@ -88,7 +88,7 @@ export function OnboardingProvider({ children }) {
 
     if (status === 'finished' || status === 'skipped') {
       try {
-        await axios.post('/onboarding/complete');
+        await axios.post('/onboarding/complete', {});
       } catch (_) { /* no-op */ }
       setRun(false);
     }
@@ -103,7 +103,7 @@ export function OnboardingProvider({ children }) {
   }, [isKioskPath]);
 
   const skip = useCallback(async () => {
-    try { await axios.post('/onboarding/complete'); } catch (_) { /* no-op */ }
+    try { await axios.post('/onboarding/complete', {}); } catch (_) { /* no-op */ }
     setRun(false);
   }, []);
 
@@ -122,8 +122,20 @@ export function OnboardingProvider({ children }) {
           showProgress
           scrollToFirstStep
           disableOverlayClose
-          locale={{ back: 'Voltar', close: 'Fechar', last: 'Concluir', next: 'Próximo', skip: 'Pular' }}
-          styles={{ options: { zIndex: 2000 } }}
+          locale={{
+            back: 'Voltar',
+            close: 'Fechar',
+            last: 'Concluir',
+            next: 'Próximo',
+            open: 'Abrir',
+            skip: 'Pular'
+          }}
+          styles={{
+            options: {
+              zIndex: 2000,
+              primaryColor: '#1976d2'
+            }
+          }}
           callback={handleCallback}
         />
       )}
