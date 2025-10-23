@@ -98,6 +98,52 @@ const CompanyNameField = memo(({ value, onChange, theme }) => {
   );
 });
 
+// Componente otimizado para o display name (evita re-render pesado a cada tecla)
+const DisplayNameField = memo(({ value, onChange, theme }) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  const lastPropValueRef = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastPropValueRef.current) {
+      setDisplayValue(value);
+      lastPropValueRef.current = value;
+    }
+  }, [value]);
+
+  const commitChange = useCallback(() => {
+    if (displayValue !== lastPropValueRef.current) {
+      onChange(displayValue);
+      lastPropValueRef.current = displayValue;
+    }
+  }, [displayValue, onChange]);
+
+  return (
+    <TextField
+      fullWidth
+      label="Nome exibido (header/sidebar)"
+      value={displayValue}
+      onChange={(e) => setDisplayValue(e.target.value)}
+      onBlur={commitChange}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitChange(); } }}
+      autoComplete="off"
+      sx={{ 
+        mb: 3,
+        '& .MuiOutlinedInput-root': {
+          borderRadius: '12px',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+          },
+          '&.Mui-focused': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 20px rgba(255, 119, 48, 0.2)',
+          }
+        }
+      }}
+    />
+  );
+});
+
 // Componente otimizado para switches
 const SettingSwitch = memo(({ checked, onChange, label, sx, theme }) => {
   return (
@@ -124,13 +170,13 @@ const SettingSwitch = memo(({ checked, onChange, label, sx, theme }) => {
 
 const Settings = () => {
   const { isDarkMode, toggleTheme, theme, animationsEnabled, transitionDuration, toggleAnimations, updateTransitionDuration } = useTheme();
-  const { settings, uiPreferences, loading: contextLoading, updateSettings } = useSettings();
+  const { settings, uiPreferences, loading: contextLoading, updateSettings, companyDisplayName, updateCompanyDisplayName } = useSettings();
   const { isAdmin } = useAuth();
   
   // Usar useRef para evitar re-renderizações desnecessárias
   const formSettingsRef = useRef({
     // Configurações Gerais
-    'general.company_name': 'TVS Digital Signage',
+    'general.company_name': '',
     'general.timezone': 'America/Sao_Paulo',
     'general.language': 'pt-BR',
     'general.auto_sync': true,
@@ -166,6 +212,7 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [localCompanyDisplayName, setLocalCompanyDisplayName] = useState('');
 
   // Carregar configurações do contexto quando disponíveis
   useEffect(() => {
@@ -181,6 +228,11 @@ const Settings = () => {
       setFormSettings(updatedSettings);
     }
   }, [contextLoading, settings]);
+
+  // Sincronizar display name da empresa para todos os papéis
+  useEffect(() => {
+    setLocalCompanyDisplayName(companyDisplayName || '');
+  }, [companyDisplayName]);
 
   // Sincronizar tema com isDarkMode (fonte da verdade visual)
   useEffect(() => {
@@ -208,23 +260,36 @@ const Settings = () => {
   const handleSave = useCallback(async () => {
     try {
       setSaving(true);
-      // Enforce fixed settings before computing diffs
-      formSettingsRef.current['general.language'] = 'pt-BR';
-      formSettingsRef.current['general.timezone'] = 'America/Sao_Paulo';
-      
-      // Enviar apenas configurações que foram alteradas
-      const changedSettings = {};
-      Object.keys(formSettingsRef.current).forEach(key => {
-        if (settings[key] !== formSettingsRef.current[key]) {
-          changedSettings[key] = formSettingsRef.current[key];
+      if (!isAdmin) {
+        const res = await updateCompanyDisplayName(localCompanyDisplayName);
+        if (res.success) {
+          setSuccess('Nome da empresa atualizado com sucesso!');
+        } else {
+          setError(res.error || 'Erro ao atualizar nome da empresa');
         }
-      });
-      
-      if (Object.keys(changedSettings).length > 0) {
-        await updateSettings(changedSettings);
+      } else {
+        // Enforce fixed settings before computing diffs
+        formSettingsRef.current['general.language'] = 'pt-BR';
+        formSettingsRef.current['general.timezone'] = 'America/Sao_Paulo';
+        
+        // Enviar apenas configurações que foram alteradas
+        const changedSettings = {};
+        Object.keys(formSettingsRef.current).forEach(key => {
+          if (settings[key] !== formSettingsRef.current[key]) {
+            changedSettings[key] = formSettingsRef.current[key];
+          }
+        });
+        
+        if (Object.keys(changedSettings).length > 0) {
+          await updateSettings(changedSettings);
+        }
+
+        if (localCompanyDisplayName !== (companyDisplayName || '')) {
+          await updateCompanyDisplayName(localCompanyDisplayName);
+        }
+        
+        setSuccess('Configurações salvas com sucesso!');
       }
-      
-      setSuccess('Configurações salvas com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError('Erro ao salvar configurações');
@@ -232,7 +297,7 @@ const Settings = () => {
     } finally {
       setSaving(false);
     }
-  }, [settings, updateSettings]);
+  }, [settings, updateSettings, isAdmin, localCompanyDisplayName, updateCompanyDisplayName, companyDisplayName]);
 
   const SettingsSkeleton = () => (
     <Box>
@@ -498,9 +563,19 @@ const Settings = () => {
                         </Typography>
                       </Box>
                       
-                      <CompanyNameField 
-                        value={formSettings['general.company_name']} 
-                        onChange={(value) => handleSettingChange('general.company_name', value)}
+                      {isAdmin && (
+                        <CompanyNameField 
+                          value={formSettings['general.company_name']}
+                          onChange={(value) => {
+                            handleSettingChange('general.company_name', value);
+                          }}
+                          theme={theme}
+                        />
+                      )}
+
+                      <DisplayNameField
+                        value={localCompanyDisplayName}
+                        onChange={(val) => setLocalCompanyDisplayName(val)}
                         theme={theme}
                       />
                       

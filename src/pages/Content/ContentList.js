@@ -28,6 +28,13 @@ import {
   Skeleton,
   Badge,
   LinearProgress,
+  Autocomplete,
+  Checkbox,
+  Select,
+  FormControl,
+  InputLabel,
+  OutlinedInput,
+  ListItemText,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -45,6 +52,8 @@ import {
   Refresh as RefreshIcon,
   GridView as GridViewIcon,
   Close as CloseIcon,
+  CheckBoxOutlineBlank as CheckBoxOutlineBlankIcon,
+  CheckBox as CheckBoxIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../config/axios';
@@ -116,7 +125,8 @@ const ContentList = () => {
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterTags, setFilterTags] = useState([]);
+  const [allTags, setAllTags] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, content: null });
@@ -126,7 +136,19 @@ const ContentList = () => {
 
   useEffect(() => {
     loadContents();
-  }, [page, searchTerm, filterType, filterCategory]);
+  }, [page, searchTerm, filterType, filterTags]);
+
+  useEffect(() => {
+    const loadTags = async () => {
+      try {
+        const res = await axios.get('/content/tags');
+        setAllTags(res.data.tags || []);
+      } catch (err) {
+        // silencioso
+      }
+    };
+    loadTags();
+  }, []);
 
   const loadContents = async () => {
     try {
@@ -136,7 +158,7 @@ const ContentList = () => {
         per_page: 12,
         search: searchTerm || undefined,
         type: filterType !== 'all' ? filterType : undefined,
-        category: filterCategory !== 'all' ? filterCategory : undefined,
+        tags: (filterTags && filterTags.length > 0) ? filterTags.join(',') : undefined,
       };
 
       const response = await axios.get(`/content`, { params });
@@ -243,6 +265,7 @@ const ContentList = () => {
               </IconButton>
             </Tooltip>
             <Button
+              data-tour="btn-new-content"
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => navigate('/content/new')}
@@ -300,14 +323,29 @@ const ContentList = () => {
             <Box>
               <Typography variant="h6" fontWeight="bold">
                 Filtros e Busca
+                {filterTags.length > 0 && (
+                  <Chip
+                    label={`${filterTags.length} tag${filterTags.length > 1 ? 's' : ''} ativa${filterTags.length > 1 ? 's' : ''}`}
+                    color="primary"
+                    size="small"
+                    sx={{ ml: 2, fontWeight: 'bold' }}
+                  />
+                )}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Encontre o conteúdo que você precisa
+                {filterTags.length > 0 && (
+                  <span style={{ color: '#1976d2', fontWeight: 'bold' }}>
+                    {' • Filtrando por: '}
+                    {filterTags.slice(0, 3).join(', ')}
+                    {filterTags.length > 3 && ` e mais ${filterTags.length - 3}`}
+                  </span>
+                )}
               </Typography>
             </Box>
           </Box>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <TextField
                 fullWidth
                 placeholder="Buscar conteúdo..."
@@ -331,7 +369,7 @@ const ContentList = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <TextField
                 fullWidth
                 select
@@ -350,46 +388,52 @@ const ContentList = () => {
                 <MenuItem value="audio">Áudio</MenuItem>
               </TextField>
             </Grid>
-            <Grid item xs={12} md={3}>
-              <TextField
-                fullWidth
-                select
-                label="Categoria"
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
+            <Grid item xs={12} md={7}>
+              <FormControl fullWidth>
+                <InputLabel id="tags-filter-label">Filtrar por Tags</InputLabel>
+                <Select
+                  labelId="tags-filter-label"
+                  multiple
+                  value={filterTags}
+                  onChange={(e) => setFilterTags(e.target.value)}
+                  input={<OutlinedInput label="Filtrar por Tags" />}
+                  renderValue={(selected) => {
+                    if (selected.length === 0) {
+                      return <em style={{ color: '#999' }}>Selecione tags...</em>;
+                    }
+                    return selected.join(', ');
+                  }}
+                  sx={{
                     borderRadius: 2,
-                  },
-                }}
-              >
-                <MenuItem value="all">Todas as categorias</MenuItem>
-                <MenuItem value="promocional">Promocional</MenuItem>
-                <MenuItem value="institucional">Institucional</MenuItem>
-                <MenuItem value="entretenimento">Entretenimento</MenuItem>
-                <MenuItem value="informativo">Informativo</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={2}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={loadContents}
-                sx={{
-                  borderRadius: 2,
-                  textTransform: 'none',
-                  fontWeight: 'bold',
-                  height: 56,
-                  '&:hover': {
-                    transform: 'translateY(-1px)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                  },
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                Filtrar
-              </Button>
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                    },
+                  }}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 300,
+                        borderRadius: 8,
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem disabled value="">
+                    <em style={{ color: '#666' }}>
+                      {allTags.length === 0 ? 'Nenhuma tag encontrada' : `${allTags.length} tags disponíveis`}
+                    </em>
+                  </MenuItem>
+                  {allTags.map((tag) => (
+                    <MenuItem key={tag} value={tag}>
+                      <Checkbox 
+                        checked={filterTags.indexOf(tag) > -1}
+                        sx={{ mr: 1 }}
+                      />
+                      <ListItemText primary={tag} />
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
           </Grid>
         </Paper>
@@ -565,17 +609,15 @@ const ContentList = () => {
                     </Typography>
                     
                     <Box display="flex" gap={1} mb={2} flexWrap="wrap">
-                      {content.category && (
+                      {(Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : [])).map((tag, idx) => (
                         <Chip
+                          key={`${content.id}-tag-${idx}`}
                           size="small"
-                          label={content.category}
+                          label={tag}
                           variant="outlined"
-                          sx={{
-                            borderRadius: 2,
-                            fontSize: '0.75rem',
-                          }}
+                          sx={{ borderRadius: 2, fontSize: '0.75rem' }}
                         />
-                      )}
+                      ))}
                     </Box>
                     
                     <Box 

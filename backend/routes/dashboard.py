@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 from sqlalchemy import func, text
+import os
+import shutil
 from models.user import User, db
 from models.content import Content
 from models.campaign import Campaign
@@ -124,8 +126,16 @@ def get_dashboard_stats():
         except Exception as e:
             print(f"[DASHBOARD] total_storage_capacity fallback due to: {e}")
             total_storage_capacity = 0
+        try:
+            total_storage_used = float(total_storage_used or 0)
+        except Exception:
+            total_storage_used = 0.0
+        try:
+            total_storage_capacity = float(total_storage_capacity or 0)
+        except Exception:
+            total_storage_capacity = 0.0
         
-        storage_percentage = (total_storage_used / total_storage_capacity * 100) if total_storage_capacity and total_storage_capacity > 0 else 0
+        storage_percentage = (total_storage_used / total_storage_capacity * 100.0) if total_storage_capacity and total_storage_capacity > 0 else 0.0
         
         return jsonify({
             'overview': {
@@ -433,7 +443,7 @@ def get_playback_status():
     """Retorna KPIs de reprodução em tempo real dos players"""
     try:
         print(f"[DASHBOARD] Endpoint playback-status chamado")
-        from app import PLAYER_PLAYBACK_STATUS, CONNECTED_PLAYERS
+        # Status agora é persistido no banco; não depende de variáveis globais em memória
         from datetime import datetime, timezone, timedelta
         
         current_time = datetime.now(timezone.utc)
@@ -442,8 +452,6 @@ def get_playback_status():
         # Calcular estatísticas de reprodução
         total_players = Player.query.count()
         print(f"[DASHBOARD] Total players no banco: {total_players}")
-        print(f"[DASHBOARD] PLAYER_PLAYBACK_STATUS: {PLAYER_PLAYBACK_STATUS}")
-        print(f"[DASHBOARD] CONNECTED_PLAYERS: {CONNECTED_PLAYERS}")
         online_players = 0
         playing_players = 0
         idle_players = 0
@@ -456,13 +464,75 @@ def get_playback_status():
         five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
         online_player_ids = set()
         
-        all_players = Player.query.all()
-        print(f"[DASHBOARD] Players encontrados: {len(all_players)}")
+        # Buscar players com fallback para esquemas antigos
+        is_orm_players = True
+        try:
+            all_players = Player.query.all()
+            print(f"[DASHBOARD] Players encontrados: {len(all_players)} (ORM)")
+        except Exception as fetch_err:
+            print(f"[DASHBOARD] Falha ao buscar players via ORM (fallback leve): {fetch_err}")
+            from sqlalchemy import text as _text
+            rows = db.session.execute(_text("SELECT id, name, platform, location_id, last_ping, status FROM players"))
+            # Converter rows em objetos leves compatíveis
+            light_players = []
+            for r in rows:
+                try:
+                    # Acesso posicional e por nome para compatibilidade
+                    pid = getattr(r, 'id', None) if hasattr(r, 'id') else r[0]
+                    pname = getattr(r, 'name', None) if hasattr(r, 'name') else r[1]
+                    pplatform = getattr(r, 'platform', None) if hasattr(r, 'platform') else r[2]
+                    plocation_id = getattr(r, 'location_id', None) if hasattr(r, 'location_id') else r[3]
+                    plast_ping = getattr(r, 'last_ping', None) if hasattr(r, 'last_ping') else r[4]
+                    pstatus = getattr(r, 'status', None) if hasattr(r, 'status') else r[5]
+                except Exception:
+                    # Se a ordem variar, tente por dict/mapping
+                    try:
+                        m = r._mapping if hasattr(r, '_mapping') else {}
+                        pid = m.get('id')
+                        pname = m.get('name')
+                        pplatform = m.get('platform')
+                        plocation_id = m.get('location_id')
+                        plast_ping = m.get('last_ping')
+                        pstatus = m.get('status')
+                    except Exception:
+                        continue
+                # Criar objeto leve com atributos usados abaixo
+                class _LightPlayer:
+                    pass
+                lp = _LightPlayer()
+                lp.id = pid
+                lp.name = pname
+                lp.platform = pplatform
+                lp.location_id = plocation_id
+                # location_name via consulta
+                try:
+                    loc = Location.query.get(plocation_id)
+                    lp.location_name = loc.name if loc else 'N/A'
+                except Exception:
+                    lp.location_name = 'N/A'
+                lp.last_ping = plast_ping
+                lp.status = pstatus
+                # Campos de telemetria inexistentes em esquema antigo
+                lp.is_playing = False
+                lp.last_playback_heartbeat = None
+                lp.playback_start_time = None
+                lp.current_content_id = None
+                lp.current_content_title = None
+                lp.current_content_type = None
+                lp.current_campaign_name = None
+                light_players.append(lp)
+            all_players = light_players
+            is_orm_players = False
+            print(f"[DASHBOARD] Players encontrados: {len(all_players)} (fallback leve)")
         
         for player in all_players:
             print(f"[DASHBOARD] Processando player: {player.name} (ID: {player.id})")
             print(f"[DASHBOARD] Last ping: {player.last_ping}")
-            is_online = player.last_ping and player.last_ping >= five_minutes_ago
+            # Usar propriedade robusta que lida com string/datetime
+            try:
+                is_online = bool(player.is_online)
+            except Exception:
+                is_online = False
             print(f"[DASHBOARD] Player {player.name} online: {is_online}")
             
             if is_online:
@@ -476,9 +546,23 @@ def get_playback_status():
             
             # Verificar se o heartbeat está recente (últimos 2 minutos)
             heartbeat_fresh = False
-            if player.last_playback_heartbeat:
-                heartbeat_age = (datetime.utcnow() - player.last_playback_heartbeat).total_seconds()
-                heartbeat_fresh = heartbeat_age < 120  # 2 minutos
+            heartbeat_dt = None
+            lph = getattr(player, 'last_playback_heartbeat', None)
+            if lph:
+                if isinstance(lph, datetime):
+                    heartbeat_dt = lph
+                elif isinstance(lph, str):
+                    try:
+                        from dateutil import parser as dtparser
+                        heartbeat_dt = dtparser.parse(lph)
+                    except Exception:
+                        heartbeat_dt = None
+            if heartbeat_dt:
+                try:
+                    heartbeat_age = (datetime.utcnow() - heartbeat_dt).total_seconds()
+                    heartbeat_fresh = heartbeat_age < 120  # 2 minutos
+                except Exception:
+                    heartbeat_fresh = False
             
             # Se não há heartbeat recente, considerar como não reproduzindo
             if is_playing and not heartbeat_fresh:
@@ -508,8 +592,8 @@ def get_playback_status():
                     'campaign_name': player.current_campaign_name,
                     'playlist_position': '1/1'  # Simplificado por enquanto
                 } if is_playing and heartbeat_fresh else None,
-                'last_heartbeat': player.last_playback_heartbeat.isoformat() if player.last_playback_heartbeat else None,
-                'start_time': player.playback_start_time.isoformat() if player.playback_start_time else None
+                'last_heartbeat': (heartbeat_dt.isoformat() if heartbeat_dt else (player.last_playback_heartbeat if isinstance(player.last_playback_heartbeat, str) else None)),
+                'start_time': (player.playback_start_time.isoformat() if isinstance(player.playback_start_time, datetime) else (player.playback_start_time if isinstance(player.playback_start_time, str) else None))
             })
         
         # Detectar players "fantasma" (online mas sem reprodução há mais de 10 minutos)
@@ -520,14 +604,27 @@ def get_playback_status():
             if not player:
                 continue
                 
-            # Se o player está reproduzindo atualmente, não é fantasma
-            if player.is_playing and player.last_playback_heartbeat:
-                heartbeat_age = (datetime.utcnow() - player.last_playback_heartbeat).total_seconds()
-                if heartbeat_age < 120:  # Heartbeat recente (2 minutos)
-                    continue
+            # Se o player está reproduzindo atualmente, não é fantasma (considerando heartbeat recente)
+            hb_dt = None
+            lph = getattr(player, 'last_playback_heartbeat', None)
+            if isinstance(lph, datetime):
+                hb_dt = lph
+            elif isinstance(lph, str):
+                try:
+                    from dateutil import parser as dtparser
+                    hb_dt = dtparser.parse(lph)
+                except Exception:
+                    hb_dt = None
+            if player.is_playing and hb_dt:
+                try:
+                    heartbeat_age = (datetime.utcnow() - hb_dt).total_seconds()
+                    if heartbeat_age < 120:  # Heartbeat recente (2 minutos)
+                        continue
+                except Exception:
+                    pass
             
             # Verificar se nunca enviou heartbeat ou há muito tempo
-            last_heartbeat = player.last_playback_heartbeat
+            last_heartbeat = hb_dt
             
             reasons = []
             heartbeat_age_sec = None
@@ -625,4 +722,159 @@ def get_playback_status():
         
     except Exception as e:
         print(f"[DASHBOARD] Erro ao obter status de reprodução: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@dashboard_bp.route('/disk-usage', methods=['GET'])
+@jwt_required()
+def get_disk_usage():
+    """Retorna informações sobre uso de espaço em disco das pastas de upload e vídeos compilados"""
+    try:
+        # Definir caminhos das pastas
+        uploads_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads')
+        compiled_videos_path = os.path.join(uploads_path, 'compiled')
+        
+        # Limite de 100GB por pasta (em bytes)
+        MAX_STORAGE_GB = 100
+        MAX_STORAGE_BYTES = MAX_STORAGE_GB * 1024 * 1024 * 1024
+        
+        def get_directory_size(path):
+            """Calcula o tamanho total de uma pasta em bytes"""
+            if not os.path.exists(path):
+                return 0
+            
+            total_size = 0
+            try:
+                for dirpath, dirnames, filenames in os.walk(path):
+                    for filename in filenames:
+                        filepath = os.path.join(dirpath, filename)
+                        try:
+                            if os.path.exists(filepath):
+                                total_size += os.path.getsize(filepath)
+                        except (OSError, IOError):
+                            continue
+            except (OSError, IOError):
+                pass
+            
+            return total_size
+        
+        def get_directory_file_count(path):
+            """Conta o número de arquivos em uma pasta"""
+            if not os.path.exists(path):
+                return 0
+            
+            file_count = 0
+            try:
+                for dirpath, dirnames, filenames in os.walk(path):
+                    file_count += len(filenames)
+            except (OSError, IOError):
+                pass
+            
+            return file_count
+        
+        def bytes_to_gb(bytes_value):
+            """Converte bytes para GB"""
+            return bytes_value / (1024 * 1024 * 1024)
+        
+        # Calcular uso das pastas
+        uploads_size_bytes = get_directory_size(uploads_path)
+        compiled_videos_size_bytes = get_directory_size(compiled_videos_path)
+        
+        uploads_file_count = get_directory_file_count(uploads_path)
+        compiled_videos_file_count = get_directory_file_count(compiled_videos_path)
+        
+        # Calcular percentuais
+        uploads_percentage = (uploads_size_bytes / MAX_STORAGE_BYTES) * 100
+        compiled_videos_percentage = (compiled_videos_size_bytes / MAX_STORAGE_BYTES) * 100
+        
+        # Determinar status de alerta
+        def get_storage_status(percentage):
+            if percentage >= 90:
+                return 'critical'
+            elif percentage >= 75:
+                return 'warning'
+            elif percentage >= 50:
+                return 'caution'
+            else:
+                return 'normal'
+        
+        uploads_status = get_storage_status(uploads_percentage)
+        compiled_videos_status = get_storage_status(compiled_videos_percentage)
+        
+        # Calcular espaço livre
+        uploads_free_bytes = MAX_STORAGE_BYTES - uploads_size_bytes
+        compiled_videos_free_bytes = MAX_STORAGE_BYTES - compiled_videos_size_bytes
+        
+        # Estatísticas adicionais
+        total_content_count = Content.query.filter(Content.is_active == True).count()
+        total_campaigns_count = Campaign.query.filter(Campaign.is_active == True).count()
+        
+        # Conteúdos por tipo para análise
+        content_by_type = db.session.query(
+            Content.content_type,
+            func.count(Content.id).label('count')
+        ).filter(Content.is_active == True).group_by(Content.content_type).all()
+        
+        result = {
+            'uploads': {
+                'path': uploads_path,
+                'size_bytes': uploads_size_bytes,
+                'size_gb': round(bytes_to_gb(uploads_size_bytes), 2),
+                'file_count': uploads_file_count,
+                'max_gb': MAX_STORAGE_GB,
+                'percentage': round(uploads_percentage, 1),
+                'free_gb': round(bytes_to_gb(uploads_free_bytes), 2),
+                'status': uploads_status,
+                'exists': os.path.exists(uploads_path)
+            },
+            'compiled_videos': {
+                'path': compiled_videos_path,
+                'size_bytes': compiled_videos_size_bytes,
+                'size_gb': round(bytes_to_gb(compiled_videos_size_bytes), 2),
+                'file_count': compiled_videos_file_count,
+                'max_gb': MAX_STORAGE_GB,
+                'percentage': round(compiled_videos_percentage, 1),
+                'free_gb': round(bytes_to_gb(compiled_videos_free_bytes), 2),
+                'status': compiled_videos_status,
+                'exists': os.path.exists(compiled_videos_path)
+            },
+            'summary': {
+                'total_used_gb': round(bytes_to_gb(uploads_size_bytes + compiled_videos_size_bytes), 2),
+                'total_max_gb': MAX_STORAGE_GB * 2,
+                'total_percentage': round(((uploads_size_bytes + compiled_videos_size_bytes) / (MAX_STORAGE_BYTES * 2)) * 100, 1),
+                'total_files': uploads_file_count + compiled_videos_file_count,
+                'content_count': total_content_count,
+                'campaigns_count': total_campaigns_count,
+                'content_by_type': {stat[0]: stat[1] for stat in content_by_type}
+            },
+            'alerts': [],
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        # Gerar alertas baseados no status
+        if uploads_status in ['warning', 'critical']:
+            severity = 'error' if uploads_status == 'critical' else 'warning'
+            result['alerts'].append({
+                'type': severity,
+                'category': 'uploads',
+                'title': f'Espaço de Upload {"Crítico" if uploads_status == "critical" else "Alto"}',
+                'message': f'Pasta de uploads está com {uploads_percentage:.1f}% de uso ({bytes_to_gb(uploads_size_bytes):.1f}GB/{MAX_STORAGE_GB}GB)',
+                'recommendation': 'Remova conteúdos obsoletos ou desnecessários para liberar espaço',
+                'percentage': uploads_percentage
+            })
+        
+        if compiled_videos_status in ['warning', 'critical']:
+            severity = 'error' if compiled_videos_status == 'critical' else 'warning'
+            result['alerts'].append({
+                'type': severity,
+                'category': 'compiled_videos',
+                'title': f'Espaço de Vídeos Compilados {"Crítico" if compiled_videos_status == "critical" else "Alto"}',
+                'message': f'Pasta de vídeos compilados está com {compiled_videos_percentage:.1f}% de uso ({bytes_to_gb(compiled_videos_size_bytes):.1f}GB/{MAX_STORAGE_GB}GB)',
+                'recommendation': 'Remova campanhas antigas ou recompile campanhas para otimizar espaço',
+                'percentage': compiled_videos_percentage
+            })
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"[DASHBOARD] Erro ao calcular uso de disco: {e}")
         return jsonify({'error': str(e)}), 500

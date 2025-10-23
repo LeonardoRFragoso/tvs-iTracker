@@ -16,6 +16,7 @@ export const SettingsProvider = ({ children }) => {
   const { user, isAdmin } = useAuth();
   const [settings, setSettings] = useState({});
   const [uiPreferences, setUiPreferences] = useState({});
+  const [companyDisplayName, setCompanyDisplayName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -29,6 +30,35 @@ export const SettingsProvider = ({ children }) => {
     } catch (err) {
       console.error('Erro ao carregar preferências de UI:', err);
       return {};
+    }
+  };
+
+  // Carregar nome exibido da empresa (para qualquer usuário autenticado)
+  const loadCompanyDisplayName = async () => {
+    try {
+      const res = await axios.get('/settings/company-display-name');
+      const name = res.data?.display_name || '';
+      setCompanyDisplayName(name);
+      return name;
+    } catch (err) {
+      // Não bloquear UI se falhar
+      return '';
+    }
+  };
+
+  // Atualizar nome exibido da empresa (RH pode alterar o da própria empresa)
+  const updateCompanyDisplayName = async (display_name, company) => {
+    try {
+      const payload = company ? { display_name, company } : { display_name };
+      const res = await axios.put('/settings/company-display-name', payload);
+      const updated = res.data?.display_name || display_name;
+      setCompanyDisplayName(updated);
+      setError(null);
+      return { success: true, display_name: updated };
+    } catch (err) {
+      const message = err.response?.data?.error || 'Erro ao atualizar nome da empresa';
+      setError(message);
+      return { success: false, error: message };
     }
   };
 
@@ -125,6 +155,8 @@ export const SettingsProvider = ({ children }) => {
     if (user) {
       // Sempre carregar preferências de UI
       loadUiPreferences();
+      // Carregar nome exibido por empresa para todos os papéis
+      loadCompanyDisplayName();
       
       // Carregar todas as configurações apenas para admin
       if (isAdmin) {
@@ -138,13 +170,16 @@ export const SettingsProvider = ({ children }) => {
   const value = {
     settings,
     uiPreferences,
+    companyDisplayName,
     loading,
     error,
     getSetting,
     updateSettings,
     resetSettings,
     loadAllSettings,
-    loadUiPreferences
+    loadUiPreferences,
+    loadCompanyDisplayName,
+    updateCompanyDisplayName
   };
 
   return (

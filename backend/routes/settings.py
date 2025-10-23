@@ -240,3 +240,63 @@ def get_player_preferences():
         return jsonify({'preferences': whitelisted}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Endpoints por empresa: nome exibido no subtítulo (RH pode alterar o da própria empresa)
+@settings_bp.route('/api/settings/company-display-name', methods=['GET'])
+@jwt_required()
+def get_company_display_name():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'Usuário não autenticado'}), 401
+
+        company = (user.company or '').strip() or 'default'
+        key = f'company.display_name.{company}'
+        display_name = SystemConfig.get_value(key)
+
+        # Se não existir ainda, usar o próprio nome da empresa como padrão e persistir
+        if not display_name:
+            display_name = company
+            try:
+                SystemConfig.set_value(key=key, value=display_name, value_type='string', description=f'Nome exibido para empresa {company}')
+            except Exception:
+                pass
+
+        return jsonify({'company': company, 'display_name': display_name}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@settings_bp.route('/api/settings/company-display-name', methods=['PUT'])
+@jwt_required()
+def update_company_display_name():
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'Usuário não autenticado'}), 401
+
+        data = request.get_json() or {}
+        display_name = (data.get('display_name') or '').strip()
+        if not display_name:
+            return jsonify({'error': 'display_name é obrigatório'}), 400
+
+        # Apenas admin/manager podem definir empresa alvo diferente; RH altera somente a própria
+        target_company = (data.get('company') or '').strip()
+        if user.role in ['admin', 'manager'] and target_company:
+            company = target_company
+        else:
+            company = (user.company or '').strip() or 'default'
+
+        # Permitir admin, manager e rh
+        if user.role not in ['admin', 'manager', 'rh']:
+            return jsonify({'error': 'Acesso negado. Permissão insuficiente'}), 403
+
+        key = f'company.display_name.{company}'
+        SystemConfig.set_value(key=key, value=display_name, value_type='string', description=f'Nome exibido para empresa {company}')
+        return jsonify({'message': 'Nome da empresa atualizado com sucesso', 'company': company, 'display_name': display_name}), 200
+    except SQLAlchemyError as e:
+        return jsonify({'error': f'Erro de banco de dados: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

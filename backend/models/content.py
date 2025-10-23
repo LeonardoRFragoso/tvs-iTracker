@@ -1,5 +1,6 @@
 from datetime import datetime
 import uuid
+import json
 from database import db
 
 # Helper to format datetime in Brazilian standard
@@ -39,6 +40,28 @@ class Content(db.Model):
     campaign_contents = db.relationship('CampaignContent', lazy=True)
     
     def to_dict(self):
+        tags_list = []
+        try:
+            if isinstance(self.tags, list):
+                tags_list = self.tags
+            elif isinstance(self.tags, str):
+                s = self.tags.strip()
+                if s:
+                    try:
+                        parsed = json.loads(s)
+                        if isinstance(parsed, list):
+                            tags_list = parsed
+                        elif isinstance(parsed, str):
+                            tags_list = [parsed]
+                        else:
+                            tags_list = [str(parsed)]
+                    except Exception:
+                        if ',' in s:
+                            tags_list = [t.strip() for t in s.split(',') if t.strip()]
+                        else:
+                            tags_list = [s]
+        except Exception:
+            tags_list = []
         return {
             'id': self.id,
             'title': self.title,
@@ -49,7 +72,7 @@ class Content(db.Model):
             'file_size': self.file_size,
             'mime_type': self.mime_type,
             'duration': self.duration,
-            'tags': self.tags,
+            'tags': tags_list,
             'category': self.category,
             'is_active': self.is_active,
             'created_at': fmt_br_datetime(self.created_at),

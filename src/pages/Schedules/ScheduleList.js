@@ -20,6 +20,7 @@ import {
   DialogActions,
   Alert,
   Pagination,
+  Fab,
   Table,
   TableBody,
   TableCell,
@@ -312,6 +313,7 @@ const ScheduleList = () => {
         icon={<ScheduleIcon />}
         actions={
           <Button
+            data-tour="btn-new-schedule"
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate('/schedules/new')}
@@ -756,6 +758,29 @@ const ScheduleList = () => {
           </CardContent>
         </Card>
       </Grow>
+
+      {/* Floating Action Button */}
+      <Fade in={true} timeout={2000}>
+        <Fab
+          color="primary"
+          onClick={() => navigate('/schedules/new')}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: 'linear-gradient(135deg, #ff7730 0%, #ff9800 100%)',
+            boxShadow: '0 8px 32px rgba(255, 119, 48, 0.3)',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #ff9800 0%, #ffb74d 100%)',
+              transform: 'scale(1.1)',
+              boxShadow: '0 12px 40px rgba(255, 119, 48, 0.4)',
+            }
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      </Fade>
 
       {/* Actions Menu */}
       <Menu

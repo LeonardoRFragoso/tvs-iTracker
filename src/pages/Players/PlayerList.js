@@ -31,7 +31,6 @@ import {
 import {
   Add as AddIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
   MoreVert as MoreVertIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -41,6 +40,7 @@ import {
   Cast as CastIcon,
   Settings as SettingsIcon,
   PlayArrow as PlayIcon,
+  Pause as PauseIcon,
   Stop as StopIcon,
   Sync as SyncIcon,
   PowerSettingsNew as PowerIcon,
@@ -55,7 +55,7 @@ import PageTitle from '../../components/Common/PageTitle';
 const PlayerList = () => {
   const navigate = useNavigate();
   const { isDarkMode, theme } = useTheme();
-  const { sendPlayerCommand } = useSocket();
+  const { sendPlayerCommand, socket } = useSocket();
   
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +81,33 @@ const PlayerList = () => {
     loadPlayers();
     loadLocations();
   }, [page, filters.search, filters.status, filters.location_id]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onPlayerStatus = (data) => {
+      setPlayers(prev => prev.map(p => (
+        p.id === data.player_id
+          ? { ...p, is_playing: (data.is_playing ?? p.is_playing), status: (data.status ?? p.status), current_content: (data.current_content ?? p.current_content) }
+          : p
+      )));
+    };
+    const onPlaybackStatus = (payload) => {
+      const pid = payload && payload.player_id;
+      const st = payload && payload.status;
+      if (!pid) return;
+      setPlayers(prev => prev.map(p => (
+        p.id === pid
+          ? { ...p, is_playing: (st && typeof st.is_playing === 'boolean') ? st.is_playing : p.is_playing }
+          : p
+      )));
+    };
+    socket.on('player_status_update', onPlayerStatus);
+    socket.on('playback_status_update', onPlaybackStatus);
+    return () => {
+      socket.off('player_status_update', onPlayerStatus);
+      socket.off('playback_status_update', onPlaybackStatus);
+    };
+  }, [socket]);
 
   const handlePlayerStatusUpdate = (data) => {
     setPlayers(prev => prev.map(player => 
@@ -145,6 +172,15 @@ const PlayerList = () => {
       }
       setSuccess(`Comando ${action} enviado para ${player.name}`);
       handleMenuClose();
+      // Optimistic update de is_playing para refletir no menu imediatamente
+      setPlayers(prev => prev.map(p => (
+        p.id === player.id
+          ? {
+              ...p,
+              is_playing: action === 'start' ? true : (action === 'pause' || action === 'stop' ? false : p.is_playing)
+            }
+          : p
+      )));
       // Reload players to get updated status
       setTimeout(() => {
         loadPlayers();
@@ -257,6 +293,7 @@ const PlayerList = () => {
     if (key === 'search') setSearchTerm(value);
     if (key === 'status') setFilterStatus(value);
     if (key === 'location_id') setFilterLocation(value);
+    setPage(1);
   };
 
   const handleDeleteClick = (player) => {
@@ -290,6 +327,7 @@ const PlayerList = () => {
         icon={<Tv />}
         actions={
           <Button
+            data-tour="btn-new-player"
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate('/players/new')}
@@ -440,29 +478,7 @@ const PlayerList = () => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={2}>
-                <Button
-                  variant="outlined"
-                  startIcon={<FilterIcon />}
-                  fullWidth
-                  sx={{
-                    borderRadius: '12px',
-                    py: 1.5,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderColor: 'rgba(255, 119, 48, 0.5)',
-                    color: '#ff7730',
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      borderColor: '#ff7730',
-                      background: 'rgba(255, 119, 48, 0.05)',
-                      transform: 'translateY(-1px)',
-                    }
-                  }}
-                >
-                  Filtrar
-                </Button>
-              </Grid>
+              
             </Grid>
           </CardContent>
         </Card>
@@ -862,7 +878,7 @@ const PlayerList = () => {
           Reiniciar
         </MenuItem>
         <MenuItem 
-          onClick={() => handlePlayerAction(selectedPlayer, 'stop')}
+          onClick={() => handlePlayerAction(selectedPlayer, (selectedPlayer && selectedPlayer.is_playing) ? 'pause' : 'start')}
           sx={{
             borderRadius: '8px',
             mx: 1,
@@ -874,8 +890,8 @@ const PlayerList = () => {
             }
           }}
         >
-          <StopIcon sx={{ mr: 1 }} />
-          Parar Reprodução
+          {selectedPlayer && selectedPlayer.is_playing ? <PauseIcon sx={{ mr: 1 }} /> : <PlayIcon sx={{ mr: 1 }} />}
+          {selectedPlayer && selectedPlayer.is_playing ? 'Pausar Reprodução' : 'Retomar Reprodução'}
         </MenuItem>
         <MenuItem 
           onClick={() => handleDeleteClick(selectedPlayer)}

@@ -16,11 +16,7 @@ import {
   Grow,
   Paper,
   Divider,
-  Fab,
   Skeleton,
-  SpeedDial,
-  SpeedDialAction,
-  SpeedDialIcon,
   Snackbar,
   AlertTitle,
   Button,
@@ -29,7 +25,6 @@ import {
   VideoLibrary as ContentIcon,
   Campaign as CampaignIcon,
   Tv as PlayerIcon,
-  Schedule as ScheduleIcon,
   RssFeed as EditorialIcon,
   Refresh as RefreshIcon,
   TrendingUp as TrendingUpIcon,
@@ -37,7 +32,6 @@ import {
   Remove,
   Storage as StorageIcon,
   Timeline as TimelineIcon,
-  Add as AddIcon,
   Keyboard as KeyboardIcon,
   Upload as UploadIcon,
   PlayArrow as PlayIcon,
@@ -265,12 +259,12 @@ const StatCard = ({ icon, title, value, subtitle, color, trend, delay = 0, previ
 
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
-  // Removido: alertas do sistema não são mais exibidos
-  // const [alerts, setAlerts] = useState([]);
+  
   const [performance, setPerformance] = useState(null);
   const [health, setHealth] = useState(null);
   const [traffic, setTraffic] = useState(null);
   const [playbackStatus, setPlaybackStatus] = useState(null);
+  const [diskUsage, setDiskUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -285,10 +279,27 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  // Auto-refresh removido - apenas refresh manual
 
   useEffect(() => {
     const handleKeyPress = (event) => {
+      const active = document.activeElement;
+      const isTyping = !!(
+        active && (
+          active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.tagName === 'SELECT' ||
+          active.isContentEditable ||
+          (typeof active.closest === 'function' && active.closest('input, textarea, select, [contenteditable="true"], .MuiInputBase-root, [role="textbox"]'))
+        )
+      );
+
+      // Evitar recarregar/navegar enquanto digitando
+      if (isTyping && (event.key === 'F5' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'r'))) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
           case 'r':
@@ -341,18 +352,16 @@ const Dashboard = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // Função de exportação removida - apenas refresh manual disponível
-
   const loadDashboardData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
 
       const requests = [
         axios.get('/dashboard/stats'),
-        // Removido: /dashboard/alerts
         axios.get('/dashboard/performance'),
         axios.get('/dashboard/health'),
         axios.get('/dashboard/playback-status'),
+        axios.get('/dashboard/disk-usage'),
       ];
 
       const includeTraffic = user?.role === 'admin';
@@ -361,11 +370,9 @@ const Dashboard = () => {
       }
 
       const results = await Promise.allSettled(requests);
-      const [statsRes, performanceRes, healthRes, playbackRes, trafficRes] = results;
+      const [statsRes, performanceRes, healthRes, playbackRes, diskUsageRes, trafficRes] = results;
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
-      // Removido: atualização de estado de alertas
-      // if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts || []);
       if (performanceRes.status === 'fulfilled') {
         console.log('[Dashboard] Performance data loaded:', performanceRes.value.data);
         setPerformance(performanceRes.value.data);
@@ -379,6 +386,14 @@ const Dashboard = () => {
         setPlaybackStatus(playbackRes.value.data);
       } else {
         console.error('[Dashboard] Failed to load playback status:', playbackRes.reason);
+      }
+
+      if (diskUsageRes.status === 'fulfilled') {
+        setDiskUsage(diskUsageRes.value.data);
+      } else {
+        console.error('[Dashboard] Failed to load disk usage:', diskUsageRes.reason);
+        // Não bloquear o dashboard se disk usage falhar
+        setDiskUsage(null);
       }
 
       if (includeTraffic) {
@@ -403,8 +418,6 @@ const Dashboard = () => {
       if (!silent) setLoading(false);
     }
   };
-
-  // Removido: ícones de alerta não são mais utilizados
 
   const getHealthColor = (status) => {
     switch (status) {
@@ -560,12 +573,6 @@ const Dashboard = () => {
     };
   })() : null;
 
-  const speedDialActions = [
-    { icon: <UploadIcon />, name: 'Novo Conteúdo', onClick: () => window.location.href = '/content/new' },
-    { icon: <CampaignIcon />, name: 'Nova Campanha', onClick: () => window.location.href = '/campaigns/new' },
-    { icon: <PlayerIcon />, name: 'Novo Player', onClick: () => window.location.href = '/players/new' },
-    { icon: <ScheduleIcon />, name: 'Novo Agendamento', onClick: () => window.location.href = '/schedules/new' },
-  ];
 
   if (loading) {
     return (
@@ -656,7 +663,7 @@ const Dashboard = () => {
 
       {/* Estatísticas */}
       <Grid container spacing={1.5} mb={2.5}>
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<ContentIcon />}
             title="Conteúdos"
@@ -669,7 +676,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<CampaignIcon />}
             title="Campanhas"
@@ -682,7 +689,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<PlayIcon />}
             title="Players Reproduzindo"
@@ -695,7 +702,7 @@ const Dashboard = () => {
           />
         </Grid>
 
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<StorageIcon />}
             title="Armazenamento"
@@ -709,7 +716,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Status dos Players */}
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           <StatCard
             icon={<PlayerIcon />}
             title="Status dos Players"
@@ -723,7 +730,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* KPI: Uso de Rede (detecção de sobreuso) */}
-        <Grid item xs={12} sm={6} md={4} lg={2}>
+        <Grid item xs={12} sm={6} md={3} lg={3}>
           {(() => {
             const overuseCount = traffic?.overuse_players?.length || 0;
             const recentPlayers = traffic?.recent?.players || {};
@@ -746,11 +753,59 @@ const Dashboard = () => {
             );
           })()}
         </Grid>
+
+        {/* KPI: Espaço de Upload */}
+        <Grid item xs={12} sm={6} md={3} lg={3}>
+          <StatCard
+            icon={<UploadIcon />}
+            title="Espaço de Upload"
+            value={diskUsage ? `${diskUsage.uploads?.percentage || 0}%` : 'Carregando...'}
+            subtitle={diskUsage ? `${diskUsage.uploads?.size_gb || 0}GB / ${diskUsage.uploads?.max_gb || 100}GB` : 'Calculando...'}
+            color={
+              !diskUsage ? 'info' :
+              (diskUsage.uploads?.status === 'critical') ? 'error' :
+              (diskUsage.uploads?.status === 'warning') ? 'warning' :
+              (diskUsage.uploads?.status === 'caution') ? 'info' : 'success'
+            }
+            trend={
+              !diskUsage ? '⏳ Carregando' :
+              diskUsage.uploads?.status === 'critical' ? '🚨 Crítico' :
+              diskUsage.uploads?.status === 'warning' ? '⚠️ Alto' :
+              diskUsage.uploads?.status === 'caution' ? '📊 Moderado' : '✅ Normal'
+            }
+            delay={6}
+            navigateTo="/content"
+          />
+        </Grid>
+
+        {/* KPI: Espaço de Vídeos Compilados */}
+        <Grid item xs={12} sm={6} md={3} lg={3}>
+          <StatCard
+            icon={<CampaignIcon />}
+            title="Vídeos Compilados"
+            value={diskUsage ? `${diskUsage.compiled_videos?.percentage || 0}%` : 'Carregando...'}
+            subtitle={diskUsage ? `${diskUsage.compiled_videos?.size_gb || 0}GB / ${diskUsage.compiled_videos?.max_gb || 100}GB` : 'Calculando...'}
+            color={
+              !diskUsage ? 'info' :
+              (diskUsage.compiled_videos?.status === 'critical') ? 'error' :
+              (diskUsage.compiled_videos?.status === 'warning') ? 'warning' :
+              (diskUsage.compiled_videos?.status === 'caution') ? 'info' : 'success'
+            }
+            trend={
+              !diskUsage ? '⏳ Carregando' :
+              diskUsage.compiled_videos?.status === 'critical' ? '🚨 Crítico' :
+              diskUsage.compiled_videos?.status === 'warning' ? '⚠️ Alto' :
+              diskUsage.compiled_videos?.status === 'caution' ? '📊 Moderado' : '✅ Normal'
+            }
+            delay={7}
+            navigateTo="/campaigns"
+          />
+        </Grid>
       </Grid>
 
       <Grid container spacing={1.5}>
         {/* Gráfico de Performance */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12}>
           <Fade in={true} timeout={1200}>
             <Paper
               elevation={0}
@@ -800,8 +855,6 @@ const Dashboard = () => {
             </Paper>
           </Fade>
         </Grid>
-
-        {/* Removido: Alertas do Sistema */}
 
         {/* Detalhes dos Players Reproduzindo */}
         {playbackStatus && playbackStatus.summary?.playing_players > 0 && (
@@ -934,42 +987,74 @@ const Dashboard = () => {
             </Fade>
           </Grid>
         )}
+
+        {/* Alertas de Espaço em Disco */}
+        {diskUsage && diskUsage.alerts?.length > 0 && (
+          <Grid item xs={12}>
+            <Fade in={true} timeout={2000}>
+              <Alert 
+                severity={diskUsage.alerts.some(alert => alert.type === 'error') ? 'error' : 'warning'}
+                sx={{ 
+                  borderRadius: 3,
+                  '& .MuiAlert-message': { width: '100%' }
+                }}
+              >
+                <AlertTitle>
+                  {diskUsage.alerts.some(alert => alert.type === 'error') ? '🚨' : '⚠️'} 
+                  {' '}Alertas de Espaço em Disco ({diskUsage.alerts?.length || 0})
+                </AlertTitle>
+                <Typography variant="body2" mb={2}>
+                  Atenção necessária para evitar problemas de armazenamento:
+                </Typography>
+                <Grid container spacing={2}>
+                  {diskUsage.alerts?.map((alert, index) => (
+                    <Grid item xs={12} md={6} key={index}>
+                      <Box 
+                        sx={{ 
+                          p: 2, 
+                          bgcolor: alert.type === 'error' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(255, 152, 0, 0.1)', 
+                          borderRadius: 2,
+                          border: alert.type === 'error' ? '1px solid rgba(244, 67, 54, 0.3)' : '1px solid rgba(255, 152, 0, 0.3)'
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight="bold" mb={1}>
+                          {alert.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" mb={1}>
+                          {alert.message}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          💡 {alert.recommendation}
+                        </Typography>
+                        <Box sx={{ mt: 1 }}>
+                          <LinearProgress 
+                            variant="determinate" 
+                            value={Math.min(alert.percentage, 100)}
+                            sx={{ 
+                              height: 6, 
+                              borderRadius: 3,
+                              bgcolor: 'rgba(255, 255, 255, 0.3)',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 3,
+                                bgcolor: alert.type === 'error' ? '#f44336' : '#ff9800'
+                              }
+                            }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            {alert.percentage.toFixed(1)}% utilizado
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Alert>
+            </Fade>
+          </Grid>
+        )}
       </Grid>
 
-      {/* Speed Dial for Quick Actions */}
-      <SpeedDial
-        ariaLabel="Ações rápidas"
-        sx={{ 
-          position: 'fixed', 
-          bottom: 24, 
-          right: 24,
-          '& .MuiFab-primary': {
-            bgcolor: 'primary.main',
-            '&:hover': {
-              bgcolor: 'primary.dark',
-            },
-          },
-        }}
-        icon={<SpeedDialIcon />}
-      >
-        {speedDialActions.map((action) => (
-          <SpeedDialAction
-            key={action.name}
-            icon={action.icon}
-            tooltipTitle={action.name}
-            onClick={action.onClick}
-            sx={{
-              '& .MuiFab-primary': {
-                bgcolor: isDarkMode ? '#333' : '#fff',
-                color: isDarkMode ? '#ff9800' : '#1976d2',
-                '&:hover': {
-                  bgcolor: isDarkMode ? '#444' : '#f5f5f5',
-                },
-              },
-            }}
-          />
-        ))}
-      </SpeedDial>
+      
 
       {/* Notifications */}
       {notifications.map((notification) => (

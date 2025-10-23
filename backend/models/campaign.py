@@ -36,9 +36,6 @@ class Campaign(db.Model):
     # Áudio de fundo para compilação
     background_audio_content_id = db.Column(db.String(36), db.ForeignKey('contents.id'), nullable=True)
     
-    # REMOVIDO: Configurações de reprodução movidas para Schedule
-    # Campanha agora é apenas um container de conteúdos
-    
     # Compiled video metadata
     compiled_video_path = db.Column(db.String(500))
     compiled_video_duration = db.Column(db.Integer)  # segundos

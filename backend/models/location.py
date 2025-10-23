@@ -38,7 +38,7 @@ class Location(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
-    players = db.relationship('Player', backref='location_ref', lazy=True)
+    players = db.relationship('Player', lazy=True)
     
     def to_dict(self):
         # Usar SQL direto para contar players e evitar carregar todos os objetos

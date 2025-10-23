@@ -355,14 +355,7 @@ const ContentDetail = () => {
                 />
               </Box>
 
-              {content.category && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    <strong>Categoria:</strong>
-                  </Typography>
-                  <Chip label={content.category} variant="outlined" size="small" />
-                </Box>
-              )}
+              
 
               <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" color="text.secondary">
@@ -404,16 +397,22 @@ const ContentDetail = () => {
                 </Box>
               )}
 
-              {content.tags && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    <strong>Tags:</strong>
-                  </Typography>
-                  <Typography variant="body1">
-                    {content.tags}
-                  </Typography>
-                </Box>
-              )}
+              {(() => {
+                const tagsArr = Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : []);
+                if (tagsArr.length === 0) return null;
+                return (
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      <strong>Tags:</strong>
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {tagsArr.map((tag, idx) => (
+                        <Chip key={`tag-${idx}`} label={tag} variant="outlined" size="small" />
+                      ))}
+                    </Box>
+                  </Box>
+                );
+              })()}
             </CardContent>
           </Card>
         </Grid>

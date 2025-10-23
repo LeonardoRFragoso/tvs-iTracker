@@ -37,9 +37,12 @@ import {
   TrendingUp,
   People as PeopleIcon,
   CalendarToday,
+  Password,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import axios from '../../config/axios';
 
 const drawerWidth = 220;
@@ -53,35 +56,54 @@ const Layout = () => {
     players: 0
   });
   const { user, logout } = useAuth();
+  const { start: startOnboarding } = useOnboarding();
   const { isDarkMode, toggleTheme, animationsEnabled, transitionDuration } = useTheme();
+  const { getSetting, companyDisplayName } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const didFetchBadgesRef = useRef(false);
+  const brandBase = 'ICTSI TVs';
+  const effectiveCompanyName = (companyDisplayName || (getSetting && getSetting('general.company_name', '')) || '').trim();
+  const appTitle = effectiveCompanyName ? `${brandBase} - ${effectiveCompanyName}` : brandBase;
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.title = appTitle;
+    }
+  }, [appTitle]);
 
   // Buscar dados para badges
   useEffect(() => {
     if (didFetchBadgesRef.current) return;
     const fetchBadgeData = async () => {
       try {
-        const [contentRes, locationsRes, dashboardRes] = await Promise.all([
-          axios.get('/content?per_page=1000'), // Buscar todos os conteúdos
-          axios.get('/locations'),
-          axios.get('/dashboard/stats') // Buscar stats do dashboard para players online
+        // Buscar endpoints de forma resiliente para não falhar tudo se um deles der erro
+        const [contentRes, locationsRes, playersStatsRes] = await Promise.allSettled([
+          axios.get('/content?per_page=1'),
+          axios.get('/locations?per_page=1'),
+          axios.get('/players/stats') // players online
         ]);
 
+        const contentTotal = (contentRes.status === 'fulfilled')
+          ? (contentRes.value?.data?.total || contentRes.value?.data?.contents?.length || 0)
+          : 0;
+
+        const locationsTotal = (locationsRes.status === 'fulfilled')
+          ? (locationsRes.value?.data?.total || locationsRes.value?.data?.locations?.length || 0)
+          : 0;
+
+        const playersOnline = (playersStatsRes.status === 'fulfilled')
+          ? (playersStatsRes.value?.data?.online_players || 0)
+          : 0;
+
         setBadges({
-          content: contentRes.data.total || contentRes.data.contents?.length || 0,
-          locations: locationsRes.data.total || locationsRes.data.locations?.length || 0,
-          players: dashboardRes.data.overview?.online_players || 0 // Usar players online em vez do total
+          content: contentTotal,
+          locations: locationsTotal,
+          players: playersOnline
         });
       } catch (error) {
         console.error('Erro ao buscar dados dos badges:', error);
-        // Manter valores padrão em caso de erro
-        setBadges({
-          content: 4,
-          locations: 3,
-          players: 0 // Padrão 0 para players online
-        });
+        // Em caso de erro inesperado do bloco acima, manter estado atual (sem hardcode)
       }
     };
 
@@ -92,16 +114,20 @@ const Layout = () => {
   // Atalhos globais de teclado
   useEffect(() => {
     const handleKeyPress = (event) => {
-      // Verificar se não está em um input/textarea/select
       const activeElement = document.activeElement;
-      const isInputActive = activeElement && (
-        activeElement.tagName === 'INPUT' ||
-        activeElement.tagName === 'TEXTAREA' ||
-        activeElement.tagName === 'SELECT' ||
-        activeElement.contentEditable === 'true'
+      const isInputActive = !!(
+        activeElement && (
+          activeElement.tagName === 'INPUT' ||
+          activeElement.tagName === 'TEXTAREA' ||
+          activeElement.tagName === 'SELECT' ||
+          activeElement.isContentEditable ||
+          (typeof activeElement.closest === 'function' && (
+            activeElement.closest('input, textarea, select, [contenteditable="true"], .MuiInputBase-root, [role="textbox"]')
+          ))
+        )
       );
 
-      if (isInputActive) return; // Não executar atalhos se estiver digitando
+      if (isInputActive) return;
 
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
@@ -160,26 +186,12 @@ const Layout = () => {
       badge: badges.content > 0 ? badges.content.toString() : null,
       description: 'Gerenciar mídias'
     },
-      { 
-        text: 'Empresas', 
-        icon: <LocationOn />, 
-        path: '/locations',
-      badge: badges.locations > 0 ? badges.locations.toString() : null,
-      description: 'Localizações ativas'
-    },
     { 
       text: 'Campanhas', 
       icon: <Campaign />, 
       path: '/campaigns',
       badge: null,
       description: 'Campanhas publicitárias'
-    },
-    { 
-      text: 'Players', 
-      icon: <Tv />, 
-      path: '/players',
-      badge: badges.players > 0 ? badges.players.toString() : null,
-      description: 'Players online'
     },
     { 
       text: 'Agendamentos', 
@@ -201,9 +213,6 @@ const Layout = () => {
     let items = [...menuItems];
     const isAdmin = user?.role === 'admin';
 
-    // Remover Monitor de Tráfego e Configurações temporariamente
-    items = items.filter(i => i.path !== '/admin/traffic-monitor' && i.path !== '/settings');
-
     // Adicionar item de aprovações para admin
     if (isAdmin) {
       const adminItem = {
@@ -224,6 +233,26 @@ const Layout = () => {
         description: 'Estatísticas de rede por player'
       };
       items.push(monitorItem);
+
+      // Adicionar Empresas na área de Administração
+      const locationItem = {
+        text: 'Empresas', 
+        icon: <LocationOn />, 
+        path: '/locations',
+        badge: badges.locations > 0 ? badges.locations.toString() : null,
+        description: 'Localizações ativas'
+      };
+      items.push(locationItem);
+
+      // Adicionar Players na área de Administração
+      const playersItem = {
+        text: 'Players', 
+        icon: <Tv />, 
+        path: '/players',
+        badge: badges.players > 0 ? badges.players.toString() : null,
+        description: 'Players online'
+      };
+      items.push(playersItem);
     }
 
     // Sempre adicionar Configurações como último item
@@ -237,7 +266,7 @@ const Layout = () => {
     items.push(configItem);
 
     return items;
-  }, [menuItems, user]);
+  }, [menuItems, user, badges]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -299,10 +328,10 @@ const Layout = () => {
           </Avatar>
           <Box>
             <Typography variant="h6" noWrap component="div" fontWeight="bold" sx={{ color: isDarkMode ? 'white' : 'inherit' }}>
-              TVS iTracker
+              {brandBase}
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.9 }}>
-              Digital Signage
+              {effectiveCompanyName || ''}
             </Typography>
           </Box>
         </Box>
@@ -351,11 +380,25 @@ const Layout = () => {
           {computedMenuItems.map((item, index) => {
             const isActive = location.pathname === item.path || 
                             (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+            const dataTour = item.path === '/content' ? 'menu-content'
+              : item.path === '/campaigns' ? 'menu-campaigns'
+              : item.path === '/schedules' ? 'menu-schedules'
+              : item.path === '/players' ? 'menu-players'
+              : item.path === '/calendar' ? 'menu-calendar'
+              : item.path === '/dashboard' ? 'menu-dashboard'
+              : undefined;
             
             // Adicionar separador antes dos itens administrativos
-            const isAdminItem = item.path.startsWith('/admin') || item.path === '/settings';
+            const isAdminItem = item.path.startsWith('/admin') 
+                               || item.path === '/settings'
+                               || item.path === '/locations'
+                               || item.path === '/players';
             const prevItem = computedMenuItems[index - 1];
-            const showDivider = isAdminItem && prevItem && !prevItem.path.startsWith('/admin') && prevItem.path !== '/settings';
+            const prevIsAdmin = prevItem && (prevItem.path.startsWith('/admin') 
+                               || prevItem.path === '/settings'
+                               || prevItem.path === '/locations'
+                               || prevItem.path === '/players');
+            const showDivider = isAdminItem && prevItem && !prevIsAdmin;
             
             return (
               <React.Fragment key={item.text}>
@@ -387,6 +430,7 @@ const Layout = () => {
                 <Fade in={true} timeout={animationsEnabled ? Math.max(0, Math.min(transitionDuration + index * 100, 1500)) : 0}>
                   <ListItem disablePadding sx={{ mb: 0.5 }}>
                     <ListItemButton
+                      data-tour={dataTour}
                       selected={isActive}
                       onClick={() => navigate(item.path)}
                       sx={{
@@ -534,7 +578,7 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Controle de Televisões iTracker
+            {appTitle}
           </Typography>
           <div>
             <IconButton
@@ -595,6 +639,16 @@ const Layout = () => {
               <MenuItem onClick={handleClose}>
                 <AccountCircle sx={{ mr: 1 }} />
                 {user?.username || 'Usuário'}
+              </MenuItem>
+              {user?.role === 'admin' && (
+                <MenuItem onClick={() => { navigate('/users'); handleClose(); }}>
+                  <Password sx={{ mr: 1 }} />
+                  Trocar senha de usuários
+                </MenuItem>
+              )}
+              <MenuItem onClick={() => { startOnboarding(); handleClose(); }}>
+                <Password sx={{ mr: 1 }} />
+                Iniciar Tour
               </MenuItem>
               <MenuItem onClick={handleLogout}>
                 <Logout sx={{ mr: 1 }} />

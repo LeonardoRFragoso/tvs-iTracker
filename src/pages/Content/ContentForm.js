@@ -7,10 +7,6 @@ import {
   TextField,
   Button,
   Grid,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   LinearProgress,
   Chip,
@@ -45,7 +41,6 @@ const ContentForm = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    category: '',
     tags: [],
     duration: '',
     filename: '',
@@ -85,7 +80,6 @@ const ContentForm = () => {
       setFormData({
         title: content.title || '',
         description: content.description || '',
-        category: content.category || '',
         tags: Array.isArray(content.tags) ? content.tags : (content.tags ? [content.tags] : []),
         duration: content.duration || '',
         filename: content.filename || '',
@@ -188,7 +182,9 @@ const ContentForm = () => {
       'video/*': ['.mp4', '.avi', '.mov', '.wmv', '.flv'],
       'audio/*': ['.mp3', '.wav', '.ogg', '.m4a']
     },
-    multiple: true
+    multiple: !isEdit, // Múltiplos arquivos apenas para criação, não para edição
+    maxFiles: isEdit ? 1 : undefined,
+    disabled: loading
   });
 
   const handleInputChange = (e) => {
@@ -216,6 +212,32 @@ const ContentForm = () => {
     }));
   };
 
+  const handleRemoveFile = (indexToRemove) => {
+    const newFiles = files.filter((_, index) => index !== indexToRemove);
+    setFiles(newFiles);
+    
+    // Recalcular tamanho total
+    const totalBytes = newFiles.reduce((sum, f) => sum + (f?.size || 0), 0);
+    setTotalBytesSelected(totalBytes);
+    
+    // Se não há mais arquivos, limpar preview
+    if (newFiles.length === 0) {
+      setPreview(null);
+      setDetectedContentType('');
+    } else {
+      // Atualizar preview para o primeiro arquivo se for imagem
+      const firstFile = newFiles[0];
+      if (firstFile.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => setPreview(reader.result);
+        reader.readAsDataURL(firstFile);
+      } else {
+        setPreview(null);
+      }
+      setDetectedContentType(firstFile.type);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -231,6 +253,11 @@ const ContentForm = () => {
       // Edição continua permitindo apenas um arquivo
       const targetFiles = isEdit ? (files[0] ? [files[0]] : []) : files;
 
+      // Tags finais: existing chips + texto pendente no campo (se não adicionado como chip)
+      const normalizedTags = Array.isArray(formData.tags) ? formData.tags : (formData.tags ? [formData.tags] : []);
+      const pending = (tagInput || '').trim();
+      const finalTags = Array.from(new Set([...normalizedTags, ...(pending ? [pending] : [])]));
+
       // Validação: tamanho total do lote
       const totalBytes = targetFiles.reduce((sum, f) => sum + (f?.size || 0), 0);
       if (totalBytes > MAX_TOTAL_BYTES) {
@@ -238,6 +265,21 @@ const ContentForm = () => {
         return;
       }
       setTotalBytesSelected(totalBytes);
+
+      if (isEdit && targetFiles.length === 0) {
+        const payload = {
+          title: (formData.title || '').trim(),
+          description: formData.description || '',
+          tags: finalTags,
+        };
+        if (formData.duration !== '' && formData.duration !== null && formData.duration !== undefined) {
+          payload.duration = formData.duration;
+        }
+        await axios.put(`/content/${id}`, payload);
+        setSuccess('Conteúdo atualizado com sucesso!');
+        setTimeout(() => { navigate('/content'); }, 1200);
+        return;
+      }
 
       let uploadedSoFar = 0;
       for (let idx = 0; idx < targetFiles.length; idx++) {
@@ -248,7 +290,7 @@ const ContentForm = () => {
 
         Object.keys(formData).forEach(key => {
           if (key === 'tags') {
-            submitData.append('tags', JSON.stringify(formData.tags));
+            submitData.append('tags', JSON.stringify(finalTags));
           } else if (key === 'duration') {
             if (isDurationRequired(contentType) && formData[key]) {
               submitData.append(key, formData[key]);
@@ -396,7 +438,7 @@ const ContentForm = () => {
                         <UploadIcon />
                       </Avatar>
                       <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Selecionar Arquivo
+                        {isEdit ? 'Selecionar Arquivo' : 'Selecionar Arquivos'}
                       </Typography>
                     </Box>
                     
@@ -428,21 +470,121 @@ const ContentForm = () => {
                           <Typography variant="h6" gutterBottom>
                             {files.length === 1 ? files[0].name : `${files.length} arquivos selecionados`}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Tamanho total: {formatFileSize(files.reduce((s,f)=>s+(f?.size||0),0))} (limite: 50 MB)
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              Tamanho total: {formatFileSize(files.reduce((s,f)=>s+(f?.size||0),0))} (limite: 50 MB)
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="text"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFiles([]);
+                                setPreview(null);
+                                setDetectedContentType('');
+                                setTotalBytesSelected(0);
+                              }}
+                              sx={{ 
+                                minWidth: 'auto',
+                                px: 1,
+                                fontSize: '0.75rem',
+                                textTransform: 'none'
+                              }}
+                            >
+                              Limpar todos
+                            </Button>
+                          </Box>
+                          {files.length > 1 && (
+                            <Box sx={{ mt: 2 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                Arquivos selecionados:
+                              </Typography>
+                              <Box sx={{ mt: 1, maxHeight: 120, overflowY: 'auto' }}>
+                                {files.map((file, index) => (
+                                  <Box key={index} sx={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'space-between',
+                                    py: 0.5,
+                                    px: 1,
+                                    borderRadius: 1,
+                                    '&:hover': {
+                                      backgroundColor: 'action.hover'
+                                    }
+                                  }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                                      • {file.name} ({formatFileSize(file.size)})
+                                    </Typography>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveFile(index);
+                                      }}
+                                      sx={{ 
+                                        ml: 1, 
+                                        width: 20, 
+                                        height: 20,
+                                        '&:hover': {
+                                          color: 'error.main'
+                                        }
+                                      }}
+                                    >
+                                      <CancelIcon sx={{ fontSize: 14 }} />
+                                    </IconButton>
+                                  </Box>
+                                ))}
+                              </Box>
+                            </Box>
+                          )}
                           </Box>
                       ) : (
                         <Box>
                           <Typography variant="h6" gutterBottom>
-                            Arraste e solte um arquivo aqui
+                            {isEdit ? 'Arraste e solte um arquivo aqui' : 'Arraste e solte arquivos aqui'}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            Suporte: Imagens, Vídeos, Áudios
+                          <Typography variant="body2" color="text.secondary" gutterBottom>
+                            {isEdit ? 'Suporte: Imagens, Vídeos, Áudios' : 'Suporte: Múltiplos arquivos • Imagens, Vídeos, Áudios'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {isEdit ? 'Ou clique para selecionar um arquivo' : 'Ou clique para selecionar múltiplos arquivos'}
                           </Typography>
                         </Box>
                       )}
                     </Box>
+
+                    {/* Botão alternativo para seleção de arquivos */}
+                    {!isEdit && (
+                      <Box sx={{ mt: 2, textAlign: 'center' }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.multiple = true;
+                            input.accept = 'image/*,video/*,audio/*';
+                            input.onchange = (e) => {
+                              const selectedFiles = Array.from(e.target.files);
+                              if (selectedFiles.length > 0) {
+                                onDrop(selectedFiles);
+                              }
+                            };
+                            input.click();
+                          }}
+                          startIcon={<UploadIcon />}
+                          sx={{
+                            borderRadius: 2,
+                            textTransform: 'none',
+                            '&:hover': {
+                              transform: 'translateY(-1px)',
+                            },
+                          }}
+                        >
+                          Selecionar Múltiplos Arquivos
+                        </Button>
+                      </Box>
+                    )}
 
                     {preview && (
                       <Box sx={{ mt: 3, textAlign: 'center' }}>
@@ -570,29 +712,7 @@ const ContentForm = () => {
                         />
                       </Grid>
                       
-                      <Grid item xs={12} md={6}>
-                        <FormControl fullWidth>
-                          <InputLabel>Categoria</InputLabel>
-                          <Select
-                            name="category"
-                            value={formData.category}
-                            onChange={handleInputChange}
-                            label="Categoria"
-                            sx={{
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            }}
-                          >
-                            <MenuItem value="institucional">Institucional</MenuItem>
-                            <MenuItem value="promocional">Promocional</MenuItem>
-                            <MenuItem value="informativo">Informativo</MenuItem>
-                            <MenuItem value="entretenimento">Entretenimento</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
+                      
                       
                       {showDurationInput && (
                         <Grid item xs={12} md={6}>

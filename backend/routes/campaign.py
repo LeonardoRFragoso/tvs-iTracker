@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 import json
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
-from sqlalchemy import func, text
+from sqlalchemy import func, text, inspect
 from collections import defaultdict
 from models.campaign import Campaign, CampaignContent, db, PlaybackEvent
 from models.content import Content
@@ -169,17 +169,27 @@ def create_campaign():
         print(f"[DEBUG] Campaign creation data received: {data}")
         print(f"[DEBUG] User ID: {user_id}")
         
-        required_fields = ['name', 'start_date', 'end_date']
-        for field in required_fields:
-            if not data.get(field):
-                print(f"[ERROR] Missing required field: {field}")
-                return jsonify({'error': f'{field} é obrigatório'}), 400
+        # Validação obrigatória apenas do nome
+        if not data.get('name'):
+            print(f"[ERROR] Missing required field: name")
+            return jsonify({'error': 'Nome é obrigatório'}), 400
         
-        # Converter datas (aceita BR e ISO). Considera fim do dia para end_date sem horário
-        start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
-        end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
+        # Processar datas opcionais
+        start_date = None
+        end_date = None
         
-        if start_date >= end_date:
+        if data.get('start_date'):
+            start_date = parse_flexible_datetime(data['start_date'], end_of_day=False)
+        
+        if data.get('end_date'):
+            end_date = parse_flexible_datetime(data['end_date'], end_of_day=True)
+        
+        # Validação condicional: se uma data for informada, ambas devem ser
+        if (start_date and not end_date) or (not start_date and end_date):
+            return jsonify({'error': 'Se informar uma data, ambas (início e fim) devem ser preenchidas'}), 400
+        
+        # Se ambas as datas foram informadas, validar ordem
+        if start_date and end_date and start_date >= end_date:
             return jsonify({'error': 'Data de início deve ser anterior à data de fim'}), 400
         
         # Converter tipos com segurança
@@ -212,7 +222,6 @@ def create_campaign():
             days_of_week=json.dumps(data.get('days_of_week', [])),
             user_id=user_id,
             background_audio_content_id=bg_audio_id,
-            # REMOVIDO: Configurações de reprodução movidas para Schedule
         )
         
         db.session.add(campaign)
@@ -788,28 +797,23 @@ def debug_campaign_analytics(campaign_id):
         db_file = engine.url.database
         db_abspath = os.path.abspath(db_file) if db_file else None
 
-        # Verificar tabela playback_events e suas colunas (SQLite)
+        # Verificar tabela playback_events e suas colunas (agnóstico ao SGBD)
         columns = []
-        has_table = False
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("PRAGMA table_info(playback_events)"))
-                rows = result.fetchall()
-                if rows:
-                    has_table = True
-                    for r in rows:
-                        # PRAGMA columns: cid, name, type, notnull, dflt_value, pk
-                        columns.append({
-                            'cid': r[0],
-                            'name': r[1],
-                            'type': r[2],
-                            'notnull': r[3],
-                            'default': r[4],
-                            'pk': r[5],
-                        })
-        except Exception as e:
-            # Falha ao executar PRAGMA
-            columns = [{'error': f'PRAGMA failed: {str(e)}'}]
+        inspector = inspect(engine)
+        has_table = inspector.has_table('playback_events')
+        if has_table:
+            try:
+                cols = inspector.get_columns('playback_events')
+                for c in cols:
+                    columns.append({
+                        'name': c.get('name'),
+                        'type': str(c.get('type')),
+                        'nullable': c.get('nullable'),
+                        'default': c.get('default'),
+                        'primary_key': c.get('primary_key'),
+                    })
+            except Exception as e:
+                columns = [{'error': f'Inspector failed: {str(e)}'}]
 
         totals = {
             'total_events': 0,

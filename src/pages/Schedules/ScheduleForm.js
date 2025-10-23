@@ -121,6 +121,16 @@ const ScheduleForm = () => {
   const { id } = useParams();
   const location = useLocation();
   const isEdit = Boolean(id);
+  const searchParams = new URLSearchParams(location.search || '');
+  const queryReturnTo = searchParams.get('returnTo');
+  // localStorage fallback (in case state/query are lost by refresh/build)
+  let storageReturnTo = null;
+  let storageFrom = null;
+  try {
+    storageReturnTo = localStorage.getItem('schedule_returnTo');
+    storageFrom = localStorage.getItem('schedule_from');
+  } catch (e) {}
+  const returnToPath = (location.state?.returnTo || queryReturnTo || storageReturnTo || '/schedules');
   const [formData, setFormData] = useState({
     name: '',
     campaign_id: '',
@@ -235,7 +245,6 @@ const ScheduleForm = () => {
         loop_behavior: schedule.loop_behavior || 'until_next',
         loop_duration_minutes: schedule.loop_duration_minutes || null,
         content_selection: schedule.content_selection || 'all',
-        // embaralhar removido do UI; manter estado interno padrão
         auto_skip_errors: true, // obrigatório
         // Forçar compatibilidade única: legado (recursos mínimos)
         device_type_compatibility: 'legacy',
@@ -397,13 +406,13 @@ const ScheduleForm = () => {
           await axios.put(`/schedules/${id}`, { ...submitData, player_id: basePlayerId });
           const otherPlayers = selected.filter(pid => pid && pid !== basePlayerId);
           if (otherPlayers.length > 0) {
-            await axios.post('/schedules/bulk', { ...submitData, player_ids: otherPlayers, check_conflicts: true });
+            await axios.post('/schedules/bulk', { ...submitData, player_ids: otherPlayers });
           }
           response = { status: 200 };
         } else if (targetMode === 'location') {
           await axios.put(`/schedules/${id}`, { ...submitData, player_id: formData.player_id });
           if (targetLocationId) {
-            await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId, check_conflicts: true });
+            await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId });
           }
           response = { status: 200 };
         } else {
@@ -413,16 +422,17 @@ const ScheduleForm = () => {
         if (targetMode === 'single') {
           response = await axios.post('/schedules', { ...submitData, player_id: formData.player_id });
         } else if (targetMode === 'location') {
-          response = await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId, check_conflicts: true });
+          response = await axios.post('/schedules/bulk', { ...submitData, location_id: targetLocationId });
         } else {
-          response = await axios.post('/schedules/bulk', { ...submitData, player_ids: selectedPlayerIds, check_conflicts: true });
+          response = await axios.post('/schedules/bulk', { ...submitData, player_ids: selectedPlayerIds });
         }
       }
 
       setSuccess(isEdit ? 'Agendamento atualizado com sucesso!' : 'Agendamento criado com sucesso!');
       
       setTimeout(() => {
-        navigate('/schedules');
+        try { localStorage.removeItem('schedule_returnTo'); localStorage.removeItem('schedule_from'); } catch (e) {}
+        navigate(returnToPath);
       }, 2000);
 
     } catch (err) {
@@ -527,7 +537,16 @@ const ScheduleForm = () => {
         <Fade in timeout={800}>
           <Box display="flex" alignItems="center" mb={4}>
             <IconButton 
-              onClick={() => navigate('/schedules')} 
+              onClick={() => {
+                try { localStorage.removeItem('schedule_returnTo'); localStorage.removeItem('schedule_from'); } catch (e) {}
+                const fromState = location.state?.from;
+                const fromQuery = searchParams.get('from');
+                if (fromState === 'calendar' || fromQuery === 'calendar') {
+                  navigate(-1);
+                } else {
+                  navigate(returnToPath);
+                }
+              }} 
               sx={{ 
                 mr: 2,
                 color: 'primary.main',
@@ -1222,7 +1241,7 @@ const ScheduleForm = () => {
                         </FormControl>
                       </Grid>
 
-                      {/* Duração por Conteúdo e Transição removidos: reprodução usa vídeo compilado da campanha */}
+                      
 
                       {formData.loop_behavior === 'time_limited' && (
                         <Grid item xs={12} md={4}>
@@ -1267,7 +1286,16 @@ const ScheduleForm = () => {
               <Box display="flex" gap={2} justifyContent="flex-end">
                 <Button
                   variant="outlined"
-                  onClick={() => navigate('/schedules')}
+                  onClick={() => {
+                    try { localStorage.removeItem('schedule_returnTo'); localStorage.removeItem('schedule_from'); } catch (e) {}
+                    const fromState = location.state?.from;
+                    const fromQuery = searchParams.get('from');
+                    if (fromState === 'calendar' || fromQuery === 'calendar') {
+                      navigate(-1);
+                    } else {
+                      navigate(returnToPath);
+                    }
+                  }}
                   startIcon={<CancelIcon />}
                   sx={{
                     borderRadius: 2,

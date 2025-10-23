@@ -20,12 +20,17 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
+import { useSettings } from '../../contexts/SettingsContext';
 
 const Navbar = ({ sidebarOpen, setSidebarOpen }) => {
   const { user, logout } = useAuth();
   const { notifications, connected } = useSocket();
+  const { getSetting } = useSettings();
   const [anchorEl, setAnchorEl] = useState(null);
   const [notificationAnchor, setNotificationAnchor] = useState(null);
+  const brandBase = 'ICTSI TVs';
+  const companyName = (getSetting && getSetting('general.company_name', '')) || '';
+  const appTitle = companyName ? `${brandBase} - ${companyName}` : brandBase;
 
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -68,7 +73,7 @@ const Navbar = ({ sidebarOpen, setSidebarOpen }) => {
         </IconButton>
 
         <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-          Controle de Televisões iTracker
+          {appTitle}
         </Typography>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

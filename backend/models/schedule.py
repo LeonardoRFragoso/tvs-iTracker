@@ -129,7 +129,6 @@ class Schedule(db.Model):
             # Permitir que campanhas com imagens sejam reproduzidas em slots 'main'
             if self.content_type == 'overlay':
                 content_type_filter = 'image'
-            # Removido: elif self.content_type == 'main': content_type_filter = 'video'
             # Agora 'main' aceita qualquer tipo de conteúdo (video, image, audio)
         
         # Contexto do agendamento para filtros

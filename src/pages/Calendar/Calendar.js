@@ -41,7 +41,8 @@ import {
   MusicNote,
   ChevronLeft,
   ChevronRight,
-  Today
+  Today,
+  Business
 } from '@mui/icons-material';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -354,6 +355,11 @@ const Calendar = () => {
     // Recuperar filtro salvo do localStorage
     return localStorage.getItem('calendar-selected-player') || '';
   });
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState(() => {
+    // Recuperar filtro salvo do localStorage
+    return localStorage.getItem('calendar-selected-company') || '';
+  });
   const [totalSchedules, setTotalSchedules] = useState(0);
   const calendarRef = useRef(null);
 
@@ -375,6 +381,27 @@ const Calendar = () => {
     }
   };
 
+  // Buscar lista de empresas
+  const fetchCompanies = async () => {
+    try {
+      const res = await axios.get('/locations?per_page=1000');
+      const locationsList = res.data.locations || [];
+      
+      // Extrair empresas únicas
+      const uniqueCompanies = [...new Set(locationsList.map(loc => loc.company).filter(Boolean))];
+      setCompanies(uniqueCompanies);
+      
+      // Verificar se a empresa selecionada ainda existe
+      if (selectedCompany && !uniqueCompanies.includes(selectedCompany)) {
+        console.log('[Calendar] Empresa selecionada não existe mais, limpando filtro');
+        setSelectedCompany('');
+        localStorage.removeItem('calendar-selected-company');
+      }
+    } catch (err) {
+      console.error('[Calendar] Error fetching companies:', err);
+    }
+  };
+
   const fetchRange = async (start, end, playerIdOverride) => {
     try {
       setLoading(true);
@@ -389,6 +416,11 @@ const Calendar = () => {
       const effectivePlayerId = (playerIdOverride ?? selectedPlayer);
       if (effectivePlayerId) {
         params.append('player_id', effectivePlayerId);
+      }
+
+      // Adicionar filtro por empresa se selecionada
+      if (selectedCompany) {
+        params.append('company', selectedCompany);
       }
 
       console.log('[Calendar] Fazendo requisição:', `/schedules/range?${params.toString()}`);
@@ -426,7 +458,15 @@ const Calendar = () => {
   };
 
   const handleViewChange = (newView) => {
+    if (!newView) return;
     setView(newView);
+
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      if (calendarApi) {
+        calendarApi.changeView(newView);
+      }
+    }
     
     // Após mudar a view, rolar para o horário atual se for uma view de tempo
     setTimeout(() => {
@@ -458,8 +498,36 @@ const Calendar = () => {
     }
   };
 
+  const handleCompanyFilter = (company) => {
+    console.log('[Calendar] Filtro alterado para empresa:', company);
+    setSelectedCompany(company);
+    
+    // Salvar filtro no localStorage
+    if (company) {
+      localStorage.setItem('calendar-selected-company', company);
+    } else {
+      localStorage.removeItem('calendar-selected-company');
+    }
+    
+    // Limpar filtro de player quando empresa muda
+    if (company && selectedPlayer) {
+      setSelectedPlayer('');
+      localStorage.removeItem('calendar-selected-player');
+    }
+    
+    if (calendarRef.current) {
+      const calendarApi = calendarRef.current.getApi();
+      const start = new Date(calendarApi.view.activeStart);
+      const end = new Date(calendarApi.view.activeEnd);
+      end.setDate(end.getDate() - 1);
+      console.log('[Calendar] Recarregando calendário com novo filtro de empresa...', company);
+      fetchRange(start, end);
+    }
+  };
+
   useEffect(() => {
     fetchPlayers();
+    fetchCompanies();
   }, []);
 
   // Scroll inicial para o horário atual quando o calendário carrega
@@ -566,7 +634,51 @@ const Calendar = () => {
       >
         <CardContent sx={{ py: 2 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ position: 'relative' }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    mb: 1,
+                    fontWeight: 500,
+                    color: theme.palette.text.secondary,
+                  }}
+                >
+                  Filtrar por Empresa
+                </Typography>
+                <FormControl fullWidth>
+                  <Select
+                    value={selectedCompany}
+                    onChange={(e) => handleCompanyFilter(e.target.value)}
+                    displayEmpty
+                    sx={{ 
+                      borderRadius: 2,
+                    }}
+                  >
+                    <MenuItem value="">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Business sx={{ fontSize: 16, color: theme.palette.text.secondary }} />
+                        <Typography variant="body2">
+                          Todas as Empresas
+                        </Typography>
+                      </Box>
+                    </MenuItem>
+                    {companies.map(company => (
+                      <MenuItem key={company} value={company}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Business sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+                          <Typography variant="body2">
+                            {company}
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            </Grid>
+            
+            <Grid item xs={12} md={4}>
               <Box sx={{ position: 'relative' }}>
                 <Typography
                   variant="body2"
@@ -583,6 +695,7 @@ const Calendar = () => {
                     value={selectedPlayer}
                     onChange={(e) => handlePlayerFilter(e.target.value)}
                     displayEmpty
+                    disabled={!!selectedCompany}
                     sx={{ 
                       borderRadius: 2,
                     }}
@@ -591,11 +704,13 @@ const Calendar = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Tv sx={{ fontSize: 16, color: theme.palette.text.secondary }} />
                         <Typography variant="body2">
-                          Todos os Players
+                          {selectedCompany ? 'Limpe o filtro de empresa primeiro' : 'Todos os Players'}
                         </Typography>
                       </Box>
                     </MenuItem>
-                    {players.map(player => (
+                    {players
+                      .filter(player => !selectedCompany || player.company === selectedCompany)
+                      .map(player => (
                       <MenuItem key={player.id} value={player.id}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                           <Tv sx={{ 
@@ -623,9 +738,20 @@ const Calendar = () => {
               </Box>
             </Grid>
             
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Stack direction="row" spacing={1}>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {selectedCompany && (
+                    <Chip 
+                      label={selectedCompany} 
+                      size="small"
+                      onDelete={() => handleCompanyFilter('')}
+                      color="secondary"
+                      variant="outlined"
+                      icon={<Business />}
+                    />
+                  )}
+                  
                   {selectedPlayer && (
                     <Chip 
                       label={players.find(p => p.id === selectedPlayer)?.name || 'Player'} 
@@ -633,6 +759,7 @@ const Calendar = () => {
                       onDelete={() => handlePlayerFilter('')}
                       color="primary"
                       variant="outlined"
+                      icon={<Tv />}
                     />
                   )}
                   
@@ -720,7 +847,18 @@ const Calendar = () => {
             const scheduleId = info.event.extendedProps?.schedule_id 
               || (info.event.id ? String(info.event.id).split('-')[0] : null);
             if (scheduleId) {
-              navigate(`/schedules/${scheduleId}/edit`);
+              try {
+                localStorage.setItem('schedule_returnTo', '/calendar');
+                localStorage.setItem('schedule_from', 'calendar');
+              } catch (e) {}
+              const editPath = `/schedules/${scheduleId}/edit?from=calendar&returnTo=${encodeURIComponent('/calendar')}`;
+              navigate(editPath, {
+                state: {
+                  returnTo: '/calendar',
+                  from: 'calendar',
+                  calendar: { selectedPlayer }
+                }
+              });
             } else {
               navigate('/schedules');
             }

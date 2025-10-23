@@ -350,32 +350,75 @@ class ChromecastService:
     def send_command(self, device_id: str, command: str, params: Dict = None) -> bool:
         """Envia comando para um dispositivo Chromecast"""
         try:
+            logger.info(f"[COMMAND] Enviando comando '{command}' para device {device_id}")
+            logger.info(f"[COMMAND] Conexões ativas: {list(self.active_connections.keys())}")
+            
             if device_id not in self.active_connections:
+                logger.error(f"[COMMAND] Device {device_id} não está nas conexões ativas")
                 return False
             
             cast = self.active_connections[device_id]
-            mc = cast.media_controller
+            logger.info(f"[COMMAND] Cast obtido: {cast.name} - Status: {cast.status}")
             
+            # Verificar se o cast está conectado
+            if cast.status is None:
+                logger.error(f"[COMMAND] Cast {device_id} não está conectado (status=None)")
+                return False
+            
+            mc = cast.media_controller
+            logger.info(f"[COMMAND] Media controller: {mc}")
+            
+            # Log do status atual da mídia antes do comando
+            try:
+                current_status = getattr(mc, 'status', None)
+                if current_status:
+                    logger.info(f"[COMMAND] Status atual da mídia: {current_status.player_state}")
+                    logger.info(f"[COMMAND] Conteúdo atual: {current_status.content_id}")
+                else:
+                    logger.info(f"[COMMAND] Nenhum status de mídia disponível")
+            except Exception as e:
+                logger.warning(f"[COMMAND] Erro ao obter status da mídia: {e}")
+            
+            # Executar comando
             if command == 'play':
+                logger.info(f"[COMMAND] Executando play()")
                 mc.play()
             elif command == 'pause':
+                logger.info(f"[COMMAND] Executando pause()")
                 mc.pause()
             elif command == 'stop':
+                logger.info(f"[COMMAND] Executando stop()")
                 mc.stop()
+                # Aguardar um pouco para o comando ser processado
+                time.sleep(0.5)
+                # Verificar se o comando foi efetivo
+                try:
+                    new_status = getattr(mc, 'status', None)
+                    if new_status:
+                        logger.info(f"[COMMAND] Status após stop: {new_status.player_state}")
+                    else:
+                        logger.info(f"[COMMAND] Nenhum status após stop")
+                except Exception as e:
+                    logger.warning(f"[COMMAND] Erro ao verificar status após stop: {e}")
             elif command == 'set_volume':
                 volume = params.get('volume', 0.5) if params else 0.5
+                logger.info(f"[COMMAND] Executando set_volume({volume})")
                 cast.set_volume(volume)
             elif command == 'seek':
                 position = params.get('position', 0) if params else 0
+                logger.info(f"[COMMAND] Executando seek({position})")
                 mc.seek(position)
             else:
-                logger.warning(f"Comando não suportado: {command}")
+                logger.warning(f"[COMMAND] Comando não suportado: {command}")
                 return False
             
+            logger.info(f"[COMMAND] Comando '{command}' enviado com sucesso para {device_id}")
             return True
             
         except Exception as e:
-            logger.error(f"Erro ao enviar comando {command} para {device_id}: {e}")
+            logger.error(f"[COMMAND] Erro ao enviar comando {command} para {device_id}: {e}")
+            import traceback
+            logger.error(f"[COMMAND] Traceback: {traceback.format_exc()}")
             return False
     
     def load_media(self, device_id: str, media_url: str, content_type: str = 'video/mp4', 

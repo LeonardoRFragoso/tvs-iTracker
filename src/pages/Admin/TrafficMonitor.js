@@ -83,6 +83,11 @@ const TrafficMonitor = () => {
   const [topItems, setTopItems] = useState([]);
   const [accItems, setAccItems] = useState([]);
 
+  // Options data for dropdowns
+  const [companies, setCompanies] = useState([]);
+  const [allPlayers, setAllPlayers] = useState([]);
+  const [allLocations, setAllLocations] = useState([]);
+
   const canView = isAdmin;
 
   const fetchSnapshot = useCallback(async () => {
@@ -102,6 +107,30 @@ const TrafficMonitor = () => {
     } catch (e) {
       setError('Erro ao carregar status dos players');
     }
+  }, []);
+
+  // Load dictionaries for dropdowns
+  const loadCompanies = useCallback(async () => {
+    try {
+      const res = await axios.get('/auth/companies');
+      setCompanies(res?.data?.companies || []);
+    } catch (_) {
+      // fallback será derivar das listas de players abaixo
+    }
+  }, []);
+
+  const loadAllPlayers = useCallback(async () => {
+    try {
+      const res = await axios.get('/players', { params: { per_page: 1000 } });
+      setAllPlayers(res?.data?.players || []);
+    } catch (_) { /* no-op */ }
+  }, []);
+
+  const loadLocations = useCallback(async () => {
+    try {
+      const res = await axios.get('/players/locations');
+      setAllLocations(res?.data?.locations || []);
+    } catch (_) { /* no-op */ }
   }, []);
 
   const fetchSystem = useCallback(async () => {
@@ -245,14 +274,24 @@ const TrafficMonitor = () => {
       setLoading(true);
       setError('');
       try {
-        await Promise.all([fetchSnapshot(), fetchPlayers(), fetchSystem(), fetchTimeseries(), fetchTop(), fetchAccumulated()]);
+        await Promise.all([
+          fetchSnapshot(),
+          fetchPlayers(),
+          fetchSystem(),
+          fetchTimeseries(),
+          fetchTop(),
+          fetchAccumulated(),
+          loadCompanies(),
+          loadAllPlayers(),
+          loadLocations(),
+        ]);
       } finally {
         if (active) setLoading(false);
       }
     };
     load();
     return () => { active = false; };
-  }, [canView, fetchSnapshot, fetchPlayers, fetchSystem, fetchTimeseries, fetchTop, fetchAccumulated]);
+  }, [canView, fetchSnapshot, fetchPlayers, fetchSystem, fetchTimeseries, fetchTop, fetchAccumulated, loadCompanies, loadAllPlayers, loadLocations]);
 
   // Real-time updates from Socket (admin room)
   useEffect(() => {
@@ -282,6 +321,31 @@ const TrafficMonitor = () => {
     }, 15000);
     return () => clearInterval(id);
   }, [canView, fetchSystem]);
+
+  // Resetar player/location ao trocar empresa
+  useEffect(() => {
+    setPlayerId('');
+    setLocationId('');
+  }, [companyFilter]);
+
+  // Options derivadas por empresa
+  const companyOptions = useMemo(() => {
+    if (Array.isArray(companies) && companies.length > 0) return companies;
+    const set = new Set((allPlayers || []).map(p => p.company).filter(Boolean));
+    return Array.from(set);
+  }, [companies, allPlayers]);
+
+  const playerOptions = useMemo(() => {
+    const list = Array.isArray(allPlayers) ? allPlayers : [];
+    return list
+      .filter(p => (companyFilter ? p.company === companyFilter : true))
+      .map(p => ({ id: String(p.id), name: p.name || String(p.id), company: p.company || '' }));
+  }, [allPlayers, companyFilter]);
+
+  const locationOptions = useMemo(() => {
+    const list = Array.isArray(allLocations) ? allLocations : [];
+    return list.filter(l => (companyFilter ? l.company === companyFilter : true));
+  }, [allLocations, companyFilter]);
 
   const formatNumber = (n) => {
     if (!n && n !== 0) return '0';
@@ -384,9 +448,33 @@ const TrafficMonitor = () => {
                 <MenuItem value="7d">7d</MenuItem>
               </Select>
             </FormControl>
-            <TextField size="small" label="Player ID" value={playerId} onChange={(e) => setPlayerId(e.target.value)} sx={{ mr: 1 }} />
-            <TextField size="small" label="Empresa" value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} sx={{ mr: 1 }} />
-            <TextField size="small" label="Location ID" value={locationId} onChange={(e) => setLocationId(e.target.value)} sx={{ mr: 1 }} />
+            <FormControl size="small" sx={{ mr: 1, minWidth: 160 }}>
+              <InputLabel>Empresa</InputLabel>
+              <Select label="Empresa" value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)}>
+                <MenuItem value="">Todas</MenuItem>
+                {companyOptions.map((c) => (
+                  <MenuItem key={c} value={c}>{c}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ mr: 1, minWidth: 180 }}>
+              <InputLabel>Player</InputLabel>
+              <Select label="Player" value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+                <MenuItem value="">Todos</MenuItem>
+                {playerOptions.map((p) => (
+                  <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ mr: 1, minWidth: 180 }}>
+              <InputLabel>Localização</InputLabel>
+              <Select label="Localização" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+                <MenuItem value="">Todas</MenuItem>
+                {locationOptions.map((l) => (
+                  <MenuItem key={l.id} value={l.id}>{l.name || l.id}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               size="small"
               placeholder="Filtrar por nome ou ID"
