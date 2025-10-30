@@ -81,13 +81,48 @@ class AutoSyncService:
                             player.status = 'offline'
                             print(f"[AUTO_SYNC] {player.name} -> OFFLINE (não encontrado)")
                     else:
-                        # Player sem Chromecast - assumir online se foi visto recentemente
-                        if player.last_ping and (datetime.utcnow() - player.last_ping).total_seconds() < 300:
-                            player.status = 'online'
-                            online_count += 1
+                        # Player sem chromecast_id
+                        if (player.platform or '').lower() == 'chromecast':
+                            # Tentar autoassociar por nome
+                            player_target_name = player.chromecast_name or player.name or ''
+                            player_name_norm = _norm(player_target_name)
+                            matched = None
+                            for device in discovered_devices:
+                                device_name = device.get('name', '')
+                                device_name_norm = _norm(device_name)
+                                if device_name_norm == player_name_norm or player_name_norm in device_name_norm or device_name_norm in player_name_norm:
+                                    matched = device
+                                    break
+                            if matched:
+                                print(f"[AUTO_SYNC] Autoassociação por nome: {player.name} -> {matched.get('name')} ({matched.get('id')})")
+                                player.chromecast_id = str(matched.get('id'))
+                                player.chromecast_name = matched.get('name') or player.chromecast_name
+                                # Validar conexão
+                                success, actual_uuid = chromecast_service.connect_to_device(
+                                    device_id=str(matched.get('id')),
+                                    device_name=player_target_name
+                                )
+                                if success:
+                                    if actual_uuid and str(actual_uuid) != str(player.chromecast_id):
+                                        player.chromecast_id = str(actual_uuid)
+                                    player.status = 'online'
+                                    player.last_ping = datetime.utcnow()
+                                    player.ip_address = matched.get('ip', player.ip_address)
+                                    online_count += 1
+                                    print(f"[AUTO_SYNC] {player.name} -> ONLINE (autoassociado)")
+                                else:
+                                    player.status = 'offline'
+                                    print(f"[AUTO_SYNC] {player.name} -> OFFLINE (falha conexão após autoassociação)")
+                            else:
+                                player.status = 'offline'
+                                print(f"[AUTO_SYNC] {player.name} (Chromecast sem ID) -> OFFLINE (nenhum correspondente)")
                         else:
-                            player.status = 'offline'
-                        print(f"[AUTO_SYNC] {player.name} (sem Chromecast) -> {player.status.upper()}")
+                            # Player não-Chromecast: considerar atividade recente
+                            if player.last_ping and (datetime.utcnow() - player.last_ping).total_seconds() < 300:
+                                player.status = 'online'
+                                online_count += 1
+                            else:
+                                player.status = 'offline'
                     
                     synced_count += 1
                     
@@ -118,7 +153,7 @@ class AutoSyncService:
             player = Player.query.get(player_id)
             if not player:
                 return None
-            
+        
             if player.chromecast_id:
                 # Descobrir dispositivos para este player específico
                 discovered_devices = chromecast_service.discover_devices(timeout=5)
@@ -154,8 +189,46 @@ class AutoSyncService:
                     player.status = 'offline'
             else:
                 # Player sem Chromecast
-                player.last_ping = datetime.utcnow()
-                player.status = 'online'
+                if (player.platform or '').lower() == 'chromecast':
+                    # Descobrir e tentar autoassociar por nome
+                    discovered_devices = chromecast_service.discover_devices(timeout=5)
+                    player_target_name = player.chromecast_name or player.name or ''
+                    device = None
+                    # Normalização simples
+                    def _norm(s: str) -> str:
+                        try:
+                            import unicodedata
+                            s = unicodedata.normalize('NFKD', s or '')
+                            s = ''.join(c for c in s if not unicodedata.combining(c))
+                            return s.strip().lower()
+                        except Exception:
+                            return (s or '').strip().lower()
+                    tnorm = _norm(player_target_name)
+                    for d in discovered_devices:
+                        if _norm(d.get('name', '')) == tnorm or tnorm in _norm(d.get('name', '')) or _norm(d.get('name', '')) in tnorm:
+                            device = d
+                            break
+                    if device:
+                        print(f"[AUTO_SYNC] (single) Autoassociação: {player.name} -> {device.get('name')} ({device.get('id')})")
+                        player.chromecast_id = str(device.get('id'))
+                        player.chromecast_name = device.get('name') or player.chromecast_name
+                        success, actual_uuid = chromecast_service.connect_to_device(
+                            device_id=str(device.get('id')),
+                            device_name=player_target_name
+                        )
+                        if success:
+                            if actual_uuid and str(actual_uuid) != str(player.chromecast_id):
+                                player.chromecast_id = str(actual_uuid)
+                            player.status = 'online'
+                            player.last_ping = datetime.utcnow()
+                            player.ip_address = device.get('ip', player.ip_address)
+                        else:
+                            player.status = 'offline'
+                    else:
+                        player.status = 'offline'
+                else:
+                    player.last_ping = datetime.utcnow()
+                    player.status = 'online'
             
             db.session.commit()
             return player.status
