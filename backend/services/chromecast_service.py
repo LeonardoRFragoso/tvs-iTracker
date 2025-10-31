@@ -151,11 +151,12 @@ class ChromecastService:
             del self._failed_connections[device_id]
             logger.info(f"Histórico de falhas limpo para {device_id}")
     
-    def connect_to_device(self, device_id: str, device_name: str = None) -> tuple[bool, str]:
-        """Conecta a um dispositivo Chromecast específico usando UUID ou nome com circuit breaker"""
+    def connect_to_device(self, device_id: str, device_name: str = None, force: bool = False) -> tuple[bool, str]:
+        """Conecta a um dispositivo Chromecast específico usando UUID ou nome com circuit breaker.
+        Quando force=True, ignora cooldown para tentativas manuais (ex.: rota /sync)."""
         try:
             # Circuit breaker: verificar se dispositivo está em cooldown
-            if self._is_device_in_cooldown(device_id):
+            if (not force) and self._is_device_in_cooldown(device_id):
                 return False, ""
 
             logger.info(f"Tentando conectar ao dispositivo {device_id} (nome: {device_name})")
@@ -281,7 +282,7 @@ class ChromecastService:
     def _test_connection(self, cast, device_id: str) -> bool:
         """Testa se a conexão com o dispositivo está funcionando"""
         try:
-            cast.wait(timeout=5)
+            cast.wait(timeout=10)
             
             if cast.status is not None:
                 self.active_connections[device_id] = cast

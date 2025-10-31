@@ -57,6 +57,8 @@ const PlayerDetail = () => {
   const [error, setError] = useState('');
   const [tabValue, setTabValue] = useState(0);
   const [deleteDialog, setDeleteDialog] = useState(false);
+  const [success, setSuccess] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   const regenerateCode = async () => {
     try {
@@ -121,11 +123,17 @@ const PlayerDetail = () => {
     try {
       if (command === 'sync') {
         // Para sync, usar endpoint HTTP específico
+        setSyncing(true);
+        setSuccess('');
+        setError(''); // Limpar erros anteriores
         const response = await axios.post(`/players/${id}/sync`);
-        if (response.data.chromecast_status === 'found') {
-          setError(''); // Limpar erros anteriores
+        if (response.data && response.data.chromecast_status === 'found') {
+          setSuccess('Sincronização concluída: Chromecast encontrado');
+        } else {
+          setError('Sincronização concluída: Chromecast não encontrado');
         }
-        setTimeout(loadPlayer, 1000); // Refresh after sync
+        await loadPlayer();
+        setSyncing(false);
       } else {
         // Para outros comandos, usar WebSocket
         await sendPlayerCommand(id, command);
@@ -133,6 +141,7 @@ const PlayerDetail = () => {
       }
     } catch (err) {
       setError(`Erro ao enviar comando: ${command} - ${err.response?.data?.error || err.message}`);
+      setSyncing(false);
     }
   };
 
@@ -252,6 +261,16 @@ const PlayerDetail = () => {
           {error}
         </Alert>
       )}
+      {syncing && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Sincronizando...
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {success}
+        </Alert>
+      )}
 
       {/* Action Buttons */}
       <Card sx={{ mb: 3 }}>
@@ -280,6 +299,7 @@ const PlayerDetail = () => {
               variant="outlined"
               startIcon={<SyncIcon />}
               onClick={() => handlePlayerCommand('sync')}
+              disabled={syncing}
             >
               Sincronizar
             </Button>
@@ -309,7 +329,7 @@ const PlayerDetail = () => {
       </Card>
 
       {/* Cast Manager */}
-      <CastManager playerId={id} />
+      <CastManager playerId={id} suppressLoader={true} />
 
       {/* Tabs */}
       <Card>

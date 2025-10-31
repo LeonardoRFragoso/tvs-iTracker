@@ -534,6 +534,41 @@ def sync_player(player_id):
                 return jsonify({'error': 'Acesso negado a players de outra empresa'}), 403
         
         print(f"[SYNC] Player encontrado: {player.name}, Chromecast ID: {player.chromecast_id}")
+
+        # Helper local: tenta obter MAC pelo ARP quando o IP é conhecido
+        def _try_get_mac_from_arp(ip: str) -> str:
+            try:
+                if not ip:
+                    return ''
+                if os.name == 'nt':
+                    try:
+                        import subprocess, re
+                        subprocess.run(['ping', '-n', '1', '-w', '1000', ip], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        res = subprocess.run(['arp', '-a'], capture_output=True, text=True)
+                        output = res.stdout or ''
+                        for line in output.splitlines():
+                            if ip in line:
+                                m = re.search(r'([0-9A-Fa-f]{2}[-:]){5}[0-9A-Fa-f]{2}', line)
+                                if m:
+                                    mac = m.group(0).replace('-', ':').lower()
+                                    if mac and mac != '00:00:00:00:00:00':
+                                        return mac
+                    except Exception:
+                        return ''
+                else:
+                    arp_path = '/proc/net/arp'
+                    if os.path.exists(arp_path):
+                        with open(arp_path, 'r') as f:
+                            lines = f.read().strip().splitlines()
+                        for line in lines[1:]:
+                            parts = line.split()
+                            if len(parts) >= 4 and parts[0] == ip:
+                                mac = parts[3].strip()
+                                if mac and mac != '00:00:00:00:00:00':
+                                    return mac
+                return ''
+            except Exception:
+                return ''
         
         # Se for (ou aparentar ser) Chromecast, tentar autoassociação por nome quando necessário
         platform_is_cc = (player.platform or '').lower() == 'chromecast'
@@ -553,7 +588,7 @@ def sync_player(player_id):
             print(f"[SYNC] Nome-alvo para descoberta: '{target_name}'")
 
             print(f"[SYNC] Iniciando descoberta de dispositivos...")
-            discovered_devices = chromecast_service.discover_devices(timeout=5)
+            discovered_devices = chromecast_service.discover_devices(timeout=8)
             print(f"[SYNC] Dispositivos descobertos: {len(discovered_devices)}")
 
             for i, device in enumerate(discovered_devices):
@@ -580,10 +615,17 @@ def sync_player(player_id):
                     if device_name and device_name != (player.chromecast_name or ''):
                         player.chromecast_name = device_name
 
+                    player.ip_address = device.get('ip', player.ip_address)
+                    mac_pre = _try_get_mac_from_arp(player.ip_address)
+                    if mac_pre and mac_pre != (player.mac_address or ''):
+                        print(f"[SYNC] MAC descoberto via ARP: {mac_pre}")
+                        player.mac_address = mac_pre
+
                     # Conectar para validar disponibilidade real
                     success, actual_uuid = chromecast_service.connect_to_device(
                         device_id=device_id,
-                        device_name=target_name or device_name
+                        device_name=target_name or device_name,
+                        force=True
                     )
                     if success:
                         if actual_uuid and str(actual_uuid) != str(player.chromecast_id):
@@ -592,6 +634,10 @@ def sync_player(player_id):
                         player.status = 'online'
                         player.last_ping = datetime.utcnow()
                         player.ip_address = device.get('ip', player.ip_address)
+                        mac = _try_get_mac_from_arp(player.ip_address)
+                        if mac and mac != (player.mac_address or ''):
+                            print(f"[SYNC] MAC descoberto via ARP: {mac}")
+                            player.mac_address = mac
                     else:
                         print(f"[SYNC] Falha na conexão. Marcando como offline")
                         player.status = 'offline'
@@ -608,7 +654,9 @@ def sync_player(player_id):
                 'message': 'Sincronização concluída',
                 'player_status': player.status,
                 'chromecast_status': 'found' if chromecast_found else 'not_found',
-                'discovered_devices': len(discovered_devices)
+                'discovered_devices': len(discovered_devices),
+                'ip_address': player.ip_address or '',
+                'mac_address': player.mac_address or ''
             })
         else:
             print(f"[SYNC] Player não é Chromecast - apenas ping")
@@ -618,7 +666,9 @@ def sync_player(player_id):
 
             return jsonify({
                 'message': 'Player sincronizado (sem Chromecast)',
-                'player_status': player.status
+                'player_status': player.status,
+                'ip_address': player.ip_address or '',
+                'mac_address': player.mac_address or ''
             })
         
     except Exception as e:

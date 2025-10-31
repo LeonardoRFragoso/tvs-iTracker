@@ -20,7 +20,7 @@ import {
 } from '@mui/icons-material';
 import axios from '../../config/axios';
 
-const CastManager = ({ playerId, onCastStateChange }) => {
+const CastManager = ({ playerId, onCastStateChange, suppressLoader = false }) => {
   const [castSession, setCastSession] = useState(null);
   const [availableDevices, setAvailableDevices] = useState([]);
   const [showDeviceDialog, setShowDeviceDialog] = useState(false);
@@ -172,6 +172,8 @@ const CastManager = ({ playerId, onCastStateChange }) => {
   };
 
   if (!castApiLoaded) {
+    // Evita exibir o loader quando não desejado para não confundir com o status de sincronização
+    if (suppressLoader) return null;
     return (
       <Box display="flex" alignItems="center" gap={1}>
         <Typography variant="body2" color="text.secondary">
