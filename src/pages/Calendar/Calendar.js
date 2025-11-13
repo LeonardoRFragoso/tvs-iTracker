@@ -638,7 +638,12 @@ const Calendar = () => {
         sx={{ 
           mb: 2, 
           borderRadius: 2,
-          border: `1px solid ${theme.palette.divider}`,
+			border: `1px solid ${theme.palette.divider}`,
+			position: 'sticky',
+			top: 8,
+			zIndex: 5,
+			backdropFilter: 'saturate(120%) blur(4px)',
+			backgroundColor: theme.palette.mode === 'dark' ? 'rgba(18,18,18,0.9)' : 'rgba(255,255,255,0.9)',
         }}
       >
         <CardContent sx={{ py: 2 }}>
