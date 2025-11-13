@@ -346,7 +346,7 @@ const getCurrentTimeForScroll = () => {
 const Calendar = () => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const [view, setView] = useState('timeGridWeek');
+	const [view, setView] = useState(() => localStorage.getItem('calendar-view') || 'timeGridWeek');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [events, setEvents] = useState([]);
@@ -450,16 +450,25 @@ const Calendar = () => {
     }
   };
 
-  const handleDatesSet = (arg) => {
-    const start = new Date(arg.start);
-    const end = new Date(arg.end);
-    end.setDate(end.getDate() - 1);
-    fetchRange(start, end, selectedPlayer);
-  };
+	const handleDatesSet = (() => {
+		let debounceTimer;
+		return (arg) => {
+			if (debounceTimer) clearTimeout(debounceTimer);
+			debounceTimer = setTimeout(() => {
+				const start = new Date(arg.start);
+				const end = new Date(arg.end);
+				end.setDate(end.getDate() - 1);
+				fetchRange(start, end, selectedPlayer);
+			}, 150);
+		};
+	})();
 
   const handleViewChange = (newView) => {
     if (!newView) return;
     setView(newView);
+		try {
+			localStorage.setItem('calendar-view', newView);
+		} catch (e) {}
 
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
@@ -786,12 +795,21 @@ const Calendar = () => {
                 </ToggleButtonGroup>
               </Box>
             </Grid>
+		
+		{/* Legenda de cores/tipos */}
+		<Grid item xs={12}>
+			<Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+				<Chip size="small" variant="outlined" label="Principal" />
+				<Chip size="small" variant="outlined" color="secondary" label="Sobreposição" />
+				<Chip size="small" variant="outlined" color="warning" icon={<Info />} label="Conflito" />
+			</Stack>
+		</Grid>
           </Grid>
         </CardContent>
       </Paper>
 
       {/* Estados de Loading e Erro */}
-      {loading && (
+	{loading && (
         <Box sx={{ mb: 2 }}>
           <LinearProgress sx={{ height: 4, borderRadius: 2 }} />
           <Typography variant="body2" sx={{ mt: 1, textAlign: 'center', color: 'text.secondary' }}>
@@ -800,11 +818,20 @@ const Calendar = () => {
         </Box>
       )}
       
-      {error && (
+	{error && (
         <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
           {error}
         </Alert>
       )}
+
+	{!loading && !error && events.length === 0 && (
+		<Alert severity="info" sx={{ mb: 2, borderRadius: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+			Nenhum agendamento neste período.
+			<Button size="small" variant="outlined" onClick={() => navigate('/schedules/new')}>
+				Criar agendamento
+			</Button>
+		</Alert>
+	)}
 
       {/* Calendário Principal */}
       <Paper 

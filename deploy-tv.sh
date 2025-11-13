@@ -103,6 +103,36 @@ if [ -z "${LOCAL_IP:-}" ]; then
 fi
 LOCAL_IP=${LOCAL_IP:-127.0.0.1}
 
+if [ ! -f backend/.env ]; then
+  echo "[INFO] Criando backend/.env com valores padrão..."
+  DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP:5000"
+  if [ "$PORT80" = true ]; then
+    DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP"
+  fi
+  cat > backend/.env <<EOF
+DATABASE_URL=sqlite:///tvs_platform.db
+SECRET_KEY=tvs-secret-key
+JWT_SECRET_KEY=tvs-jwt-secret-key
+UPLOAD_FOLDER=uploads
+MAX_CONTENT_LENGTH=104857600
+MEDIA_BASE_URL=$DEFAULT_MEDIA_BASE_URL
+EOF
+  echo "[INFO] backend/.env criado. Você pode editar este arquivo para ajustar chaves/segredos."
+else
+  DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP:5000"
+  if [ "$PORT80" = true ]; then
+    DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP"
+  fi
+  if ! grep -q '^DATABASE_URL=' backend/.env; then
+    echo "[INFO] Adicionando DATABASE_URL padrão (sqlite) ao backend/.env"
+    echo "DATABASE_URL=sqlite:///tvs_platform.db" >> backend/.env
+  fi
+  if ! grep -q '^MEDIA_BASE_URL=' backend/.env; then
+    echo "[INFO] Adicionando MEDIA_BASE_URL padrão ao backend/.env"
+    echo "MEDIA_BASE_URL=$DEFAULT_MEDIA_BASE_URL" >> backend/.env
+  fi
+fi
+
 # Informações
 echo
 echo "Sistema preparado para modo TV!"
