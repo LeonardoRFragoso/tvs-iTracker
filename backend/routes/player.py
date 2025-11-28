@@ -199,6 +199,7 @@ def create_player():
             if not user_company or not location_company or user_company != location_company:
                 return jsonify({'error': 'RH só pode criar players na própria empresa'}), 403
         
+        # Valores fixos para Chromecast 4
         player = Player(
             name=data['name'],
             description=data.get('description', ''),
@@ -208,14 +209,15 @@ def create_player():
             ip_address=data.get('ip_address', ''),
             chromecast_id=data.get('chromecast_id', ''),
             chromecast_name=data.get('chromecast_name', ''),
-            platform=data.get('platform', 'web'),
-            device_type=data.get('device_type', 'modern'),  # Adicionado campo device_type
-            resolution=data.get('resolution', '1920x1080'),
-            orientation=data.get('orientation', 'landscape'),
+            # Valores fixos para Chromecast 4
+            platform='chromecast',
+            device_type='modern',
+            resolution='1920x1080',  # Detectado automaticamente pela TV
+            orientation='landscape',
             default_content_duration=data.get('default_content_duration', 10),
-            transition_effect=data.get('transition_effect', 'fade'),
-            volume_level=data.get('volume_level', 50),
-            storage_capacity_gb=data.get('storage_capacity_gb', 32),
+            transition_effect='fade',  # Não usado no Chromecast
+            volume_level=100,  # Controlado pelo controle remoto
+            storage_capacity_gb=8,  # Chromecast 4 tem ~8GB
             is_active=data.get('is_active', True),
             access_code=data.get('access_code') or _generate_unique_access_code()
         )
@@ -339,22 +341,16 @@ def update_player(player_id):
             player.chromecast_model = data['chromecast_model']
         if 'chromecast_firmware' in data:
             player.chromecast_firmware = data['chromecast_firmware']
-        if 'platform' in data:
-            player.platform = data['platform']
-        if 'device_type' in data:
-            player.device_type = data['device_type']
-        if 'resolution' in data:
-            player.resolution = data['resolution']
-        if 'orientation' in data:
-            player.orientation = data['orientation']
+        # Campos fixos para Chromecast 4 - não permitir alteração
+        player.platform = 'chromecast'
+        player.device_type = 'modern'
+        player.resolution = '1920x1080'
+        player.orientation = 'landscape'
+        player.volume_level = 100
+        player.storage_capacity_gb = 8
+        # Campos configuráveis
         if 'default_content_duration' in data:
             player.default_content_duration = data['default_content_duration']
-        if 'transition_effect' in data:
-            player.transition_effect = data['transition_effect']
-        if 'volume_level' in data:
-            player.volume_level = data['volume_level']
-        if 'storage_capacity_gb' in data:
-            player.storage_capacity_gb = data['storage_capacity_gb']
         if 'is_active' in data:
             player.is_active = data['is_active']
         

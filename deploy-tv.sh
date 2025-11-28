@@ -96,6 +96,34 @@ fi
 backend/venv/bin/python -m pip install --upgrade pip
 backend/venv/bin/pip install -r requirements.txt
 
+# Verificar se MariaDB está instalado e configurado
+if command -v mysql >/dev/null 2>&1; then
+  echo "[INFO] MariaDB/MySQL detectado no sistema."
+  if [ ! -f /root/.tvs_itracker_credentials ]; then
+    echo
+    echo "=================================================="
+    echo "⚠️  CONFIGURAÇÃO DO BANCO DE DADOS NECESSÁRIA"
+    echo "=================================================="
+    echo
+    echo "O banco de dados MariaDB ainda não foi configurado."
+    echo "Execute o seguinte comando como root:"
+    echo
+    echo "  sudo bash backend/setup_database.sh"
+    echo
+    echo "Isso irá:"
+    echo "  - Criar o banco de dados 'tvs_itracker'"
+    echo "  - Criar o usuário 'tvs_user'"
+    echo "  - Gerar senha segura automaticamente"
+    echo "  - Fornecer a string de conexão para o .env"
+    echo
+  else
+    echo "[INFO] Credenciais do banco encontradas em /root/.tvs_itracker_credentials"
+  fi
+else
+  echo "[AVISO] MariaDB/MySQL não detectado. Instale com:"
+  echo "  sudo apt install mariadb-server mariadb-client"
+fi
+
 # Descobrir IP local (para exibir URLs)
 LOCAL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 if [ -z "${LOCAL_IP:-}" ]; then
@@ -109,23 +137,53 @@ if [ ! -f backend/.env ]; then
   if [ "$PORT80" = true ]; then
     DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP"
   fi
+  
+  # Gerar chaves de segurança aleatórias
+  SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || echo "tvs-secret-key-CHANGE-ME")
+  JWT_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || echo "tvs-jwt-secret-key-CHANGE-ME")
+  
   cat > backend/.env <<EOF
-DATABASE_URL=sqlite:///tvs_platform.db
-SECRET_KEY=tvs-secret-key
-JWT_SECRET_KEY=tvs-jwt-secret-key
+# Database Configuration - MariaDB/MySQL
+# IMPORTANTE: Configure com suas credenciais reais!
+# Formato: mysql+pymysql://usuario:senha@host:porta/nome_banco
+DATABASE_URL=mysql+pymysql://tvs_user:SENHA_AQUI@localhost:3306/tvs_itracker
+
+# Security Keys (geradas automaticamente)
+SECRET_KEY=$SECRET_KEY
+JWT_SECRET_KEY=$JWT_SECRET_KEY
+JWT_ACCESS_TOKEN_EXPIRES=3600
+
+# Flask Configuration
+FLASK_ENV=production
+FLASK_DEBUG=False
+
+# Upload Configuration
 UPLOAD_FOLDER=uploads
 MAX_CONTENT_LENGTH=104857600
+
+# Media Base URL (acessível pelos Chromecasts)
 MEDIA_BASE_URL=$DEFAULT_MEDIA_BASE_URL
+
+# Socket.IO Configuration
+SOCKETIO_ASYNC_MODE=eventlet
+REACT_APP_SOCKET_URL=$DEFAULT_MEDIA_BASE_URL
+
+# External APIs (opcional)
+NEWS_API_KEY=your-news-api-key
+WEATHER_API_KEY=your-weather-api-key
 EOF
-  echo "[INFO] backend/.env criado. Você pode editar este arquivo para ajustar chaves/segredos."
+  echo "[INFO] backend/.env criado com MariaDB."
+  echo "[AVISO] ⚠️  CONFIGURE O DATABASE_URL com suas credenciais reais!"
+  echo "[AVISO] ⚠️  Edite backend/.env antes de iniciar o servidor."
 else
   DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP:5000"
   if [ "$PORT80" = true ]; then
     DEFAULT_MEDIA_BASE_URL="http://$LOCAL_IP"
   fi
   if ! grep -q '^DATABASE_URL=' backend/.env; then
-    echo "[INFO] Adicionando DATABASE_URL padrão (sqlite) ao backend/.env"
-    echo "DATABASE_URL=sqlite:///tvs_platform.db" >> backend/.env
+    echo "[INFO] Adicionando DATABASE_URL padrão (MariaDB) ao backend/.env"
+    echo "DATABASE_URL=mysql+pymysql://tvs_user:SENHA_AQUI@localhost:3306/tvs_itracker" >> backend/.env
+    echo "[AVISO] ⚠️  Configure o DATABASE_URL em backend/.env!"
   fi
   if ! grep -q '^MEDIA_BASE_URL=' backend/.env; then
     echo "[INFO] Adicionando MEDIA_BASE_URL padrão ao backend/.env"

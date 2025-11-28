@@ -405,52 +405,67 @@ const PlayerDetail = () => {
           {/* Tab 1: Configurações */}
           {tabValue === 1 && (
             <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Chromecast 4 (Google TV):</strong> Dispositivo configurado para streaming direto. 
+                    Resolução e orientação detectadas automaticamente pela TV conectada.
+                  </Typography>
+                </Alert>
+              </Grid>
+              
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" gutterBottom>
                   Configurações de Exibição
                 </Typography>
                 <List dense>
                   <ListItem>
-                    <ListItemText primary="Plataforma" secondary={player.platform} />
+                    <ListItemText primary="Plataforma" secondary="Chromecast 4 (Google TV)" />
                   </ListItem>
                   <ListItem>
-                    <ListItemText primary="Resolução" secondary={player.resolution} />
+                    <ListItemText primary="Tipo de dispositivo" secondary="Moderno (Streaming)" />
                   </ListItem>
                   <ListItem>
-                    <ListItemText primary="Orientação" secondary={player.orientation} />
+                    <ListItemText primary="Duração padrão do conteúdo" secondary={`${player.default_content_duration || 10}s`} />
                   </ListItem>
                   <ListItem>
-                    <ListItemText primary="Duração padrão" secondary={`${player.default_content_duration}s`} />
+                    <ListItemText 
+                      primary="Resolução" 
+                      secondary="Detectada automaticamente (até 4K HDR)" 
+                    />
                   </ListItem>
                   <ListItem>
-                    <ListItemText primary="Efeito de transição" secondary={player.transition_effect} />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText primary="Volume" secondary={`${player.volume_level}%`} />
+                    <ListItemText 
+                      primary="Volume" 
+                      secondary="Controlado pelo controle remoto da TV" 
+                    />
                   </ListItem>
                 </List>
               </Grid>
               
               <Grid item xs={12} md={6}>
                 <Typography variant="h6" gutterBottom>
-                  Armazenamento
+                  Armazenamento e Streaming
                 </Typography>
-                <Box mb={2}>
-                  <Typography variant="body2" color="text.secondary">
-                    {player.storage_used_gb}GB / {player.storage_capacity_gb}GB ({player.storage_percentage}%)
+                <Alert severity="success" sx={{ mb: 2, borderRadius: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Streaming Direto:</strong> Chromecast não armazena conteúdo localmente. 
+                    Todo conteúdo é transmitido diretamente do servidor.
                   </Typography>
-                  <LinearProgress 
-                    variant="determinate" 
-                    value={player.storage_percentage} 
-                    sx={{ mt: 1 }}
-                  />
-                </Box>
+                </Alert>
                 <List dense>
                   <ListItem>
                     <ListItemIcon><StorageIcon /></ListItemIcon>
                     <ListItemText 
-                      primary="Espaço disponível" 
-                      secondary={`${player.storage_available_gb}GB`} 
+                      primary="Armazenamento interno" 
+                      secondary="~8GB (sistema operacional)" 
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemIcon><NetworkIcon /></ListItemIcon>
+                    <ListItemText 
+                      primary="Modo de operação" 
+                      secondary="Streaming em tempo real via rede" 
                     />
                   </ListItem>
                 </List>

@@ -46,15 +46,15 @@ const PlayerForm = () => {
     ip_address: '',
     chromecast_id: '',
     chromecast_name: '',
-    platform: 'web',
-    device_type: 'tizen', // Padrão para web browser
-    // Valores padrão para exibição e armazenamento
+    // Valores fixos para Chromecast 4
+    platform: 'chromecast',
+    device_type: 'modern',
     resolution: '1920x1080',
     orientation: 'landscape',
     default_content_duration: 10,
     transition_effect: 'fade',
-    volume_level: 50,
-    storage_capacity_gb: 32,
+    volume_level: 100,
+    storage_capacity_gb: 8,
     is_active: true,
   });
   
@@ -74,14 +74,8 @@ const PlayerForm = () => {
     init();
   }, [id]);
 
-  // Automação do tipo de dispositivo baseado na plataforma
-  useEffect(() => {
-    if (formData.platform === 'chromecast' && formData.device_type !== 'modern') {
-      handleChange('device_type', 'modern');
-    } else if (formData.platform === 'web' && formData.device_type !== 'tizen') {
-      handleChange('device_type', 'tizen');
-    }
-  }, [formData.platform]);
+  // Nota: Platform e device_type são fixos para Chromecast 4
+  // Não é mais necessário automação de tipo de dispositivo
 
   const loadLocations = async () => {
     try {
@@ -96,10 +90,12 @@ const PlayerForm = () => {
     try {
       const response = await axios.get(`/players/${id}`);
       const data = response.data || {};
-      // Coagir players legados para Tizen na edição (UI possui apenas Moderno e Tizen)
-      if (data.device_type === 'legacy') {
-        data.device_type = 'tizen';
-      }
+      // Garantir valores fixos para Chromecast 4
+      data.platform = 'chromecast';
+      data.device_type = 'modern';
+      data.resolution = data.resolution || '1920x1080';
+      data.orientation = data.orientation || 'landscape';
+      data.storage_capacity_gb = 8; // Chromecast 4 tem ~8GB
       setFormData(data);
     } catch (err) {
       setError('Erro ao carregar player');
@@ -274,59 +270,11 @@ const PlayerForm = () => {
                         />
                       </Grid>
                       <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          select
-                          label="Plataforma"
-                          value={formData.platform}
-                          onChange={(e) => {
-                            const newPlatform = e.target.value;
-                            handleChange('platform', newPlatform);
-                            
-                            // Automação do tipo de dispositivo baseado na plataforma
-                            if (newPlatform === 'chromecast') {
-                              handleChange('device_type', 'modern');
-                            } else if (newPlatform === 'web') {
-                              handleChange('device_type', 'tizen');
-                            }
-                          }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        >
-                          <MenuItem value="web">Web Browser</MenuItem>
-                          <MenuItem value="chromecast">Chromecast</MenuItem>
-                        </TextField>
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          select
-                          label="Tipo de Dispositivo"
-                          value={formData.device_type === 'legacy' ? 'tizen' : formData.device_type}
-                          onChange={(e) => handleChange('device_type', e.target.value === 'legacy' ? 'tizen' : e.target.value)}
-                          helperText={`Selecionado automaticamente: ${formData.platform === 'chromecast' ? 'Chromecast → Moderno (React/HTML5)' : 'Web Browser → Tizen (Samsung/Legacy)'}`}
-                          disabled={true}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              backgroundColor: (theme) => theme.palette.action.disabledBackground,
-                              '&:hover': {
-                                transform: 'translateY(-2px)',
-                                transition: 'transform 0.2s ease-in-out',
-                              },
-                            },
-                          }}
-                        >
-                          <MenuItem value="modern">Moderno (React/HTML5 completo)</MenuItem>
-                          <MenuItem value="tizen">Samsung Tizen (inclui Legacy)</MenuItem>
-                        </TextField>
+                        <Alert severity="info" sx={{ borderRadius: 2 }}>
+                          <Typography variant="body2">
+                            <strong>Plataforma:</strong> Chromecast 4 (Google TV) - Configurado automaticamente
+                          </Typography>
+                        </Alert>
                       </Grid>
                       <Grid item xs={12}>
                         <TextField

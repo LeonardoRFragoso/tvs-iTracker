@@ -21,7 +21,6 @@ import {
   Fade,
   Grow,
   CircularProgress,
-  Slider,
   Tooltip,
 } from '@mui/material';
 import {
@@ -47,17 +46,12 @@ const PlayerSettings = () => {
   const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState({
     default_content_duration: 10,
-    transition_effect: 'fade',
-    volume_level: 100,
-    orientation: 'landscape',
-    resolution: '1920x1080',
     auto_start: true,
     cache_enabled: true,
     debug_mode: false,
     network_timeout: 30,
     retry_interval: 5,
     max_retries: 3,
-    storage_limit_gb: 5,
     auto_update: true,
     update_time: '03:00',
     kiosk_mode: true,
@@ -77,17 +71,12 @@ const PlayerSettings = () => {
       const playerData = response.data;
       setFormData({
         default_content_duration: playerData.default_content_duration || 10,
-        transition_effect: playerData.transition_effect || 'fade',
-        volume_level: playerData.volume_level || 100,
-        orientation: playerData.orientation || 'landscape',
-        resolution: playerData.resolution || '1920x1080',
         auto_start: playerData.auto_start !== false,
         cache_enabled: playerData.cache_enabled !== false,
         debug_mode: playerData.debug_mode === true,
         network_timeout: playerData.network_timeout || 30,
         retry_interval: playerData.retry_interval || 5,
         max_retries: playerData.max_retries || 3,
-        storage_limit_gb: playerData.storage_limit_gb || 5,
         auto_update: playerData.auto_update !== false,
         update_time: playerData.update_time || '03:00',
         kiosk_mode: playerData.kiosk_mode !== false,
@@ -105,13 +94,6 @@ const PlayerSettings = () => {
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? checked : value,
-    });
-  };
-
-  const handleSliderChange = (name) => (e, value) => {
-    setFormData({
-      ...formData,
-      [name]: value,
     });
   };
 
@@ -261,54 +243,14 @@ const PlayerSettings = () => {
                     </Box>
                     <Divider sx={{ mb: 3 }} />
 
+                    <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+                      <Typography variant="body2">
+                        <strong>Chromecast 4:</strong> Resolução e orientação detectadas automaticamente pela TV. Volume controlado pelo controle remoto.
+                      </Typography>
+                    </Alert>
+
                     <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth variant="outlined" margin="normal">
-                          <InputLabel>Orientação</InputLabel>
-                          <Select
-                            name="orientation"
-                            value={formData.orientation}
-                            onChange={handleChange}
-                            label="Orientação"
-                          >
-                            <MenuItem value="landscape">Paisagem</MenuItem>
-                            <MenuItem value="portrait">Retrato</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth variant="outlined" margin="normal">
-                          <InputLabel>Resolução</InputLabel>
-                          <Select
-                            name="resolution"
-                            value={formData.resolution}
-                            onChange={handleChange}
-                            label="Resolução"
-                          >
-                            <MenuItem value="1920x1080">Full HD (1920x1080)</MenuItem>
-                            <MenuItem value="1280x720">HD (1280x720)</MenuItem>
-                            <MenuItem value="3840x2160">4K (3840x2160)</MenuItem>
-                            <MenuItem value="1024x768">1024x768</MenuItem>
-                            <MenuItem value="800x600">800x600</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
                       <Grid item xs={12}>
-                        <Typography gutterBottom>
-                          Volume ({formData.volume_level}%)
-                        </Typography>
-                        <Slider
-                          value={formData.volume_level}
-                          onChange={handleSliderChange('volume_level')}
-                          aria-labelledby="volume-slider"
-                          valueLabelDisplay="auto"
-                          step={5}
-                          marks
-                          min={0}
-                          max={100}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
                           label="Duração padrão do conteúdo (segundos)"
@@ -317,24 +259,9 @@ const PlayerSettings = () => {
                           value={formData.default_content_duration}
                           onChange={handleChange}
                           margin="normal"
+                          helperText="Tempo de exibição para imagens e conteúdo sem duração definida"
                           InputProps={{ inputProps: { min: 1, max: 300 } }}
                         />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl fullWidth variant="outlined" margin="normal">
-                          <InputLabel>Efeito de transição</InputLabel>
-                          <Select
-                            name="transition_effect"
-                            value={formData.transition_effect}
-                            onChange={handleChange}
-                            label="Efeito de transição"
-                          >
-                            <MenuItem value="fade">Fade</MenuItem>
-                            <MenuItem value="slide">Slide</MenuItem>
-                            <MenuItem value="zoom">Zoom</MenuItem>
-                            <MenuItem value="none">Nenhum</MenuItem>
-                          </Select>
-                        </FormControl>
                       </Grid>
                       <Grid item xs={12}>
                         <FormControlLabel
@@ -346,7 +273,7 @@ const PlayerSettings = () => {
                               color="primary"
                             />
                           }
-                          label="Modo quiosque (tela cheia)"
+                          label="Modo quiosque (tela cheia sem controles)"
                         />
                       </Grid>
                     </Grid>
@@ -550,17 +477,12 @@ const PlayerSettings = () => {
                           InputLabelProps={{ shrink: true }}
                         />
                       </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          label="Limite de armazenamento (GB)"
-                          name="storage_limit_gb"
-                          type="number"
-                          value={formData.storage_limit_gb}
-                          onChange={handleChange}
-                          margin="normal"
-                          InputProps={{ inputProps: { min: 1, max: 50 } }}
-                        />
+                      <Grid item xs={12}>
+                        <Alert severity="info" sx={{ borderRadius: 2 }}>
+                          <Typography variant="body2">
+                            <strong>Armazenamento:</strong> Chromecast 4 faz streaming direto, sem necessidade de armazenamento local de conteúdo.
+                          </Typography>
+                        </Alert>
                       </Grid>
                     </Grid>
                   </Paper>
