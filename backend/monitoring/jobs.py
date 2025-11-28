@@ -283,11 +283,13 @@ def check_schedules_with_context(app):
         print(f"[Scheduler] Erro no check_and_execute_schedules: {e}")
 
 
-def emit_system_stats_job(socketio):
+def emit_system_stats_job(app, socketio):
+    """Emite estatísticas do sistema via Socket.IO com contexto da aplicação"""
     try:
-        enabled = SystemConfig.get_value('monitor.enable_system_stats', True)
-        if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
-            socketio.emit('system_stats', collect_system_stats(), room='admin')
+        with app.app_context():
+            enabled = SystemConfig.get_value('monitor.enable_system_stats', True)
+            if str(enabled).lower() in ['1', 'true', 'yes'] or enabled is True:
+                socketio.emit('system_stats', collect_system_stats(), room='admin')
     except Exception as e:
         print(f"[System] Falha ao emitir métricas: {e}")
 
@@ -365,7 +367,7 @@ def configure_scheduler_jobs(scheduler, app, socketio):
             )
         if not scheduler.get_job('system_stats_emitter'):
             scheduler.add_job(
-                func=lambda: emit_system_stats_job(socketio),
+                func=lambda: emit_system_stats_job(app, socketio),
                 trigger='interval',
                 seconds=int(SystemConfig.get_value('monitor.emit_interval_sec', 30) or 30),
                 id='system_stats_emitter',
